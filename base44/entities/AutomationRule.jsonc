@@ -1,0 +1,90 @@
+{
+  "name": "AutomationRule",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Rule name"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "trigger_metric": {
+      "type": "string",
+      "enum": [
+        "port_latency",
+        "cpu_load",
+        "packet_loss",
+        "wan_speed_down",
+        "wan_latency",
+        "device_offline",
+        "ups_battery"
+      ],
+      "description": "Metric to monitor"
+    },
+    "trigger_device": {
+      "type": "string",
+      "description": "Device name or 'any'"
+    },
+    "trigger_operator": {
+      "type": "string",
+      "enum": [
+        "gt",
+        "lt",
+        "gte",
+        "lte",
+        "eq"
+      ],
+      "description": "Comparison operator"
+    },
+    "trigger_value": {
+      "type": "number",
+      "description": "Threshold value"
+    },
+    "trigger_unit": {
+      "type": "string",
+      "description": "Unit label e.g. ms, %, Mbps"
+    },
+    "action": {
+      "type": "string",
+      "enum": [
+        "snmp_port_bounce",
+        "send_alert",
+        "log_only",
+        "ping_restart",
+        "power_cycle",
+        "capture_traffic"
+      ],
+      "description": "Action to take"
+    },
+    "action_target": {
+      "type": "string",
+      "description": "Target device/port for action"
+    },
+    "requires_approval": {
+      "type": "boolean",
+      "default": false
+    },
+    "cooldown_minutes": {
+      "type": "number",
+      "default": 10,
+      "description": "Minimum minutes between firings"
+    },
+    "last_fired_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "fire_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "name",
+    "trigger_metric",
+    "trigger_operator",
+    "trigger_value",
+    "action"
+  ]
+}

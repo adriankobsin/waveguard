@@ -15,6 +15,7 @@ import SettingsPage from './pages/SettingsPage';
 import TopologyPage from './pages/TopologyPage';
 import EquipmentDetailPage from './pages/EquipmentDetailPage';
 import CommitVelocityPage from './pages/CommitVelocityPage';
+import AutomationPage from './pages/AutomationPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -39,6 +40,7 @@ function App() {
             <Route path="/topology" element={<TopologyPage />} />
             <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
             <Route path="/commit-velocity" element={<CommitVelocityPage />} />
+            <Route path="/automation" element={<AutomationPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
