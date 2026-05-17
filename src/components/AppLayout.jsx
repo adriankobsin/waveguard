@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
-  Wifi, Menu, X, Smartphone, Search, Bell, Share2
+  Wifi, Menu, X, Smartphone, Search, Bell, Share2, GitCommit
 } from "lucide-react";
 
 const NAV = [
@@ -11,6 +11,7 @@ const NAV = [
   { to: "/snmp", icon: Network, label: "SNMP" },
   { to: "/diagnoses", icon: Activity, label: "Diagnoses" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
+  { to: "/commit-velocity", icon: GitCommit, label: "Commit Velocity" },
   { to: "/mobile", icon: Smartphone, label: "Mobile View" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

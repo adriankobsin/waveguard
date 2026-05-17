@@ -14,6 +14,7 @@ import SnmpPage from './pages/SnmpPage';
 import SettingsPage from './pages/SettingsPage';
 import TopologyPage from './pages/TopologyPage';
 import EquipmentDetailPage from './pages/EquipmentDetailPage';
+import CommitVelocityPage from './pages/CommitVelocityPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -37,6 +38,7 @@ function App() {
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/topology" element={<TopologyPage />} />
             <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
+            <Route path="/commit-velocity" element={<CommitVelocityPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
