@@ -12,6 +12,8 @@ import DiagnosesPage from './pages/DiagnosesPage';
 import MaintenancePage from './pages/MaintenancePage';
 import SnmpPage from './pages/SnmpPage';
 import SettingsPage from './pages/SettingsPage';
+import TopologyPage from './pages/TopologyPage';
+import EquipmentDetailPage from './pages/EquipmentDetailPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -33,6 +35,8 @@ function App() {
             <Route path="/snmp" element={<SnmpPage />} />
             <Route path="/diagnoses" element={<DiagnosesPage />} />
             <Route path="/maintenance" element={<MaintenancePage />} />
+            <Route path="/topology" element={<TopologyPage />} />
+            <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 

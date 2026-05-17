@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 import {
   CheckCircle2, WifiOff, AlertTriangle, Signal, Gauge,
-  Camera, Wrench, RefreshCw, ChevronDown, ChevronUp, Zap, X
+  Camera, Wrench, RefreshCw, ChevronDown, ChevronUp, Zap, X, Monitor
 } from "lucide-react";
 
 const REFRESH_INTERVAL = 30000;
@@ -108,6 +109,7 @@ function CameraModal({ cam, onClose }) {
 }
 
 export default function MobileDashboard() {
+  const navigate = useNavigate();
   const [data] = useState(MOCK_DATA);
   const [lastRefresh, setLastRefresh] = useState(new Date());
   const [refreshing, setRefreshing] = useState(false);
@@ -148,12 +150,20 @@ export default function MobileDashboard() {
               <p className="text-xs text-white/60">M/Y Horizon · {lastRefresh.toLocaleTimeString()}</p>
             </div>
           </div>
-          <button
-            onClick={refresh}
-            className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 active:bg-white/20 transition-colors"
-          >
-            <RefreshCw size={14} className={`text-white ${refreshing ? "animate-spin" : ""}`} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/")}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 active:bg-white/20 transition-colors text-xs text-white/80"
+            >
+              <Monitor size={12} /> Desktop
+            </button>
+            <button
+              onClick={refresh}
+              className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 active:bg-white/20 transition-colors"
+            >
+              <RefreshCw size={14} className={`text-white ${refreshing ? "animate-spin" : ""}`} />
+            </button>
+          </div>
         </div>
       </div>
 
