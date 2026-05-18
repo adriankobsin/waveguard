@@ -33,8 +33,7 @@ const DEFAULT_LAYOUT = [
 ];
 
 const GRID_COLS = 12;
-const MIN_CELL_HEIGHT = 80;
-const MAX_CELL_HEIGHT = 120;
+const CELL_HEIGHT = 100;
 
 export default function CustomizableDashboard() {
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);
@@ -43,21 +42,6 @@ export default function CustomizableDashboard() {
   const [draggingId, setDraggingId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [gridContainer, setGridContainer] = useState(null);
-  const [cellHeight, setCellHeight] = useState(MIN_CELL_HEIGHT);
-
-  // Dynamic cell height based on viewport
-  useState(() => {
-    const updateCellHeight = () => {
-      const width = window.innerWidth;
-      if (width < 640) setCellHeight(MIN_CELL_HEIGHT);
-      else if (width < 1024) setCellHeight(90);
-      else setCellHeight(MAX_CELL_HEIGHT);
-    };
-    
-    updateCellHeight();
-    window.addEventListener('resize', updateCellHeight);
-    return () => window.removeEventListener('resize', updateCellHeight);
-  }, []);
 
   const handleAddWidget = (widgetType) => {
     const widgetDef = WIDGET_TYPES[widgetType];
@@ -100,7 +84,7 @@ export default function CustomizableDashboard() {
     const y = e.clientY - gridRect.top - dragOffset.y;
     
     const newGridX = Math.round(x / cellWidth);
-    const newGridY = Math.round(y / cellHeight);
+    const newGridY = Math.round(y / CELL_HEIGHT);
     
     setLayout(prev => prev.map(w => {
       if (w.id === draggingId) {
@@ -120,7 +104,7 @@ export default function CustomizableDashboard() {
   };
 
   const handleResize = (widgetId, direction, delta) => {
-    if (!editMode || !gridContainer) return;
+    if (!editMode) return;
     setLayout(prev => prev.map(w => {
       if (w.id === widgetId) {
         const widgetDef = WIDGET_TYPES[w.type];
@@ -132,11 +116,6 @@ export default function CustomizableDashboard() {
         }
         if (direction.includes('s')) {
           newH = Math.max(widgetDef.minSize.h, w.h + delta);
-        }
-        
-        // Prevent exceeding grid bounds
-        if (w.x + newW > GRID_COLS) {
-          newW = GRID_COLS - w.x;
         }
         
         return { ...w, w: newW, h: newH };
@@ -177,7 +156,7 @@ export default function CustomizableDashboard() {
         className="relative grid gap-3 md:gap-4"
         style={{
           gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
-          gridAutoRows: `${cellHeight}px`,
+          gridAutoRows: `${CELL_HEIGHT}px`,
         }}
         onMouseMove={handleDrag}
         onMouseUp={handleDragEnd}
@@ -236,7 +215,7 @@ export default function CustomizableDashboard() {
                         const gridRect = gridContainer.getBoundingClientRect();
                         if (!gridRect) return;
                         const deltaX = Math.round((moveEvent.clientX - startX) / (gridRect.width / GRID_COLS));
-                        const deltaY = Math.round((moveEvent.clientY - startY) / cellHeight);
+                        const deltaY = Math.round((moveEvent.clientY - startY) / CELL_HEIGHT);
                         handleResize(widget.id, 'se', Math.max(deltaX, deltaY));
                       };
                       
