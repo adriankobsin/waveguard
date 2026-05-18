@@ -1,418 +1,412 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Network, RefreshCw, ZoomIn, ZoomOut, Maximize2, Filter,
-  Wifi, Camera, Monitor, Zap, Server, Router as RouterIcon,
-  Smartphone, HardDrive, ChevronRight, X
-} from "lucide-react";
+import ForceGraph2D from "react-force-graph-2d";
+import { X, MapPin, Hash, Tag, FileText, Cable, Filter, Maximize2, RefreshCw, Layers } from "lucide-react";
 
-// ─── Mock topology data ──────────────────────────────────────────────
-const NODES = [
-  { id: "core-sw",    label: "Core Switch",     type: "switch",  ip: "192.168.10.1",  status: "online",  vendor: "Cisco",     ports: 48, model: "Catalyst 2960X" },
-  { id: "sw-bridge",  label: "SW-Bridge",       type: "switch",  ip: "192.168.10.2",  status: "online",  vendor: "Cisco",     ports: 24, model: "SG350-28" },
-  { id: "sw-saloon",  label: "SW-Saloon",       type: "switch",  ip: "192.168.10.3",  status: "online",  vendor: "Cisco",     ports: 24, model: "SG350-28" },
-  { id: "sw-deck",    label: "SW-Deck-Lower",   type: "switch",  ip: "192.168.10.5",  status: "warning", vendor: "Cisco",     ports: 16, model: "SG250-18" },
-  { id: "sw-engine",  label: "SW-Engine",       type: "switch",  ip: "192.168.10.6",  status: "online",  vendor: "Cisco",     ports: 16, model: "SG250-18" },
-  { id: "ap-bridge",  label: "AP-Bridge",       type: "ap",      ip: "192.168.10.20", status: "online",  vendor: "Ubiquiti",  model: "UAP-AC-Pro" },
-  { id: "ap-deck",    label: "AP-Deck",         type: "ap",      ip: "192.168.10.21", status: "online",  vendor: "Ubiquiti",  model: "UAP-AC-Pro" },
-  { id: "qsys-core",  label: "Q-SYS Core",      type: "av",      ip: "192.168.10.30", status: "online",  vendor: "Q-SYS",     model: "Core 110f" },
-  { id: "qsys-amp",   label: "Q-SYS Amp",       type: "av",      ip: "192.168.10.31", status: "online",  vendor: "Q-SYS",     model: "CX-Q 4K8" },
-  { id: "cam-bridge", label: "Cam-Bridge-01",   type: "camera",  ip: "192.168.10.51", status: "offline", vendor: "Dahua",     model: "SD49425XB-HNR" },
-  { id: "cam-saloon", label: "Cam-Saloon-01",   type: "camera",  ip: "192.168.10.52", status: "online",  vendor: "Dahua",     model: "IPC-HDW3849H" },
-  { id: "cam-deck1",  label: "Cam-Deck-01",     type: "camera",  ip: "192.168.10.53", status: "online",  vendor: "Dahua",     model: "IPC-HDW3849H" },
-  { id: "cam-deck2",  label: "Cam-Deck-02",     type: "camera",  ip: "192.168.10.54", status: "online",  vendor: "Dahua",     model: "IPC-HDW3849H" },
-  { id: "nas",        label: "NAS-Synology",    type: "server",  ip: "192.168.10.80", status: "online",  vendor: "Synology",  model: "DS1522+" },
-  { id: "ups-main",   label: "UPS-Main",        type: "ups",     ip: "192.168.10.90", status: "online",  vendor: "APC",       model: "SMT1500RM2U" },
-  { id: "ups-av",     label: "UPS-AV",          type: "ups",     ip: "192.168.10.91", status: "online",  vendor: "APC",       model: "SMT750RM2U" },
-  { id: "starlink",   label: "Starlink Router", type: "router",  ip: "192.168.100.1", status: "online",  vendor: "SpaceX",    model: "Gen3 Dish" },
-  { id: "tablet-br",  label: "Bridge Tablet",   type: "endpoint",ip: "192.168.10.110",status: "online",  vendor: "Apple",     model: "iPad Pro 12.9" },
+// ─── Full device + cable dataset ─────────────────────────────────────────────
+const DEVICES = [
+  { id: "router-wan",     name: "Router-WAN",         category: "Network", model: "MikroTik CCR2004-1G",    ip: "192.168.1.1",    location: "Bridge Rack",   serial: "MT220B0041",   condition: "Excellent", notes: "BGP + failover configured" },
+  { id: "sw-bridge",      name: "SW-Bridge",           category: "Network", model: "Cisco CBS350-24T",       ip: "192.168.10.1",   location: "Bridge Rack",   serial: "FOC2241X0AB",  condition: "Good",      notes: "Primary distribution switch" },
+  { id: "sw-saloon",      name: "SW-Saloon",           category: "Network", model: "Cisco CBS350-16T",       ip: "192.168.10.2",   location: "Saloon Cabinet",serial: "FOC2241X0CD",  condition: "Good",      notes: "" },
+  { id: "sw-deck",        name: "SW-Deck-Lower",       category: "Network", model: "Cisco SG250-18",         ip: "192.168.10.5",   location: "Deck Cabinet",  serial: "FOC2131X0EF",  condition: "Fair",      notes: "CPU spikes noted" },
+  { id: "sw-engine",      name: "SW-Engine",           category: "Network", model: "Cisco SG250-18",         ip: "192.168.10.6",   location: "Engine Room",   serial: "FOC2131X0GH",  condition: "Good",      notes: "" },
+  { id: "ap-bridge",      name: "AP-Bridge",           category: "Network", model: "Ubiquiti UAP-AC-Pro",    ip: "192.168.10.20",  location: "Bridge Mast",   serial: "UBQ2022A001",  condition: "Good",      notes: "" },
+  { id: "ap-deck",        name: "AP-Deck-Aft",         category: "Network", model: "Ubiquiti UAP-AC-Pro",    ip: "192.168.10.21",  location: "Aft Deck",      serial: "UBQ2022A002",  condition: "Good",      notes: "" },
+  { id: "cam-bridge",     name: "Cam-Bridge-01",       category: "Camera",  model: "Dahua IPC-HDW3849H",     ip: "192.168.10.51",  location: "Bridge Ext.",   serial: "DH2023051201", condition: "Fair",      notes: "PoE — requires port bounce" },
+  { id: "cam-saloon",     name: "Cam-Saloon-01",       category: "Camera",  model: "Dahua IPC-HDW3849H",     ip: "192.168.10.52",  location: "Saloon",        serial: "DH2023051202", condition: "Good",      notes: "" },
+  { id: "cam-deck1",      name: "Cam-Deck-01",         category: "Camera",  model: "Dahua IPC-HDW3849H",     ip: "192.168.10.53",  location: "Fore Deck",     serial: "DH2023051203", condition: "Good",      notes: "" },
+  { id: "cam-deck2",      name: "Cam-Deck-02",         category: "Camera",  model: "Dahua IPC-HDW3849H",     ip: "192.168.10.54",  location: "Aft Deck",      serial: "DH2023051204", condition: "Good",      notes: "" },
+  { id: "av-proc",        name: "AV-Proc-Saloon",      category: "AV",      model: "Crestron NVX-350",       ip: "192.168.10.22",  location: "Saloon AV Rack",serial: "CRE7462183",   condition: "Good",      notes: "4K HDR matrix" },
+  { id: "av-matrix",      name: "AV-Matrix-Saloon",    category: "AV",      model: "Kramer VS-88H",          ip: "192.168.10.23",  location: "Saloon AV Rack",serial: "KRM1980041",   condition: "Good",      notes: "" },
+  { id: "qsys-core",      name: "Q-SYS Core",          category: "AV",      model: "Q-SYS Core 110f",        ip: "192.168.10.30",  location: "Bridge Rack",   serial: "QSC2021001",   condition: "Good",      notes: "Audio DSP main" },
+  { id: "nas",            name: "NAS-Synology",        category: "Server",  model: "Synology DS1522+",       ip: "192.168.10.80",  location: "Engine Room",   serial: "SYN2022001",   condition: "Good",      notes: "" },
+  { id: "ups-main",       name: "UPS-Main",            category: "Power",   model: "APC Smart-UPS 3000VA",   ip: "192.168.10.90",  location: "Engine Room",   serial: "AS1720140893", condition: "Good",      notes: "Battery at 42%" },
+  { id: "ups-av",         name: "UPS-AV",              category: "Power",   model: "APC Smart-UPS 750VA",    ip: "192.168.10.91",  location: "Saloon AV Rack",serial: "AS1820140112", condition: "Good",      notes: "" },
 ];
 
-const EDGES = [
-  { from: "starlink",  to: "core-sw"  },
-  { from: "core-sw",   to: "sw-bridge" },
-  { from: "core-sw",   to: "sw-saloon" },
-  { from: "core-sw",   to: "sw-deck"  },
-  { from: "core-sw",   to: "sw-engine" },
-  { from: "core-sw",   to: "nas"      },
-  { from: "core-sw",   to: "ups-main" },
-  { from: "sw-bridge", to: "ap-bridge" },
-  { from: "sw-bridge", to: "cam-bridge" },
-  { from: "sw-bridge", to: "qsys-core" },
-  { from: "sw-bridge", to: "tablet-br" },
-  { from: "sw-saloon", to: "ap-deck"  },
-  { from: "sw-saloon", to: "cam-saloon" },
-  { from: "sw-saloon", to: "qsys-amp" },
-  { from: "sw-saloon", to: "ups-av"   },
-  { from: "sw-deck",   to: "cam-deck1" },
-  { from: "sw-deck",   to: "cam-deck2" },
-  { from: "qsys-core", to: "qsys-amp" },
+const CABLES = [
+  { id: "c01", label: "C-001", source: "router-wan",  target: "sw-bridge",   type: "Cat6A",    notes: "Primary WAN uplink" },
+  { id: "c02", label: "C-002", source: "sw-bridge",   target: "sw-saloon",   type: "Cat6A",    notes: "Trunk" },
+  { id: "c03", label: "C-003", source: "sw-bridge",   target: "sw-deck",     type: "Cat6A",    notes: "Trunk" },
+  { id: "c04", label: "C-004", source: "sw-bridge",   target: "sw-engine",   type: "Cat6A",    notes: "Trunk" },
+  { id: "c05", label: "C-005", source: "sw-bridge",   target: "ap-bridge",   type: "Cat6",     notes: "PoE" },
+  { id: "c06", label: "C-006", source: "sw-bridge",   target: "cam-bridge",  type: "Cat6",     notes: "PoE camera" },
+  { id: "c07", label: "C-007", source: "sw-bridge",   target: "qsys-core",   type: "Cat6A",    notes: "" },
+  { id: "c08", label: "C-008", source: "sw-bridge",   target: "nas",         type: "Cat6A",    notes: "" },
+  { id: "c09", label: "C-009", source: "sw-saloon",   target: "ap-deck",     type: "Cat6",     notes: "PoE" },
+  { id: "c10", label: "C-010", source: "sw-saloon",   target: "cam-saloon",  type: "Cat6",     notes: "PoE camera" },
+  { id: "c11", label: "C-011", source: "sw-saloon",   target: "av-proc",     type: "Cat6A",    notes: "" },
+  { id: "c12", label: "C-012", source: "sw-saloon",   target: "av-matrix",   type: "Cat6A",    notes: "" },
+  { id: "c13", label: "C-013", source: "sw-saloon",   target: "ups-av",      type: "Cat6",     notes: "SNMP monitoring" },
+  { id: "c14", label: "C-014", source: "sw-deck",     target: "cam-deck1",   type: "Cat6",     notes: "PoE camera" },
+  { id: "c15", label: "C-015", source: "sw-deck",     target: "cam-deck2",   type: "Cat6",     notes: "PoE camera" },
+  { id: "c16", label: "C-016", source: "ups-main",    target: "sw-bridge",   type: "Power IEC",notes: "Protected feed" },
+  { id: "c17", label: "C-017", source: "ups-main",    target: "router-wan",  type: "Power IEC",notes: "Protected feed" },
 ];
 
-// ─── Layout: hierarchical force-ish positions ────────────────────────
-const POSITIONS = {
-  "starlink":  { x: 500, y: 60  },
-  "core-sw":   { x: 500, y: 170 },
-  "sw-bridge": { x: 200, y: 300 },
-  "sw-saloon": { x: 500, y: 300 },
-  "sw-deck":   { x: 750, y: 300 },
-  "sw-engine": { x: 950, y: 300 },
-  "nas":       { x: 650, y: 170 },
-  "ups-main":  { x: 350, y: 170 },
-  "ap-bridge": { x: 80,  y: 420 },
-  "cam-bridge":{ x: 200, y: 420 },
-  "qsys-core": { x: 310, y: 420 },
-  "tablet-br": { x: 80,  y: 530 },
-  "ap-deck":   { x: 410, y: 420 },
-  "cam-saloon":{ x: 510, y: 420 },
-  "qsys-amp":  { x: 310, y: 530 },
-  "ups-av":    { x: 610, y: 420 },
-  "cam-deck1": { x: 700, y: 420 },
-  "cam-deck2": { x: 820, y: 420 },
+// ─── Status mock ──────────────────────────────────────────────────────────────
+const MOCK_STATUS = {
+  "router-wan": "online", "sw-bridge": "online",   "sw-saloon": "online",
+  "sw-deck": "warning",   "sw-engine": "online",   "ap-bridge": "online",
+  "ap-deck": "online",    "cam-bridge": "offline",  "cam-saloon": "online",
+  "cam-deck1": "online",  "cam-deck2": "online",   "av-proc": "online",
+  "av-matrix": "online",  "qsys-core": "online",   "nas": "online",
+  "ups-main": "warning",  "ups-av": "online",
 };
 
-const TYPE_CONFIG = {
-  switch:   { icon: Network,     color: "text-cyan-400",   bg: "bg-cyan-500/20",    border: "border-cyan-500/40" },
-  router:   { icon: RouterIcon,  color: "text-blue-400",   bg: "bg-blue-500/20",    border: "border-blue-500/40" },
-  ap:       { icon: Wifi,        color: "text-indigo-400", bg: "bg-indigo-500/20",  border: "border-indigo-500/40" },
-  camera:   { icon: Camera,      color: "text-purple-400", bg: "bg-purple-500/20",  border: "border-purple-500/40" },
-  av:       { icon: Monitor,     color: "text-orange-400", bg: "bg-orange-500/20",  border: "border-orange-500/40" },
-  server:   { icon: Server,      color: "text-green-400",  bg: "bg-green-500/20",   border: "border-green-500/40" },
-  ups:      { icon: Zap,         color: "text-yellow-400", bg: "bg-yellow-500/20",  border: "border-yellow-500/40" },
-  endpoint: { icon: Smartphone,  color: "text-gray-400",   bg: "bg-gray-500/20",    border: "border-gray-500/40" },
+// ─── Visual config ────────────────────────────────────────────────────────────
+const CATEGORY_COLORS = {
+  Network: "#06b6d4",
+  Camera:  "#a78bfa",
+  AV:      "#60a5fa",
+  Server:  "#34d399",
+  Power:   "#fbbf24",
+  Other:   "#94a3b8",
 };
 
-const STATUS_DOT = {
-  online:  "bg-green-500",
-  offline: "bg-red-500 animate-pulse",
-  warning: "bg-yellow-500 animate-pulse",
-  unknown: "bg-gray-500",
+const STATUS_COLORS = {
+  online:  "#22c55e",
+  offline: "#ef4444",
+  warning: "#f59e0b",
+  unknown: "#64748b",
 };
 
-const STATUS_RING = {
-  online:  "",
-  offline: "ring-2 ring-red-500/50",
-  warning: "ring-2 ring-yellow-500/50",
-  unknown: "",
+const STATUS_CONFIG = {
+  online:  { label: "Online",  color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/30", dot: "bg-emerald-400" },
+  offline: { label: "Offline", color: "text-red-400",     bg: "bg-red-500/15 border-red-500/30",         dot: "bg-red-400" },
+  warning: { label: "Warning", color: "text-amber-400",   bg: "bg-amber-500/15 border-amber-500/30",     dot: "bg-amber-400" },
+  unknown: { label: "Unknown", color: "text-slate-400",   bg: "bg-slate-500/15 border-slate-500/30",     dot: "bg-slate-400" },
 };
 
-const CANVAS_W = 1080;
-const CANVAS_H = 620;
+const CONDITION_COLORS = {
+  Excellent: "text-emerald-400", Good: "text-cyan-400",
+  Fair: "text-amber-400",        Poor: "text-red-400",
+  Decommissioned: "text-slate-400",
+};
 
-// ─── Tooltip Component ───────────────────────────────────────────────
-function NodeTooltip({ node, x, y }) {
-  const cfg = TYPE_CONFIG[node.type] ?? TYPE_CONFIG.endpoint;
+// ─── Detail Panel ─────────────────────────────────────────────────────────────
+function DetailPanel({ node, onClose }) {
+  if (!node) return null;
+  const status = MOCK_STATUS[node.id] || "unknown";
+  const cfg = STATUS_CONFIG[status];
+  const cables = CABLES.filter(c => c.source === node.id || c.target === node.id);
+
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.92, y: 6 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.92 }}
-      transition={{ duration: 0.12 }}
-      className="absolute z-50 pointer-events-none"
-      style={{ left: x + 16, top: y - 10 }}
-    >
-      <div className="bg-card border border-border rounded-xl shadow-2xl p-3 min-w-[180px]">
-        <div className="flex items-center gap-2 mb-2">
-          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${cfg.bg}`}>
-            <cfg.icon size={14} className={cfg.color} />
+    <AnimatePresence>
+      <motion.div
+        key={node.id}
+        initial={{ opacity: 0, x: 24 }}
+        animate={{ opacity: 1, x: 0 }}
+        exit={{ opacity: 0, x: 24 }}
+        transition={{ duration: 0.2, ease: "easeOut" }}
+        className="absolute top-4 right-4 w-72 z-20 pointer-events-auto"
+      >
+        <div className="rounded-2xl border border-white/10 bg-[#0a0f1c]/92 backdrop-blur-xl shadow-2xl overflow-hidden">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+            <div className="flex items-center gap-2.5">
+              <span className={`w-2 h-2 rounded-full ${cfg.dot}`} style={{ animation: status !== "online" ? "pulse 2s infinite" : "none" }} />
+              <p className="text-sm font-semibold text-white leading-tight">{node.name}</p>
+            </div>
+            <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white">
+              <X size={12} />
+            </button>
           </div>
-          <div>
-            <p className="text-xs font-bold text-foreground leading-none">{node.label}</p>
-            <p className="text-xs text-muted-foreground font-mono mt-0.5">{node.ip}</p>
-          </div>
-          <span className={`ml-auto w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT[node.status]}`} />
-        </div>
-        <div className="space-y-1 text-xs text-muted-foreground border-t border-border/50 pt-2">
-          <div className="flex justify-between"><span>Vendor</span><span className="text-foreground">{node.vendor}</span></div>
-          <div className="flex justify-between"><span>Model</span><span className="text-foreground truncate ml-2 max-w-[120px]">{node.model}</span></div>
-          {node.ports && <div className="flex justify-between"><span>Ports</span><span className="text-foreground">{node.ports}</span></div>}
-          <div className="flex justify-between">
-            <span>Status</span>
-            <span className={node.status === "online" ? "text-green-400" : node.status === "offline" ? "text-red-400" : "text-yellow-400"}>
-              {node.status.toUpperCase()}
+
+          {/* Status + category */}
+          <div className="px-4 pt-3 pb-1 flex items-center gap-2 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+              {cfg.label}
+            </span>
+            <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border border-white/10 text-slate-400">
+              {node.category}
             </span>
           </div>
+
+          {/* Details */}
+          <div className="px-4 py-3 space-y-2.5">
+            {node.model    && <Row icon={Tag}     label="Model"    value={node.model} />}
+            {node.ip       && <Row icon={Hash}    label="IP"       value={node.ip} mono />}
+            {node.location && <Row icon={MapPin}  label="Location" value={node.location} />}
+            {node.serial   && <Row icon={Hash}    label="Serial"   value={node.serial} mono />}
+            {node.condition && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">Condition</span>
+                <span className={`text-xs font-medium ${CONDITION_COLORS[node.condition] || "text-slate-400"}`}>{node.condition}</span>
+              </div>
+            )}
+            {node.notes && (
+              <div className="pt-1 border-t border-white/6">
+                <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><FileText size={10} /> Notes</p>
+                <p className="text-xs text-slate-300 leading-relaxed">{node.notes}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Connected cables */}
+          {cables.length > 0 && (
+            <div className="px-4 pb-4 border-t border-white/6 pt-3">
+              <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide flex items-center gap-1.5">
+                <Cable size={10} /> Connections ({cables.length})
+              </p>
+              <div className="space-y-2">
+                {cables.map(c => {
+                  const peerId = c.source === node.id ? c.target : c.source;
+                  const peer = DEVICES.find(d => d.id === peerId);
+                  const peerStatus = MOCK_STATUS[peerId] || "unknown";
+                  const peerStatusDot = STATUS_COLORS[peerStatus];
+                  return (
+                    <div key={c.id} className="flex items-center justify-between text-xs gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: peerStatusDot }} />
+                        <span className="text-slate-300 truncate">{peer?.name || peerId}</span>
+                      </div>
+                      <span className="text-cyan-400/70 font-mono text-[10px] flex-shrink-0 ml-1">{c.type}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-1 mt-2 pt-2 border-t border-border/50 text-xs text-primary">
-          <span>Click to view details</span>
-          <ChevronRight size={10} />
-        </div>
-      </div>
-    </motion.div>
+      </motion.div>
+    </AnimatePresence>
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────
-export default function TopologyPage() {
-  const navigate = useNavigate();
-  const svgRef = useRef(null);
-  const containerRef = useRef(null);
-
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState(null);
-  const [hoveredNode, setHoveredNode] = useState(null);
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
-  const [filterType, setFilterType] = useState("all");
-  const [filterStatus, setFilterStatus] = useState("all");
-  const [showFilters, setShowFilters] = useState(false);
-
-  const filteredNodeIds = new Set(
-    NODES.filter(n =>
-      (filterType === "all" || n.type === filterType) &&
-      (filterStatus === "all" || n.status === filterStatus)
-    ).map(n => n.id)
+function Row({ icon: Icon, label, value, mono }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-slate-500 flex items-center gap-1 flex-shrink-0"><Icon size={10} />{label}</span>
+      <span className={`text-xs text-slate-200 truncate text-right ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
   );
+}
 
-  const visibleEdges = EDGES.filter(e => filteredNodeIds.has(e.from) && filteredNodeIds.has(e.to));
+// ─── Legend ───────────────────────────────────────────────────────────────────
+function Legend({ filter, onFilter }) {
+  return (
+    <div className="absolute bottom-4 left-4 z-10 rounded-xl border border-white/10 bg-[#0a0f1c]/90 backdrop-blur-md p-3 space-y-1.5">
+      <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-2">Category</p>
+      {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
+        <button
+          key={cat}
+          onClick={() => onFilter(f => f === cat ? null : cat)}
+          className={`flex items-center gap-2 text-xs w-full transition-opacity ${filter && filter !== cat ? "opacity-30" : "opacity-100"}`}
+        >
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+          <span className="text-slate-400">{cat}</span>
+        </button>
+      ))}
+      <div className="border-t border-white/6 mt-2 pt-2 space-y-1.5">
+        <p className="text-[10px] text-slate-500 uppercase tracking-widest">Status</p>
+        {Object.entries(STATUS_COLORS).slice(0, 3).map(([s, color]) => (
+          <div key={s} className="flex items-center gap-2 text-xs">
+            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
+            <span className="text-slate-400 capitalize">{s}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-  const handleWheel = useCallback((e) => {
-    e.preventDefault();
-    setZoom(z => Math.max(0.4, Math.min(2.5, z - e.deltaY * 0.001)));
-  }, []);
+// ─── Main Page ────────────────────────────────────────────────────────────────
+export default function TopologyPage() {
+  const graphRef = useRef();
+  const containerRef = useRef();
+  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [categoryFilter, setCategoryFilter] = useState(null);
+  const [key, setKey] = useState(0); // force re-mount on reset
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (el) el.addEventListener("wheel", handleWheel, { passive: false });
-    return () => { if (el) el.removeEventListener("wheel", handleWheel); };
-  }, [handleWheel]);
+    const update = () => {
+      if (containerRef.current) {
+        setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
 
-  const onMouseDown = (e) => {
-    if (e.target.tagName === "svg" || e.target.tagName === "rect") {
-      setDragging(true);
-      setDragStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-    }
+  // Build filtered graph data
+  const visibleDevices = categoryFilter
+    ? DEVICES.filter(d => d.category === categoryFilter)
+    : DEVICES;
+  const visibleIds = new Set(visibleDevices.map(d => d.id));
+  const visibleCables = CABLES.filter(c => visibleIds.has(c.source) && visibleIds.has(c.target));
+
+  const graphData = {
+    nodes: visibleDevices.map(d => ({ ...d, status: MOCK_STATUS[d.id] || "unknown" })),
+    links: visibleCables.map(c => ({ ...c, source: c.source, target: c.target })),
   };
 
-  const onMouseMove = (e) => {
-    if (dragging && dragStart) {
-      setPan({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
-    }
-    if (hoveredNode) {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-    }
-  };
+  const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
+    const isSelected = selectedNode?.id === node.id;
+    const catColor = CATEGORY_COLORS[node.category] || "#94a3b8";
+    const statusColor = STATUS_COLORS[node.status] || STATUS_COLORS.unknown;
+    const radius = isSelected ? 14 : 10;
 
-  const onMouseUp = () => { setDragging(false); setDragStart(null); };
+    if (isSelected) {
+      ctx.shadowColor = catColor;
+      ctx.shadowBlur = 22;
+    }
 
-  const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+    // Outer status ring
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius + 4, 0, 2 * Math.PI);
+    ctx.fillStyle = catColor + "22";
+    ctx.fill();
+
+    // Node body gradient
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
+    const grad = ctx.createRadialGradient(node.x - 2, node.y - 2, 1, node.x, node.y, radius);
+    grad.addColorStop(0, catColor + "ee");
+    grad.addColorStop(1, catColor + "77");
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Border ring
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
+    ctx.strokeStyle = isSelected ? "#ffffff55" : catColor + "88";
+    ctx.lineWidth = isSelected ? 2 : 1;
+    ctx.stroke();
+
+    // Status dot
+    ctx.beginPath();
+    ctx.arc(node.x + radius * 0.68, node.y - radius * 0.68, 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = statusColor;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = statusColor;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Label
+    const fontSize = Math.max(8, 10 / globalScale);
+    ctx.font = `${isSelected ? "600" : "500"} ${fontSize}px Inter, sans-serif`;
+    ctx.fillStyle = isSelected ? "#ffffff" : "rgba(255,255,255,0.75)";
+    ctx.textAlign = "center";
+    ctx.fillText(node.name.length > 14 ? node.name.slice(0, 13) + "…" : node.name, node.x, node.y + radius + fontSize + 2);
+  }, [selectedNode]);
+
+  const linkCanvasObject = useCallback((link, ctx) => {
+    const s = link.source;
+    const t = link.target;
+    if (!s.x || !t.x) return;
+    const isPower = link.type === "Power IEC";
+    ctx.beginPath();
+    ctx.moveTo(s.x, s.y);
+    ctx.lineTo(t.x, t.y);
+    ctx.strokeStyle = isPower ? "rgba(251,191,36,0.3)" : "rgba(6,182,212,0.2)";
+    ctx.lineWidth = isPower ? 2 : 1.5;
+    ctx.setLineDash(isPower ? [5, 3] : []);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }, []);
+
+  const handleNodeClick = useCallback((node) => {
+    setSelectedNode(prev => prev?.id === node.id ? null : node);
+  }, []);
 
   const statusCounts = {
-    online:  NODES.filter(n => n.status === "online").length,
-    offline: NODES.filter(n => n.status === "offline").length,
-    warning: NODES.filter(n => n.status === "warning").length,
+    online:  DEVICES.filter(d => MOCK_STATUS[d.id] === "online").length,
+    warning: DEVICES.filter(d => MOCK_STATUS[d.id] === "warning").length,
+    offline: DEVICES.filter(d => MOCK_STATUS[d.id] === "offline").length,
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="h-full flex flex-col bg-[#060912]">
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-border/50 flex-shrink-0">
-        <div>
-          <h1 className="text-base font-bold text-foreground">Network Topology</h1>
-          <p className="text-xs text-muted-foreground">{NODES.length} devices · {EDGES.length} links</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Status summary pills */}
-          <div className="hidden sm:flex items-center gap-2 mr-2">
-            <span className="flex items-center gap-1.5 text-xs text-green-400"><span className="w-2 h-2 rounded-full bg-green-500" />{statusCounts.online} online</span>
-            {statusCounts.warning > 0 && <span className="flex items-center gap-1.5 text-xs text-yellow-400"><span className="w-2 h-2 rounded-full bg-yellow-500" />{statusCounts.warning} warn</span>}
-            {statusCounts.offline > 0 && <span className="flex items-center gap-1.5 text-xs text-red-400"><span className="w-2 h-2 rounded-full bg-red-500" />{statusCounts.offline} offline</span>}
+      <div className="flex items-center justify-between px-5 py-3 border-b border-white/6 bg-[#070b13]/80 backdrop-blur-xl flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-cyan-500/12 flex items-center justify-center ring-1 ring-cyan-500/20">
+            <Layers size={14} className="text-cyan-400" />
           </div>
-          <button onClick={() => setShowFilters(f => !f)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-colors ${showFilters ? "bg-primary/15 border-primary/30 text-primary" : "border-border text-muted-foreground hover:text-foreground"}`}>
-            <Filter size={12} /> Filter
+          <div>
+            <h1 className="text-sm font-bold text-white leading-none">Network Topology</h1>
+            <p className="text-xs text-slate-500 mt-0.5">{DEVICES.length} devices · {CABLES.length} links</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-3 mr-1">
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{statusCounts.online} online</span>
+            {statusCounts.warning > 0 && <span className="flex items-center gap-1.5 text-xs text-amber-400"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{statusCounts.warning} warning</span>}
+            {statusCounts.offline > 0 && <span className="flex items-center gap-1.5 text-xs text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />{statusCounts.offline} offline</span>}
+          </div>
+          {categoryFilter && (
+            <button
+              onClick={() => setCategoryFilter(null)}
+              className="flex items-center gap-1.5 text-xs bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2.5 py-1 rounded-lg hover:bg-cyan-500/25 transition-colors"
+            >
+              <Filter size={10} /> {categoryFilter} <X size={10} />
+            </button>
+          )}
+          <button
+            onClick={() => { setKey(k => k + 1); setSelectedNode(null); setCategoryFilter(null); }}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/10 text-slate-500 hover:text-slate-200 transition-colors"
+            title="Reset layout"
+          >
+            <RefreshCw size={13} />
           </button>
-          <button onClick={() => setZoom(z => Math.min(2.5, z + 0.2))} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><ZoomIn size={13} /></button>
-          <button onClick={() => setZoom(z => Math.max(0.4, z - 0.2))} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><ZoomOut size={13} /></button>
-          <button onClick={resetView} className="w-7 h-7 flex items-center justify-center rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"><Maximize2 size={13} /></button>
+          <button
+            onClick={() => graphRef.current?.zoomToFit(400)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/10 text-slate-500 hover:text-slate-200 transition-colors"
+            title="Fit to view"
+          >
+            <Maximize2 size={13} />
+          </button>
         </div>
       </div>
 
-      {/* Filter bar */}
-      <AnimatePresence>
-        {showFilters && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="border-b border-border/50 overflow-hidden">
-            <div className="px-5 py-2.5 flex flex-wrap gap-4 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Type:</span>
-                {["all", "switch", "router", "ap", "camera", "av", "server", "ups", "endpoint"].map(t => (
-                  <button key={t} onClick={() => setFilterType(t)} className={`px-2 py-1 rounded-md capitalize transition-colors ${filterType === t ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"}`}>{t}</button>
-                ))}
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-muted-foreground">Status:</span>
-                {["all", "online", "offline", "warning"].map(s => (
-                  <button key={s} onClick={() => setFilterStatus(s)} className={`px-2 py-1 rounded-md capitalize transition-colors ${filterStatus === s ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground"}`}>{s}</button>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Canvas */}
-      <div
-        ref={containerRef}
-        className="flex-1 relative overflow-hidden cursor-grab active:cursor-grabbing select-none"
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-      >
-        <svg
-          ref={svgRef}
-          width="100%"
-          height="100%"
-          style={{ touchAction: "none" }}
-        >
-          {/* Background grid */}
-          <defs>
-            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="hsl(220,15%,12%)" strokeWidth="0.5" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#grid)" />
-
-          <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-            {/* Edges */}
-            {visibleEdges.map((edge, i) => {
-              const from = POSITIONS[edge.from];
-              const to = POSITIONS[edge.to];
-              if (!from || !to) return null;
-              const fromNode = NODES.find(n => n.id === edge.from);
-              const toNode = NODES.find(n => n.id === edge.to);
-              const hasOffline = fromNode?.status === "offline" || toNode?.status === "offline";
-              const hasWarning = fromNode?.status === "warning" || toNode?.status === "warning";
-              const stroke = hasOffline ? "hsl(0,75%,45%)" : hasWarning ? "hsl(38,92%,45%)" : "hsl(220,15%,22%)";
-              return (
-                <line
-                  key={i}
-                  x1={from.x} y1={from.y}
-                  x2={to.x} y2={to.y}
-                  stroke={stroke}
-                  strokeWidth={hasOffline || hasWarning ? 1.5 : 1}
-                  strokeDasharray={hasOffline ? "4 3" : undefined}
-                  opacity={0.7}
-                />
-              );
-            })}
-
-            {/* Nodes */}
-            {NODES.filter(n => filteredNodeIds.has(n.id)).map(node => {
-              const pos = POSITIONS[node.id];
-              if (!pos) return null;
-              const cfg = TYPE_CONFIG[node.type] ?? TYPE_CONFIG.endpoint;
-              const isCore = node.type === "switch" && node.id === "core-sw";
-              const r = isCore ? 28 : 22;
-
-              return (
-                <g
-                  key={node.id}
-                  transform={`translate(${pos.x}, ${pos.y})`}
-                  style={{ cursor: "pointer" }}
-                  onMouseEnter={(e) => {
-                    setHoveredNode(node);
-                    const rect = containerRef.current?.getBoundingClientRect();
-                    if (rect) setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-                  }}
-                  onMouseLeave={() => setHoveredNode(null)}
-                  onClick={() => navigate(`/equipment/${node.id}`)}
-                >
-                  {/* Outer ring for offline/warning */}
-                  {(node.status === "offline" || node.status === "warning") && (
-                    <circle
-                      r={r + 6}
-                      fill="none"
-                      stroke={node.status === "offline" ? "hsl(0,75%,55%)" : "hsl(38,92%,50%)"}
-                      strokeWidth={1}
-                      opacity={0.4}
-                      strokeDasharray="3 2"
-                    />
-                  )}
-
-                  {/* Node circle */}
-                  <circle
-                    r={r}
-                    fill={`hsl(220,18%,${isCore ? 12 : 10}%)`}
-                    stroke={
-                      node.status === "offline" ? "hsl(0,75%,55%)" :
-                      node.status === "warning" ? "hsl(38,92%,50%)" :
-                      hoveredNode?.id === node.id ? "hsl(192,100%,48%)" :
-                      "hsl(220,15%,22%)"
-                    }
-                    strokeWidth={hoveredNode?.id === node.id ? 2 : 1.5}
-                  />
-
-                  {/* Status dot */}
-                  <circle
-                    cx={r - 4} cy={-(r - 4)}
-                    r={5}
-                    fill={
-                      node.status === "online" ? "hsl(145,65%,45%)" :
-                      node.status === "offline" ? "hsl(0,75%,55%)" :
-                      "hsl(38,92%,50%)"
-                    }
-                    stroke="hsl(220,20%,6%)"
-                    strokeWidth={1.5}
-                  />
-
-                  {/* Label */}
-                  <text
-                    textAnchor="middle"
-                    y={r + 14}
-                    fontSize={10}
-                    fill="hsl(210,20%,72%)"
-                    fontFamily="Inter, sans-serif"
-                    fontWeight={isCore ? "600" : "400"}
-                  >
-                    {node.label.length > 14 ? node.label.slice(0, 13) + "…" : node.label}
-                  </text>
-
-                  {/* Inline icon using foreignObject */}
-                  <foreignObject x={-10} y={-10} width={20} height={20} style={{ pointerEvents: "none" }}>
-                    <div className={`w-full h-full flex items-center justify-center ${cfg.color}`} xmlns="http://www.w3.org/1999/xhtml">
-                      <cfg.icon size={isCore ? 16 : 13} />
-                    </div>
-                  </foreignObject>
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-
-        {/* Tooltip */}
-        <AnimatePresence>
-          {hoveredNode && (
-            <NodeTooltip
-              node={hoveredNode}
-              x={tooltipPos.x}
-              y={tooltipPos.y}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Zoom indicator */}
-        <div className="absolute bottom-3 right-3 text-xs text-muted-foreground bg-card/80 border border-border/50 px-2 py-1 rounded-lg font-mono">
-          {Math.round(zoom * 100)}%
+      {/* Graph canvas */}
+      <div ref={containerRef} className="flex-1 relative overflow-hidden">
+        {/* Hint */}
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-slate-600 pointer-events-none z-10 select-none">
+          Drag nodes · Scroll to zoom · Click for details
         </div>
+
+        <ForceGraph2D
+          key={key}
+          ref={graphRef}
+          graphData={graphData}
+          width={dimensions.width}
+          height={dimensions.height}
+          backgroundColor="#060912"
+          nodeCanvasObject={nodeCanvasObject}
+          nodeCanvasObjectMode={() => "replace"}
+          linkCanvasObject={linkCanvasObject}
+          linkCanvasObjectMode={() => "replace"}
+          onNodeClick={handleNodeClick}
+          nodeLabel={() => ""}
+          enableNodeDrag={true}
+          enableZoomInteraction={true}
+          cooldownTicks={100}
+          d3AlphaDecay={0.015}
+          d3VelocityDecay={0.25}
+          nodePointerAreaPaint={(node, color, ctx) => {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(node.x, node.y, 16, 0, 2 * Math.PI);
+            ctx.fill();
+          }}
+        />
 
         {/* Legend */}
-        <div className="absolute bottom-3 left-3 bg-card/90 border border-border/50 rounded-xl p-3 space-y-1.5">
-          <p className="text-xs font-semibold text-muted-foreground mb-2">Legend</p>
-          {Object.entries(TYPE_CONFIG).map(([type, cfg]) => (
-            <div key={type} className="flex items-center gap-2 text-xs text-muted-foreground">
-              <cfg.icon size={11} className={cfg.color} />
-              <span className="capitalize">{type}</span>
-            </div>
-          ))}
-        </div>
+        <Legend filter={categoryFilter} onFilter={setCategoryFilter} />
 
-        {/* Pan hint */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 text-xs text-muted-foreground/50 pointer-events-none">
-          Drag to pan · Scroll to zoom · Click node for details
-        </div>
+        {/* Detail panel */}
+        {selectedNode && (
+          <DetailPanel
+            node={selectedNode}
+            onClose={() => setSelectedNode(null)}
+          />
+        )}
       </div>
     </div>
   );
