@@ -217,7 +217,7 @@ export default function RadialNetworkGraph({
 
     ctx.shadowBlur = 0;
     ctx.restore();
-  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom]);
+  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom, pan]);
 
   const handleCanvasClick = useCallback((e) => {
     if (isDragging) return;
