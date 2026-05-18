@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, useMemo, memo } from "react";
+import { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 
 const CATEGORY_COLORS = {
@@ -31,7 +31,6 @@ const MOCK_STATUS = {
   "Rack-Comms": "online",
 };
 
-// Build stable graph data once — never rebuild so force-graph doesn't lose node refs
 function buildGraphData(equipment, cables) {
   const nodeMap = new Map();
   equipment.forEach(eq => {
@@ -49,7 +48,7 @@ function buildGraphData(equipment, cables) {
     const toName = (c.target ?? c.to ?? "").split(" (")[0];
     [fromName, toName].forEach(name => {
       if (name && !nodeMap.has(name)) {
-        nodeMap.set(name, { id: name, label: name, category: "Other", name, status: MOCK_STATUS[name] || "unknown" });
+        nodeMap.set(name, { id: name, label: name, category: "Other", name, status: "unknown" });
       }
     });
   });
@@ -60,23 +59,39 @@ function buildGraphData(equipment, cables) {
       source: (c.source ?? c.from ?? "").split(" (")[0],
       target: (c.target ?? c.to ?? "").split(" (")[0],
       label: c.type,
-      cableLabel: c.label,
     }))
     .filter(l => l.source && l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
 
   return { nodes, links };
 }
 
-// Inner graph isolated from selectedNode re-renders via memo
-const GraphCanvas = memo(function GraphCanvas({ graphData, selectedNodeId, onNodeClick }) {
-  const graphRef = useRef();
+export default function NetworkGraph({ equipment, cables, onNodeClick, selectedNode }) {
   const containerRef = useRef();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+
+  // Keep selectedNode in a ref so canvas callbacks can read it without
+  // causing re-renders — this is the key fix: callbacks never change identity.
+  const selectedNodeIdRef = useRef(selectedNode?.id ?? null);
+  selectedNodeIdRef.current = selectedNode?.id ?? null;
+
+  // Build graph data ONCE — deep copy so force-graph can mutate freely
+  // without corrupting our source or triggering re-renders.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const graphData = useMemo(() => {
+    const base = buildGraphData(equipment, cables);
+    return {
+      nodes: base.nodes.map(n => ({ ...n })),
+      links: base.links.map(l => ({ ...l })),
+    };
+  }, []); // intentionally empty — data is static mock data
 
   useEffect(() => {
     const update = () => {
       if (containerRef.current) {
-        setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
+        setDimensions({
+          width: containerRef.current.offsetWidth,
+          height: containerRef.current.offsetHeight,
+        });
       }
     };
     update();
@@ -85,9 +100,10 @@ const GraphCanvas = memo(function GraphCanvas({ graphData, selectedNodeId, onNod
     return () => ro.disconnect();
   }, []);
 
+  // Stable callbacks — read selectedNodeId from ref, never recreated
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
     if (!isFinite(node.x) || !isFinite(node.y)) return;
-    const isSelected = selectedNodeId === node.id;
+    const isSelected = selectedNodeIdRef.current === node.id;
     const catColor = CATEGORY_COLORS[node.category] || "#94a3b8";
     const statusColor = STATUS_COLORS[node.status] || STATUS_COLORS.unknown;
     const radius = isSelected ? 14 : 10;
@@ -118,7 +134,7 @@ const GraphCanvas = memo(function GraphCanvas({ graphData, selectedNodeId, onNod
     ctx.fillStyle = isSelected ? "#ffffff" : "rgba(255,255,255,0.75)";
     ctx.textAlign = "center";
     ctx.fillText(node.label, node.x, node.y + radius + fontSize + 2);
-  }, [selectedNodeId]);
+  }, []); // stable — reads ref at paint time
 
   const linkCanvasObject = useCallback((link, ctx) => {
     const start = link.source;
@@ -137,7 +153,6 @@ const GraphCanvas = memo(function GraphCanvas({ graphData, selectedNodeId, onNod
   return (
     <div ref={containerRef} className="w-full h-full">
       <ForceGraph2D
-        ref={graphRef}
         graphData={graphData}
         width={dimensions.width}
         height={dimensions.height}
@@ -155,33 +170,5 @@ const GraphCanvas = memo(function GraphCanvas({ graphData, selectedNodeId, onNod
         enableZoomInteraction={true}
       />
     </div>
-  );
-});
-
-export default function NetworkGraph({ equipment, cables, onNodeClick, selectedNode }) {
-  // Build a fresh deep-copy each mount so force-graph can freely mutate it
-  // without corrupting our source arrays. The memo key is a stable string so
-  // it only rebuilds if the actual data identity changes.
-  const dataKey = useMemo(
-    () => equipment.map(e => e.name).join(","),
-    [equipment]
-  );
-
-  const graphData = useMemo(() => {
-    const base = buildGraphData(equipment, cables);
-    // Deep copy so force-graph's internal mutations don't affect our source
-    return {
-      nodes: base.nodes.map(n => ({ ...n })),
-      links: base.links.map(l => ({ ...l })),
-    };
-  }, [dataKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  return (
-    <GraphCanvas
-      key={dataKey}
-      graphData={graphData}
-      selectedNodeId={selectedNode?.id ?? null}
-      onNodeClick={onNodeClick}
-    />
   );
 }
