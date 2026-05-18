@@ -24,16 +24,16 @@ import {
 } from "@/components/ui/select";
 
 const DEFAULT_LAYOUT = [
-  { id: "w1", type: "stats_grid", x: 0, y: 0, w: 4, h: 1 },
-  { id: "w2", type: "alarms", x: 0, y: 1, w: 1, h: 2 },
-  { id: "w3", type: "categories", x: 1, y: 1, w: 1, h: 2 },
-  { id: "w4", type: "wan_status", x: 2, y: 1, w: 1, h: 2 },
-  { id: "w5", type: "traffic_chart", x: 0, y: 3, w: 3, h: 2 },
-  { id: "w6", type: "wan_latency", x: 3, y: 3, w: 2, h: 2 },
+  { id: "w1", type: "stats_grid", x: 0, y: 0, w: 12, h: 2 },
+  { id: "w2", type: "alarms", x: 0, y: 2, w: 4, h: 3 },
+  { id: "w3", type: "categories", x: 4, y: 2, w: 4, h: 3 },
+  { id: "w4", type: "wan_status", x: 8, y: 2, w: 4, h: 3 },
+  { id: "w5", type: "traffic_chart", x: 0, y: 5, w: 8, h: 4 },
+  { id: "w6", type: "wan_latency", x: 8, y: 5, w: 4, h: 4 },
 ];
 
 const GRID_COLS = 12;
-const CELL_HEIGHT = 80;
+const CELL_HEIGHT = 100;
 
 export default function CustomizableDashboard() {
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);
@@ -153,9 +153,9 @@ export default function CustomizableDashboard() {
       {/* Grid Container */}
       <div
         ref={setGridContainer}
-        className="relative grid gap-4"
+        className="relative grid gap-3 md:gap-4"
         style={{
-          gridTemplateColumns: `repeat(${GRID_COLS}, 1fr)`,
+          gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
           gridAutoRows: `${CELL_HEIGHT}px`,
         }}
         onMouseMove={handleDrag}
