@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Package, Plus, Search, X, Filter, Pencil, Trash2,
   Wifi, Camera, Monitor, Zap, Server, HardDrive, Check,
-  LayoutGrid, List
+  LayoutGrid, List, Download
 } from "lucide-react";
+import InventoryExportModal from "../components/inventory/InventoryExportModal";
 
 const CATEGORIES = ["All", "Network", "Camera", "AV", "Power", "Control", "Other"];
 const CONDITIONS = ["Excellent", "Good", "Fair", "Poor", "Decommissioned"];
@@ -64,6 +65,7 @@ export default function InventoryPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [viewMode, setViewMode] = useState("grid");
+  const [showExport, setShowExport] = useState(false);
 
   const filtered = equipment.filter(e => {
     const matchCat = category === "All" || e.category === category;
@@ -100,12 +102,20 @@ export default function InventoryPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">Equipment CRUD, condition tracking, and spare-parts reference</p>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
-        >
-          <Plus size={14} /> Add Equipment
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowExport(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border text-foreground rounded-lg text-sm font-medium hover:bg-accent transition-colors"
+          >
+            <Download size={14} /> Export
+          </button>
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            <Plus size={14} /> Add Equipment
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -297,6 +307,10 @@ export default function InventoryPage() {
         </div>
       )}
       <p className="text-xs text-muted-foreground">{equipment.length} items · {filtered.length} shown</p>
+
+      {showExport && (
+        <InventoryExportModal equipment={equipment} onClose={() => setShowExport(false)} />
+      )}
     </div>
   );
 }
