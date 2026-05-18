@@ -3,13 +3,14 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
   Wifi, Menu, X, Smartphone, Search, Bell, Share2, GitCommit, Zap,
-  BookOpen, Bot, Cable, Package, FileText, Lightbulb
+  BookOpen, Bot, Cable, Package, FileText, Lightbulb, Radar
 } from "lucide-react";
 
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/topology", icon: Share2, label: "Topology" },
   { to: "/snmp", icon: Network, label: "SNMP" },
+  { to: "/discovery", icon: Radar, label: "Discovery" },
   { to: "/diagnoses", icon: Activity, label: "Diagnoses" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
   { to: "/inventory", icon: Package, label: "Inventory" },

@@ -22,6 +22,7 @@ import CablesPage from './pages/CablesPage';
 import InventoryPage from './pages/InventoryPage';
 import ReportsPage from './pages/ReportsPage';
 import LightingPage from './pages/LightingPage';
+import NetworkDiscoveryPage from './pages/NetworkDiscoveryPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -53,6 +54,7 @@ function App() {
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/lighting" element={<LightingPage />} />
+            <Route path="/discovery" element={<NetworkDiscoveryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
