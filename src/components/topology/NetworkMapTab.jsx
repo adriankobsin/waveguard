@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
-import ForceGraph2D from "react-force-graph-2d";
 import { base44 } from "@/api/base44Client";
+import RadialNetworkGraph from "./RadialNetworkGraph";
 import {
   Search, Filter, RefreshCw, Maximize2, GitBranch, ArrowRight,
   CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable
@@ -294,110 +294,23 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
 
   const graphData = useMemo(() => ({
     nodes: visibleDevices.map(d => ({
-      ...d,
+      id: d.id,
+      name: d.name,
+      category: d.category,
       status: d.status || "unknown",
+      ...d,
       connections: visibleConnections.filter(c => c.source === d.id || c.target === d.id)
         .map(c => ({ target: c.source === d.id ? c.target : c.source, port: c.source_port })),
     })),
-    links: visibleConnections.map(c => ({ ...c, source: c.source, target: c.target })),
+    links: visibleConnections.map((c, idx) => ({ 
+      id: c.id || `link-${idx}`,
+      source: c.source, 
+      target: c.target,
+      ...c 
+    })),
   }), [visibleDevices, visibleConnections]);
 
-  const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
-    if (!isFinite(node.x) || !isFinite(node.y)) return;
-    const path = pathRef.current;
-    const isPathNode = path?.nodeIds?.has(node.id);
-    const isPickedSource = pathSourceRef.current?.id === node.id;
-    const isSelected = !path && selectedNodeRef.current?.id === node.id;
 
-    const catColor = CATEGORY_COLORS[node.category] || "#94a3b8";
-    const statusColor = STATUS_COLORS[node.status] || STATUS_COLORS.unknown;
-    const dimmed = path && !isPathNode;
-    const radius = (isSelected || isPathNode) ? 14 : 10;
-
-    ctx.globalAlpha = dimmed ? 0.2 : 1;
-
-    if (isSelected || isPickedSource || isPathNode) {
-      ctx.shadowColor = isPickedSource || isPathNode ? "#f97316" : catColor;
-      ctx.shadowBlur = 22;
-    }
-
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, radius + 4, 0, 2 * Math.PI);
-    ctx.fillStyle = isPathNode ? "#fb923c22" : catColor + "22";
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
-    const grad = ctx.createRadialGradient(node.x - 2, node.y - 2, 1, node.x, node.y, radius);
-    if (isPathNode) {
-      grad.addColorStop(0, "#fb923cee");
-      grad.addColorStop(1, "#ea580c88");
-    } else {
-      grad.addColorStop(0, catColor + "ee");
-      grad.addColorStop(1, catColor + "77");
-    }
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    ctx.beginPath();
-    ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
-    ctx.strokeStyle = isPathNode ? "#fb923c" : isSelected ? "#ffffff55" : catColor + "88";
-    ctx.lineWidth = isPathNode ? 2 : isSelected ? 2 : 1;
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(node.x + radius * 0.68, node.y - radius * 0.68, 3.5, 0, 2 * Math.PI);
-    ctx.fillStyle = statusColor;
-    ctx.shadowBlur = 6;
-    ctx.shadowColor = statusColor;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    const fontSize = Math.max(8, 10 / globalScale);
-    ctx.font = `${(isSelected || isPathNode) ? "600" : "500"} ${fontSize}px Inter, sans-serif`;
-    ctx.fillStyle = (isSelected || isPathNode) ? "#ffffff" : "rgba(255,255,255,0.75)";
-    ctx.textAlign = "center";
-    ctx.fillText(node.name.length > 14 ? node.name.slice(0, 13) + "…" : node.name, node.x, node.y + radius + fontSize + 2);
-
-    ctx.globalAlpha = 1;
-  }, []);
-
-  const linkCanvasObject = useCallback((link, ctx) => {
-    const s = link.source;
-    const t = link.target;
-    if (!isFinite(s.x) || !isFinite(s.y) || !isFinite(t.x) || !isFinite(t.y)) return;
-
-    const path = pathRef.current;
-    const isPathEdge = path?.edgeIds?.has(link.id);
-    const dimmed = path && !isPathEdge;
-
-    ctx.globalAlpha = dimmed ? 0.08 : 1;
-
-    ctx.beginPath();
-    ctx.moveTo(s.x, s.y);
-    ctx.lineTo(t.x, t.y);
-
-    if (isPathEdge) {
-      ctx.strokeStyle = "#f97316";
-      ctx.lineWidth = 3;
-      ctx.shadowColor = "#f97316";
-      ctx.shadowBlur = 12;
-      ctx.setLineDash([8, 5]);
-      ctx.lineDashOffset = dashOffsetRef.current;
-      ctx.stroke();
-      ctx.shadowBlur = 0;
-      ctx.setLineDash([]);
-    } else {
-      const isPower = link.type === "Power IEC";
-      ctx.strokeStyle = isPower ? "rgba(251,191,36,0.3)" : "rgba(6,182,212,0.2)";
-      ctx.lineWidth = isPower ? 2 : 1.5;
-      ctx.setLineDash(isPower ? [5, 3] : []);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    ctx.globalAlpha = 1;
-  }, []);
 
   const handleNodeClick = useCallback((node) => {
     if (!pathMode) {
@@ -448,7 +361,7 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   }
 
   return (
-    <div ref={containerRef} className="w-full h-full relative">
+    <div ref={containerRef} className="w-full h-full relative bg-[#060912] overflow-hidden">
       {/* Toolbar */}
       <div className="absolute top-4 left-4 right-4 z-10 flex items-center gap-2">
         <div className="flex items-center gap-2 bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 rounded-xl px-3 py-2">
@@ -478,34 +391,17 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
           <RefreshCw size={12} />
           Refresh
         </button>
-        <button
-          onClick={() => graphRef.current?.zoomToFit(500, 80)}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
-        >
-          <Maximize2 size={12} />
-          Fit
-        </button>
+
       </div>
 
       {/* Graph */}
-      <ForceGraph2D
-        ref={graphRef}
+      <RadialNetworkGraph
         graphData={graphData}
-        width={dimensions.width}
-        height={dimensions.height}
-        backgroundColor="transparent"
-        nodeCanvasObject={nodeCanvasObject}
-        nodeCanvasObjectMode={() => "replace"}
-        linkCanvasObject={linkCanvasObject}
-        linkCanvasObjectMode={() => "replace"}
+        selectedNode={selectedNode}
         onNodeClick={handleNodeClick}
-        nodeLabel={() => ""}
-        cooldownTicks={80}
-        d3AlphaDecay={0.02}
-        d3VelocityDecay={0.3}
-        enableNodeDrag={true}
-        enableZoomInteraction={true}
-        onEngineStop={() => graphRef.current?.zoomToFit(500, 80)}
+        pathSource={pathSource}
+        activePath={activePath}
+        dimensions={dimensions}
       />
 
       {/* Overlays */}
