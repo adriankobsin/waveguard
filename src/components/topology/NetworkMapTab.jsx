@@ -199,9 +199,9 @@ function PathPanel({ path, onClose }) {
   );
 }
 
-function Legend({ filter, onFilter }) {
+function Legend({ filter, onFilter, statusFilter, onStatusFilter }) {
   return (
-    <div className="absolute bottom-4 left-4 z-10 rounded-xl border border-white/10 bg-[#0a0f1c]/90 backdrop-blur-md p-3 space-y-1.5">
+    <div className="absolute bottom-4 left-4 z-10 rounded-xl border border-white/10 bg-[#0a0f1c]/90 backdrop-blur-md p-3 space-y-1.5 max-h-[80vh] overflow-y-auto">
       <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-2">Category</p>
       {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
         <button
@@ -215,11 +215,15 @@ function Legend({ filter, onFilter }) {
       ))}
       <div className="border-t border-white/6 mt-2 pt-2 space-y-1.5">
         <p className="text-[10px] text-slate-500 uppercase tracking-widest">Status</p>
-        {Object.entries(STATUS_COLORS).slice(0, 3).map(([s, color]) => (
-          <div key={s} className="flex items-center gap-2 text-xs">
+        {Object.entries(STATUS_COLORS).map(([s, color]) => (
+          <button
+            key={s}
+            onClick={() => onStatusFilter(f => f === s ? null : s)}
+            className={`flex items-center gap-2 text-xs w-full transition-opacity ${statusFilter && statusFilter !== s ? "opacity-30" : "opacity-100"}`}
+          >
             <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
             <span className="text-slate-400 capitalize">{s}</span>
-          </div>
+          </button>
         ))}
       </div>
     </div>
@@ -232,7 +236,9 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [selectedNode, setSelectedNode] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState(null);
+  const [statusFilter, setStatusFilter] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [zoom, setZoom] = useState(1);
   const [pathMode, setPathMode] = useState(false);
   const [pathSource, setPathSource] = useState(null);
   const [pathTarget, setPathTarget] = useState(null);
@@ -274,6 +280,9 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
     if (categoryFilter) {
       devices = devices.filter(d => d.category === categoryFilter);
     }
+    if (statusFilter) {
+      devices = devices.filter(d => d.status === statusFilter);
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       devices = devices.filter(d =>
@@ -284,7 +293,7 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
       );
     }
     return devices;
-  }, [topologyData, categoryFilter, searchQuery]);
+  }, [topologyData, categoryFilter, statusFilter, searchQuery]);
 
   const visibleIds = new Set(visibleDevices.map(d => d.id));
   const visibleConnections = useMemo(() => {
@@ -391,7 +400,21 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
           <RefreshCw size={12} />
           Refresh
         </button>
-
+        <div className="flex items-center gap-1 bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 rounded-xl px-2 py-2">
+          <button
+            onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}
+            className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
+          >
+            <span className="text-lg font-bold">−</span>
+          </button>
+          <span className="text-xs text-slate-500 w-12 text-center">{Math.round(zoom * 100)}%</span>
+          <button
+            onClick={() => setZoom(z => Math.min(2, z + 0.25))}
+            className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
+          >
+            <span className="text-lg font-bold">+</span>
+          </button>
+        </div>
       </div>
 
       {/* Graph */}
@@ -402,10 +425,11 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
         pathSource={pathSource}
         activePath={activePath}
         dimensions={dimensions}
+        zoom={zoom}
       />
 
       {/* Overlays */}
-      <Legend filter={categoryFilter} onFilter={setCategoryFilter} />
+      <Legend filter={categoryFilter} onFilter={setCategoryFilter} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />
       <DetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
       <PathPanel path={activePath} onClose={clearPath} />
 

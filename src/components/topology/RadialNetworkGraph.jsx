@@ -37,6 +37,7 @@ export default function RadialNetworkGraph({
   pathSource,
   activePath,
   dimensions,
+  zoom = 1,
 }) {
   const canvasRef = useRef();
 
@@ -94,6 +95,12 @@ export default function RadialNetworkGraph({
 
     const centerX = width / 2;
     const centerY = height / 2;
+
+    // Apply zoom transform
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-centerX, -centerY);
 
     // Draw concentric rings
     ctx.globalAlpha = 0.08;
@@ -206,7 +213,8 @@ export default function RadialNetworkGraph({
     });
 
     ctx.shadowBlur = 0;
-  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions]);
+    ctx.restore();
+  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom]);
 
   const handleCanvasClick = useCallback((e) => {
     const canvas = canvasRef.current;
@@ -215,15 +223,23 @@ export default function RadialNetworkGraph({
     const rect = canvas.getBoundingClientRect();
     const clickX = e.clientX - rect.left;
     const clickY = e.clientY - rect.top;
+    const width = dimensions.width || 800;
+    const height = dimensions.height || 600;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    // Adjust for zoom
+    const adjustedX = centerX + (clickX - centerX) / zoom;
+    const adjustedY = centerY + (clickY - centerY) / zoom;
 
     for (const node of Object.values(nodePositions)) {
-      const dist = Math.sqrt((clickX - node.x) ** 2 + (clickY - node.y) ** 2);
+      const dist = Math.sqrt((adjustedX - node.x) ** 2 + (adjustedY - node.y) ** 2);
       if (dist < 18) {
         onNodeClick(node);
         return;
       }
     }
-  }, [nodePositions, onNodeClick]);
+  }, [nodePositions, onNodeClick, dimensions, zoom]);
 
   return (
     <canvas
