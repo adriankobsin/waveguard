@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import StatusPulse from "../components/StatusPulse";
 import NetworkGraph from "../components/NetworkGraph";
-import NodeDetailPanel from "../components/NodeDetailPanel";
+import NodeSidePanel from "../components/NodeSidePanel";
 
 // ─── shared mock data (mirrors InventoryPage & CablesPage) ───────────────────
 const EQUIPMENT = [
@@ -187,8 +187,8 @@ export default function Dashboard() {
           />
         </Suspense>
 
-        {/* Node detail panel */}
-        <NodeDetailPanel
+        {/* Node side panel */}
+        <NodeSidePanel
           node={selectedNode}
           cables={CABLES}
           onClose={() => setSelectedNode(null)}
