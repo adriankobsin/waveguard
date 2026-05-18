@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, useMemo } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 
 const CATEGORY_COLORS = {
@@ -31,18 +31,24 @@ const MOCK_STATUS = {
   "Rack-Comms": "online",
 };
 
+// Build graph data with pre-resolved object references in links.
+// This way force-graph never needs to do its own string→node lookup,
+// which is what causes the "node not found" crash.
 function buildGraphData(equipment, cables) {
   const nodeMap = new Map();
+
   equipment.forEach(eq => {
-    nodeMap.set(eq.name, {
+    const node = {
       id: eq.name,
       label: eq.name,
       category: eq.category,
       ...eq,
       status: MOCK_STATUS[eq.name] || "online",
-    });
+    };
+    nodeMap.set(eq.name, node);
   });
 
+  // Ensure any cable endpoints that aren't in equipment are also nodes
   cables.forEach(c => {
     const fromName = (c.source ?? c.from ?? "").split(" (")[0];
     const toName = (c.target ?? c.to ?? "").split(" (")[0];
@@ -54,13 +60,19 @@ function buildGraphData(equipment, cables) {
   });
 
   const nodes = Array.from(nodeMap.values());
+
+  // Pre-resolve source/target to actual node objects so force-graph
+  // skips its internal string lookup entirely
   const links = cables
-    .map(c => ({
-      source: (c.source ?? c.from ?? "").split(" (")[0],
-      target: (c.target ?? c.to ?? "").split(" (")[0],
-      label: c.type,
-    }))
-    .filter(l => l.source && l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
+    .map(c => {
+      const fromName = (c.source ?? c.from ?? "").split(" (")[0];
+      const toName = (c.target ?? c.to ?? "").split(" (")[0];
+      const sourceNode = nodeMap.get(fromName);
+      const targetNode = nodeMap.get(toName);
+      if (!sourceNode || !targetNode) return null;
+      return { source: sourceNode, target: targetNode, label: c.type };
+    })
+    .filter(Boolean);
 
   return { nodes, links };
 }
@@ -69,21 +81,16 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
   const containerRef = useRef();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
-  // Keep selectedNode in a ref so canvas callbacks can read it without
-  // causing re-renders — this is the key fix: callbacks never change identity.
+  // selectedNode in a ref so callbacks stay stable and never cause re-renders
   const selectedNodeIdRef = useRef(selectedNode?.id ?? null);
   selectedNodeIdRef.current = selectedNode?.id ?? null;
 
-  // Build graph data ONCE — deep copy so force-graph can mutate freely
-  // without corrupting our source or triggering re-renders.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const graphData = useMemo(() => {
-    const base = buildGraphData(equipment, cables);
-    return {
-      nodes: base.nodes.map(n => ({ ...n })),
-      links: base.links.map(l => ({ ...l })),
-    };
-  }, []); // intentionally empty — data is static mock data
+  // Build once and never rebuild — the ref to graphData never changes,
+  // so ForceGraph2D is never handed a new prop that triggers re-init
+  const graphDataRef = useRef(null);
+  if (!graphDataRef.current) {
+    graphDataRef.current = buildGraphData(equipment, cables);
+  }
 
   useEffect(() => {
     const update = () => {
@@ -100,7 +107,6 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
     return () => ro.disconnect();
   }, []);
 
-  // Stable callbacks — read selectedNodeId from ref, never recreated
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
     if (!isFinite(node.x) || !isFinite(node.y)) return;
     const isSelected = selectedNodeIdRef.current === node.id;
@@ -153,7 +159,7 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
   return (
     <div ref={containerRef} className="w-full h-full">
       <ForceGraph2D
-        graphData={graphData}
+        graphData={graphDataRef.current}
         width={dimensions.width}
         height={dimensions.height}
         backgroundColor="transparent"
