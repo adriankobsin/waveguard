@@ -2,7 +2,8 @@ import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
-  Wifi, Menu, X, Smartphone, Search, Bell, Share2, GitCommit, Zap
+  Wifi, Menu, X, Smartphone, Search, Bell, Share2, GitCommit, Zap,
+  BookOpen, Bot, Cable, Package
 } from "lucide-react";
 
 const NAV = [
@@ -11,6 +12,10 @@ const NAV = [
   { to: "/snmp", icon: Network, label: "SNMP" },
   { to: "/diagnoses", icon: Activity, label: "Diagnoses" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
+  { to: "/inventory", icon: Package, label: "Inventory" },
+  { to: "/cables", icon: Cable, label: "Cables" },
+  { to: "/documents", icon: BookOpen, label: "Documents" },
+  { to: "/assistant", icon: Bot, label: "AI Assistant" },
   { to: "/automation", icon: Zap, label: "Automation" },
   { to: "/commit-velocity", icon: GitCommit, label: "Commit Velocity" },
   { to: "/mobile", icon: Smartphone, label: "Mobile View" },
@@ -98,7 +103,7 @@ export default function AppLayout() {
 
         {/* Footer */}
         <div className="px-4 py-3 border-t border-border/50">
-          <p className="text-xs text-muted-foreground">v2.0.0-alpha · Pi 5 ARM64</p>
+          <p className="text-xs text-muted-foreground">v1.0.0 · Wave-AVI</p>
         </div>
       </aside>
 
