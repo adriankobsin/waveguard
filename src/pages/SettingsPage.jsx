@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Settings, Mail, Brain, Database, Bell, Shield,
   ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X,
-  Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi
+  Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi,
+  Moon, Sun
 } from "lucide-react";
 
 const SECTIONS = [
   { key: "general",             label: "General",              icon: Anchor,          desc: "Vessel / property profile" },
+  { key: "appearance",          label: "Appearance",           icon: Moon,            desc: "Light/dark mode theme switcher" },
   { key: "dashboard",           label: "Dashboard widgets",    icon: LayoutDashboard, desc: "Order and visibility for each widget" },
   { key: "network-monitoring",  label: "Network monitoring",   icon: Network,         desc: "Scan ranges, poll intervals, thresholds" },
   { key: "integrations",        label: "Integrations",         icon: Puzzle,          desc: "Vendor drivers and external services" },
@@ -290,6 +292,84 @@ function DiscoveryPanel() {
   );
 }
 
+function AppearancePanel() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("theme") || "dark";
+    }
+    return "dark";
+  });
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    root.classList.remove("light", "dark");
+    root.classList.add(theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">Choose your preferred color scheme. The platform adapts to look great in any environment.</p>
+      
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button
+          onClick={() => setTheme("light")}
+          className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+            theme === "light" 
+              ? "border-primary bg-primary/10" 
+              : "border-border bg-secondary hover:border-primary/30"
+          }`}
+        >
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${theme === "light" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            <Sun size={18} />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-foreground">Light Mode</p>
+            <p className="text-xs text-muted-foreground">Bright and clean</p>
+          </div>
+          {theme === "light" && <CheckCircle2 size={16} className="ml-auto text-primary" />}
+        </button>
+
+        <button
+          onClick={() => setTheme("dark")}
+          className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${
+            theme === "dark" 
+              ? "border-primary bg-primary/10" 
+              : "border-border bg-secondary hover:border-primary/30"
+          }`}
+        >
+          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${theme === "dark" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+            <Moon size={18} />
+          </div>
+          <div className="text-left">
+            <p className="text-sm font-semibold text-foreground">Dark Mode</p>
+            <p className="text-xs text-muted-foreground">Easy on the eyes</p>
+          </div>
+          {theme === "dark" && <CheckCircle2 size={16} className="ml-auto text-primary" />}
+        </button>
+      </div>
+
+      <div className="px-4 py-3 rounded-xl bg-secondary border border-border">
+        <p className="text-xs text-muted-foreground mb-2">Preview</p>
+        <div className={`rounded-lg p-4 ${theme === "light" ? "bg-white border border-border" : "bg-[#0a0f1c] border border-white/10"}`}>
+          <div className="flex items-center gap-2 mb-3">
+            <div className={`w-2 h-2 rounded-full ${theme === "light" ? "bg-emerald-500" : "bg-emerald-400"}`} />
+            <p className={`text-xs font-medium ${theme === "light" ? "text-foreground" : "text-white"}`}>System Status</p>
+          </div>
+          <div className="space-y-2">
+            <div className={`h-2 rounded-full ${theme === "light" ? "bg-secondary" : "bg-white/10"}`}>
+              <div className={`h-2 rounded-full w-3/4 ${theme === "light" ? "bg-primary" : "bg-cyan-500"}`} />
+            </div>
+            <div className={`h-2 rounded-full ${theme === "light" ? "bg-secondary" : "bg-white/10"}`}>
+              <div className={`h-2 rounded-full w-1/2 ${theme === "light" ? "bg-primary" : "bg-cyan-500"}`} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GeneralPanel() {
   const [vessel, setVessel] = useState({ name: "M/Y Horizon", displayName: "Horizon", homePort: "Palma de Mallorca", timezone: "Europe/London", notes: "" });
   return (
@@ -545,6 +625,7 @@ function NotificationsPanel() {
 
 const PANEL_COMPONENTS = {
   general: GeneralPanel,
+  appearance: AppearancePanel,
   dashboard: DashboardWidgetsPanel,
   "network-monitoring": NetworkMonitoringPanel,
   integrations: IntegrationsPanel,
