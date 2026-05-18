@@ -4,6 +4,7 @@ import ForceGraph2D from "react-force-graph-2d";
 import { X, MapPin, Hash, Tag, FileText, Cable, Filter, Maximize2, RefreshCw, Layers, GitBranch, ArrowRight, CheckCircle2, Monitor, Cpu, Lightbulb, Server } from "lucide-react";
 import LightingMapTab from "../components/topology/LightingMapTab";
 import RackElevationTab from "../components/topology/RackElevationTab";
+import NetworkMapTab from "../components/topology/NetworkMapTab";
 
 // ─── Full device + cable dataset ─────────────────────────────────────────────
 const DEVICES = [
@@ -542,49 +543,10 @@ export default function TopologyPage() {
             <p className="text-xs text-slate-500 mt-0.5">Signal flow, patching, VLAN overlays, rack elevation, weight, thermal, power, uplinks.</p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-3 mr-1">
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{statusCounts.online} online</span>
-            {statusCounts.warning > 0 && <span className="flex items-center gap-1.5 text-xs text-amber-400"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{statusCounts.warning} warning</span>}
-            {statusCounts.offline > 0 && <span className="flex items-center gap-1.5 text-xs text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />{statusCounts.offline} offline</span>}
-          </div>
-
-          {/* Path trace button */}
-          <button
-            onClick={togglePathMode}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
-              pathMode
-                ? "bg-orange-500/20 border-orange-500/40 text-orange-400"
-                : "border-white/10 text-slate-400 hover:text-slate-200 hover:border-white/20"
-            }`}
-            title="Trace signal path between two nodes"
-          >
-            <GitBranch size={12} />
-            <span className="hidden sm:inline">{pathMode ? "Exit Path" : "Trace Path"}</span>
-          </button>
-
-          {categoryFilter && (
-            <button
-              onClick={() => setCategoryFilter(null)}
-              className="flex items-center gap-1.5 text-xs bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 px-2.5 py-1 rounded-lg hover:bg-cyan-500/25 transition-colors"
-            >
-              <Filter size={10} /> {categoryFilter} <X size={10} />
-            </button>
-          )}
-          <button
-            onClick={() => { setKey(k => k + 1); setSelectedNode(null); setCategoryFilter(null); clearPath(); setPathMode(false); }}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/10 text-slate-500 hover:text-slate-200 transition-colors"
-            title="Reset layout"
-          >
-            <RefreshCw size={13} />
-          </button>
-          <button
-            onClick={() => graphRef.current?.zoomToFit(400)}
-            className="w-7 h-7 flex items-center justify-center rounded-lg border border-white/10 text-slate-500 hover:text-slate-200 transition-colors"
-            title="Fit to view"
-          >
-            <Maximize2 size={13} />
-          </button>
+        <div className="hidden sm:flex items-center gap-3">
+          <span className="flex items-center gap-1.5 text-xs text-emerald-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />{statusCounts.online} online</span>
+          {statusCounts.warning > 0 && <span className="flex items-center gap-1.5 text-xs text-amber-400"><span className="w-1.5 h-1.5 rounded-full bg-amber-500" />{statusCounts.warning} warning</span>}
+          {statusCounts.offline > 0 && <span className="flex items-center gap-1.5 text-xs text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />{statusCounts.offline} offline</span>}
         </div>
       </div>
 
@@ -615,75 +577,8 @@ export default function TopologyPage() {
         {activeTab === "lighting" && <LightingMapTab />}
         {activeTab === "rack" && <RackElevationTab />}
 
-        {/* Network tab only */}
-        {activeTab === "network" && <>
-        {/* Contextual hint */}
-        <div className="absolute top-3 left-1/2 -translate-x-1/2 text-xs pointer-events-none z-10 select-none">
-          {pathMode ? (
-            <span className={`px-3 py-1.5 rounded-lg border ${pathSource ? "border-orange-500/40 bg-orange-500/15 text-orange-300" : "border-white/15 bg-white/5 text-slate-400"}`}>
-              {!pathSource ? "Click a node to set path source" : `Source: ${pathSource.name} — now click the target node`}
-            </span>
-          ) : (
-            <span className="text-slate-600">Drag nodes · Scroll to zoom · Click for details</span>
-          )}
-        </div>
-
-        <ForceGraph2D
-          key={key}
-          ref={graphRef}
-          graphData={graphData}
-          width={dimensions.width}
-          height={dimensions.height}
-          backgroundColor="#060912"
-          nodeCanvasObject={nodeCanvasObject}
-          nodeCanvasObjectMode={() => "replace"}
-          linkCanvasObject={linkCanvasObject}
-          linkCanvasObjectMode={() => "replace"}
-          onNodeClick={handleNodeClick}
-          nodeLabel={() => ""}
-          enableNodeDrag={true}
-          enableZoomInteraction={true}
-          cooldownTicks={100}
-          d3AlphaDecay={0.015}
-          d3VelocityDecay={0.25}
-          nodePointerAreaPaint={(node, color, ctx) => {
-            if (!isFinite(node.x) || !isFinite(node.y)) return;
-            ctx.fillStyle = color;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, 16, 0, 2 * Math.PI);
-            ctx.fill();
-          }}
-        />
-
-        {/* Legend */}
-        <Legend filter={categoryFilter} onFilter={setCategoryFilter} />
-
-        {/* Detail panel — only in normal mode */}
-        {!pathMode && selectedNode && (
-          <DetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
-        )}
-
-        {/* Path result panel */}
-        {activePath && (
-          <PathPanel
-            path={activePath}
-            sourceNode={pathSource}
-            targetNode={pathTarget}
-            onClose={clearPath}
-          />
-        )}
-
-        {/* No-path found message */}
-        {pathMode && pathSource && pathTarget && !activePath && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 px-4 py-2.5 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-xs"
-          >
-            No physical path found between {pathSource.name} and {pathTarget.name}
-          </motion.div>
-        )}
-        </>}
+        {/* Network tab */}
+        {activeTab === "network" && <NetworkMapTab />}
       </div>
     </div>
   );
