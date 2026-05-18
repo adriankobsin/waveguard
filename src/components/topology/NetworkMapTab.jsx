@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Wifi, Camera, Monitor, Zap, Server, HardDrive,
   ChevronDown, ChevronRight, X, Cable, MapPin, Hash, Tag,
-  FileText, Search, GitBranch, CheckCircle2, ArrowRight, Filter
+  FileText, Search, GitBranch, CheckCircle2, ArrowRight, Filter,
+  Pencil, Trash2, Check, Network
 } from "lucide-react";
+import SnmpPortMapPanel from "../snmp/SnmpPortMapPanel";
 
 // ─── Data (mirrors TopologyPage DEVICES / CABLES) ─────────────────────────────
 const DEVICES = [
@@ -102,13 +104,20 @@ function findPath(sourceId, targetId) {
   return null;
 }
 
+const CATEGORIES_LIST = ["Network", "Camera", "AV", "Server", "Power", "Control", "Other"];
+const CONDITIONS_LIST = ["Excellent", "Good", "Fair", "Poor", "Decommissioned"];
+
 // ─── Device detail panel ──────────────────────────────────────────────────────
-function DevicePanel({ device, onClose }) {
+function DevicePanel({ device, onClose, onSave, onDelete }) {
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ ...device });
   const status = MOCK_STATUS[device.id] || "unknown";
   const scfg = STATUS_CFG[status];
   const catMeta = CATEGORY_META[device.category] || CATEGORY_META.Network;
   const connections = CABLES.filter(c => c.source === device.id || c.target === device.id);
   const Icon = catMeta.icon;
+
+  const handleSave = () => { onSave(form); setEditing(false); };
 
   return (
     <motion.div
@@ -129,69 +138,131 @@ function DevicePanel({ device, onClose }) {
             <p className="text-xs text-slate-500 mt-0.5">{device.category}</p>
           </div>
         </div>
-        <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-          <X size={12} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setEditing(e => !e)} className="w-6 h-6 rounded-lg hover:bg-cyan-500/15 flex items-center justify-center text-slate-400 hover:text-cyan-400 transition-colors" title="Edit">
+            <Pencil size={11} />
+          </button>
+          <button onClick={() => onDelete(device.id)} className="w-6 h-6 rounded-lg hover:bg-red-500/15 flex items-center justify-center text-slate-400 hover:text-red-400 transition-colors" title="Delete">
+            <Trash2 size={11} />
+          </button>
+          <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            <X size={12} />
+          </button>
+        </div>
       </div>
 
-      {/* Status badge */}
-      <div className="px-4 pt-3 pb-1 flex gap-2 flex-wrap">
-        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${scfg.badge}`}>
-          <span className={`w-1.5 h-1.5 rounded-full ${scfg.dot}`} />
-          {scfg.label}
-        </span>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full border border-white/10 ${CONDITION_COLORS[device.condition] || "text-slate-400"}`}>
-          {device.condition}
-        </span>
-      </div>
-
-      {/* Specs */}
-      <div className="px-4 py-3 space-y-2.5">
-        {[
-          { icon: Tag,    label: "Model",    value: device.model },
-          { icon: Hash,   label: "IP",       value: device.ip,       mono: true },
-          { icon: MapPin, label: "Location", value: device.location },
-          { icon: Hash,   label: "Serial",   value: device.serial,   mono: true },
-        ].map(r => (
-          <div key={r.label} className="flex items-center justify-between gap-2">
-            <span className="text-xs text-slate-500 flex items-center gap-1 flex-shrink-0">
-              <r.icon size={10} />{r.label}
-            </span>
-            <span className={`text-xs text-slate-200 truncate text-right ${r.mono ? "font-mono" : ""}`}>{r.value}</span>
+      {/* Edit form */}
+      {editing && (
+        <div className="px-4 py-3 border-b border-white/8 space-y-2">
+          {[
+            { key: "name", label: "Name" }, { key: "model", label: "Model" },
+            { key: "ip", label: "IP", mono: true }, { key: "location", label: "Location" },
+            { key: "serial", label: "Serial", mono: true },
+          ].map(f => (
+            <div key={f.key}>
+              <label className="text-[10px] text-slate-500 uppercase tracking-wide">{f.label}</label>
+              <input
+                value={form[f.key] || ""}
+                onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
+                className={`w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 mt-0.5 ${f.mono ? "font-mono" : ""}`}
+              />
+            </div>
+          ))}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-[10px] text-slate-500 uppercase tracking-wide">Category</label>
+              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 mt-0.5">
+                {CATEGORIES_LIST.map(c => <option key={c} className="bg-[#0a0f1c]">{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] text-slate-500 uppercase tracking-wide">Condition</label>
+              <select value={form.condition} onChange={e => setForm(p => ({ ...p, condition: e.target.value }))}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 mt-0.5">
+                {CONDITIONS_LIST.map(c => <option key={c} className="bg-[#0a0f1c]">{c}</option>)}
+              </select>
+            </div>
           </div>
-        ))}
-        {device.notes && (
-          <div className="pt-1 border-t border-white/6">
-            <p className="text-xs text-slate-500 flex items-center gap-1 mb-1"><FileText size={10} />Notes</p>
-            <p className="text-xs text-slate-300 leading-relaxed">{device.notes}</p>
+          <div>
+            <label className="text-[10px] text-slate-500 uppercase tracking-wide">Notes</label>
+            <textarea value={form.notes || ""} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} rows={2}
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500/50 mt-0.5 resize-none" />
           </div>
-        )}
-      </div>
-
-      {/* Connections */}
-      {connections.length > 0 && (
-        <div className="px-4 pb-4 border-t border-white/6 pt-3">
-          <p className="text-xs text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-            <Cable size={10} /> Connections ({connections.length})
-          </p>
-          <div className="space-y-1.5">
-            {connections.map(c => {
-              const peerId = c.source === device.id ? c.target : c.source;
-              const peer = DEVICES.find(d => d.id === peerId);
-              const peerStatus = MOCK_STATUS[peerId] || "unknown";
-              const peerDot = STATUS_CFG[peerStatus]?.dot || "bg-slate-500";
-              return (
-                <div key={c.id} className="flex items-center justify-between text-xs gap-2 px-2 py-1.5 rounded-lg bg-white/3 border border-white/5">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${peerDot}`} />
-                    <span className="text-slate-300 truncate">{peer?.name || peerId}</span>
-                  </div>
-                  <span className="text-cyan-400/70 font-mono text-[10px] flex-shrink-0">{c.type}</span>
-                </div>
-              );
-            })}
+          <div className="flex gap-2 pt-1">
+            <button onClick={handleSave} className="flex items-center gap-1 px-3 py-1.5 bg-cyan-500 text-black rounded-lg text-xs font-semibold hover:bg-cyan-400 transition-colors">
+              <Check size={11} /> Save
+            </button>
+            <button onClick={() => { setEditing(false); setForm({ ...device }); }}
+              className="flex items-center gap-1 px-3 py-1.5 bg-white/8 text-slate-400 rounded-lg text-xs hover:text-white transition-colors">
+              <X size={11} /> Cancel
+            </button>
           </div>
         </div>
+      )}
+
+      {!editing && (
+        <>
+          {/* Status badge */}
+          <div className="px-4 pt-3 pb-1 flex gap-2 flex-wrap">
+            <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${scfg.badge}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${scfg.dot}`} />
+              {scfg.label}
+            </span>
+            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border border-white/10 ${CONDITION_COLORS[device.condition] || "text-slate-400"}`}>
+              {device.condition}
+            </span>
+          </div>
+
+          {/* Specs */}
+          <div className="px-4 py-3 space-y-2.5">
+            {[
+              { icon: Tag,    label: "Model",    value: device.model },
+              { icon: Hash,   label: "IP",       value: device.ip,       mono: true },
+              { icon: MapPin, label: "Location", value: device.location },
+              { icon: Hash,   label: "Serial",   value: device.serial,   mono: true },
+            ].map(r => (
+              <div key={r.label} className="flex items-center justify-between gap-2">
+                <span className="text-xs text-slate-500 flex items-center gap-1 flex-shrink-0">
+                  <r.icon size={10} />{r.label}
+                </span>
+                <span className={`text-xs text-slate-200 truncate text-right ${r.mono ? "font-mono" : ""}`}>{r.value}</span>
+              </div>
+            ))}
+            {device.notes && (
+              <div className="pt-1 border-t border-white/6">
+                <p className="text-xs text-slate-500 flex items-center gap-1 mb-1"><FileText size={10} />Notes</p>
+                <p className="text-xs text-slate-300 leading-relaxed">{device.notes}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Connections */}
+          {connections.length > 0 && (
+            <div className="px-4 pb-4 border-t border-white/6 pt-3">
+              <p className="text-xs text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Cable size={10} /> Connections ({connections.length})
+              </p>
+              <div className="space-y-1.5">
+                {connections.map(c => {
+                  const peerId = c.source === device.id ? c.target : c.source;
+                  const peer = DEVICES.find(d => d.id === peerId);
+                  const peerStatus = MOCK_STATUS[peerId] || "unknown";
+                  const peerDot = STATUS_CFG[peerStatus]?.dot || "bg-slate-500";
+                  return (
+                    <div key={c.id} className="flex items-center justify-between text-xs gap-2 px-2 py-1.5 rounded-lg bg-white/3 border border-white/5">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${peerDot}`} />
+                        <span className="text-slate-300 truncate">{peer?.name || peerId}</span>
+                      </div>
+                      <span className="text-cyan-400/70 font-mono text-[10px] flex-shrink-0">{c.type}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </motion.div>
   );
@@ -348,13 +419,25 @@ function CategoryGroup({ category, devices, selectedId, pathSource, pathMode, on
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function NetworkMapTab() {
+  const [devices, setDevices] = useState(DEVICES);
   const [selectedDevice, setSelectedDevice] = useState(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [pathMode, setPathMode] = useState(false);
   const [pathSource, setPathSource] = useState(null);
   const [pathTarget, setPathTarget] = useState(null);
-  const [pathResult, setPathResult] = useState(undefined); // undefined = not computed yet
+  const [pathResult, setPathResult] = useState(undefined);
+  const [view, setView] = useState("devices"); // "devices" | "snmp"
+
+  const handleSaveDevice = (updated) => {
+    setDevices(prev => prev.map(d => d.id === updated.id ? updated : d));
+    setSelectedDevice(updated);
+  };
+
+  const handleDeleteDevice = (id) => {
+    setDevices(prev => prev.filter(d => d.id !== id));
+    setSelectedDevice(null);
+  };
 
   const handleSelect = (device) => {
     setSelectedDevice(prev => prev?.id === device.id ? null : device);
@@ -388,7 +471,7 @@ export default function NetworkMapTab() {
 
   // Group + filter
   const filtered = useMemo(() => {
-    return DEVICES.filter(d => {
+    return devices.filter(d => {
       const q = search.toLowerCase();
       const matchSearch = !q || d.name.toLowerCase().includes(q) || d.model.toLowerCase().includes(q) || d.ip.includes(q) || d.location.toLowerCase().includes(q);
       const matchStatus = statusFilter === "all" || (MOCK_STATUS[d.id] || "unknown") === statusFilter;
@@ -406,9 +489,9 @@ export default function NetworkMapTab() {
     return order.filter(c => map[c]).map(c => ({ category: c, devices: map[c] }));
   }, [filtered]);
 
-  const totalOnline  = DEVICES.filter(d => MOCK_STATUS[d.id] === "online").length;
-  const totalOffline = DEVICES.filter(d => MOCK_STATUS[d.id] === "offline").length;
-  const totalWarn    = DEVICES.filter(d => MOCK_STATUS[d.id] === "warning").length;
+  const totalOnline  = devices.filter(d => MOCK_STATUS[d.id] === "online").length;
+  const totalOffline = devices.filter(d => MOCK_STATUS[d.id] === "offline").length;
+  const totalWarn    = devices.filter(d => MOCK_STATUS[d.id] === "warning").length;
 
   return (
     <div className="flex h-full overflow-hidden bg-[#060912]">
@@ -448,30 +531,51 @@ export default function NetworkMapTab() {
             ))}
           </div>
 
-          {/* Path trace */}
-          <button
-            onClick={togglePathMode}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ml-auto ${
-              pathMode ? "border-orange-500/40 bg-orange-500/15 text-orange-400" : "border-white/10 text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <GitBranch size={12} />
-            {pathMode ? "Exit path" : "Trace path"}
-          </button>
+          {/* View toggle */}
+          <div className="flex items-center gap-1 ml-auto">
+            <button onClick={() => setView("devices")}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-all ${view === "devices" ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-400" : "border-white/8 text-slate-500 hover:text-slate-300"}`}>
+              <Filter size={11} /> Devices
+            </button>
+            <button onClick={() => setView("snmp")}
+              className={`flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-all ${view === "snmp" ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-400" : "border-white/8 text-slate-500 hover:text-slate-300"}`}>
+              <Network size={11} /> SNMP Ports
+            </button>
+          </div>
+
+          {/* Path trace — only in device view */}
+          {view === "devices" && (
+            <button
+              onClick={togglePathMode}
+              className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                pathMode ? "border-orange-500/40 bg-orange-500/15 text-orange-400" : "border-white/10 text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <GitBranch size={12} />
+              {pathMode ? "Exit path" : "Trace path"}
+            </button>
+          )}
         </div>
 
-        {/* Column headers */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-white/4 bg-[#070b13]/40 flex-shrink-0 text-[10px] text-slate-600 uppercase tracking-widest">
+        {/* SNMP view */}
+        {view === "snmp" && (
+          <div className="flex-1 overflow-y-auto px-4 py-4">
+            <SnmpPortMapPanel />
+          </div>
+        )}
+
+        {/* Column headers — only for device view */}
+        {view === "devices" && <div className="flex items-center gap-3 px-4 py-2 border-b border-white/4 bg-[#070b13]/40 flex-shrink-0 text-[10px] text-slate-600 uppercase tracking-widest">
           <div className="w-8 flex-shrink-0" />
           <div className="flex-1">Device</div>
           <div className="hidden md:block w-28 text-right">IP</div>
           <div className="hidden lg:block w-32 text-right">Location</div>
           <div className="hidden sm:block w-14 text-right">Links</div>
           <div className="w-20 text-right">Status</div>
-        </div>
+        </div>}
 
         {/* Path hint / result */}
-        {pathMode && (
+        {view === "devices" && pathMode && (
           <div className="px-5 pb-1">
             {!pathSource ? (
               <div className="mt-2 px-4 py-2.5 rounded-xl border border-orange-500/20 bg-orange-500/6 text-xs text-orange-400/80">
@@ -487,8 +591,8 @@ export default function NetworkMapTab() {
           </div>
         )}
 
-        {/* Device groups */}
-        <div className="flex-1 overflow-y-auto px-3 py-3">
+        {/* Device groups — only for device view */}
+        {view === "devices" && <div className="flex-1 overflow-y-auto px-3 py-3">
           {grouped.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 gap-2 text-slate-600">
               <Filter size={20} />
@@ -508,16 +612,18 @@ export default function NetworkMapTab() {
               />
             ))
           )}
-        </div>
+        </div>}
       </div>
 
       {/* ── Detail panel ─────────────────────────────────────────────────── */}
       <AnimatePresence>
-        {selectedDevice && !pathMode && (
+        {selectedDevice && !pathMode && view === "devices" && (
           <div className="hidden md:flex p-4 border-l border-white/6 bg-[#070b13]/60">
             <DevicePanel
               device={selectedDevice}
               onClose={() => setSelectedDevice(null)}
+              onSave={handleSaveDevice}
+              onDelete={handleDeleteDevice}
             />
           </div>
         )}

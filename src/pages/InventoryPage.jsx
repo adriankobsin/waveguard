@@ -18,12 +18,23 @@ const TYPE_ICONS = {
 };
 
 const INITIAL_EQUIPMENT = [
-  { id: "1", name: "SW-Bridge", model: "Cisco CBS350-24T", category: "Network", ip: "192.168.10.1", condition: "Good", location: "Bridge Rack", serial: "FOC2241X0AB", notes: "Primary distribution switch" },
-  { id: "2", name: "SW-Saloon", model: "Cisco CBS350-16T", category: "Network", ip: "192.168.10.2", condition: "Good", location: "Saloon Cabinet", serial: "FOC2241X0CD", notes: "" },
-  { id: "3", name: "Cam-Bridge-01", model: "Dahua IPC-HDW3849H", category: "Camera", ip: "192.168.10.51", condition: "Fair", location: "Bridge Exterior", serial: "DH2023051201", notes: "PoE — requires port bounce" },
-  { id: "4", name: "AV-Proc-Saloon", model: "Crestron NVX-350", category: "AV", ip: "192.168.10.22", condition: "Good", location: "Saloon AV Rack", serial: "CRE7462183", notes: "4K HDR matrix" },
-  { id: "5", name: "UPS-Main", model: "APC Smart-UPS 3000VA", category: "Power", ip: "192.168.10.80", condition: "Good", location: "Engine Room", serial: "AS1720140893", notes: "Battery at 42%" },
-  { id: "6", name: "Router-WAN", model: "MikroTik CCR2004-1G", category: "Network", ip: "192.168.1.1", condition: "Excellent", location: "Bridge Rack", serial: "MT220B0041", notes: "BGP + failover configured" },
+  { id: "router-wan", name: "Router-WAN",       model: "MikroTik CCR2004-1G",  category: "Network", ip: "192.168.1.1",   condition: "Excellent", location: "Bridge Rack",    serial: "MT220B0041",  notes: "BGP + failover configured" },
+  { id: "sw-bridge",  name: "SW-Bridge",         model: "Cisco CBS350-24T",     category: "Network", ip: "192.168.10.1",  condition: "Good",      location: "Bridge Rack",    serial: "FOC2241X0AB", notes: "Primary distribution switch" },
+  { id: "sw-saloon",  name: "SW-Saloon",         model: "Cisco CBS350-16T",     category: "Network", ip: "192.168.10.2",  condition: "Good",      location: "Saloon Cabinet", serial: "FOC2241X0CD", notes: "" },
+  { id: "sw-deck",    name: "SW-Deck-Lower",     model: "Cisco SG250-18",       category: "Network", ip: "192.168.10.5",  condition: "Fair",      location: "Deck Cabinet",   serial: "FOC2131X0EF", notes: "CPU spikes noted" },
+  { id: "sw-engine",  name: "SW-Engine",         model: "Cisco SG250-18",       category: "Network", ip: "192.168.10.6",  condition: "Good",      location: "Engine Room",    serial: "FOC2131X0GH", notes: "" },
+  { id: "ap-bridge",  name: "AP-Bridge",         model: "Ubiquiti UAP-AC-Pro",  category: "Network", ip: "192.168.10.20", condition: "Good",      location: "Bridge Mast",    serial: "UBQ2022A001", notes: "" },
+  { id: "ap-deck",    name: "AP-Deck-Aft",       model: "Ubiquiti UAP-AC-Pro",  category: "Network", ip: "192.168.10.21", condition: "Good",      location: "Aft Deck",       serial: "UBQ2022A002", notes: "" },
+  { id: "cam-bridge", name: "Cam-Bridge-01",     model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.51", condition: "Fair",      location: "Bridge Ext.",    serial: "DH2023051201",notes: "PoE — requires port bounce" },
+  { id: "cam-saloon", name: "Cam-Saloon-01",     model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.52", condition: "Good",      location: "Saloon",         serial: "DH2023051202",notes: "" },
+  { id: "cam-deck1",  name: "Cam-Deck-01",       model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.53", condition: "Good",      location: "Fore Deck",      serial: "DH2023051203",notes: "" },
+  { id: "cam-deck2",  name: "Cam-Deck-02",       model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.54", condition: "Good",      location: "Aft Deck",       serial: "DH2023051204",notes: "" },
+  { id: "av-proc",    name: "AV-Proc-Saloon",    model: "Crestron NVX-350",     category: "AV",      ip: "192.168.10.22", condition: "Good",      location: "Saloon AV Rack", serial: "CRE7462183",  notes: "4K HDR matrix" },
+  { id: "av-matrix",  name: "AV-Matrix-Saloon",  model: "Kramer VS-88H",        category: "AV",      ip: "192.168.10.23", condition: "Good",      location: "Saloon AV Rack", serial: "KRM1980041",  notes: "" },
+  { id: "qsys-core",  name: "Q-SYS Core",        model: "Q-SYS Core 110f",      category: "AV",      ip: "192.168.10.30", condition: "Good",      location: "Bridge Rack",    serial: "QSC2021001",  notes: "Audio DSP main" },
+  { id: "nas",        name: "NAS-Synology",       model: "Synology DS1522+",     category: "Control", ip: "192.168.10.80", condition: "Good",      location: "Engine Room",    serial: "SYN2022001",  notes: "" },
+  { id: "ups-main",   name: "UPS-Main",           model: "APC Smart-UPS 3000VA", category: "Power",   ip: "192.168.10.90", condition: "Good",      location: "Engine Room",    serial: "AS1720140893",notes: "Battery at 42%" },
+  { id: "ups-av",     name: "UPS-AV",             model: "APC Smart-UPS 750VA",  category: "Power",   ip: "192.168.10.91", condition: "Good",      location: "Saloon AV Rack", serial: "AS1820140112",notes: "" },
 ];
 
 const EMPTY = { name: "", model: "", category: "Network", ip: "", condition: "Good", location: "", serial: "", notes: "" };
