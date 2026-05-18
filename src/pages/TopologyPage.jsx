@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ForceGraph2D from "react-force-graph-2d";
-import { X, MapPin, Hash, Tag, FileText, Cable, Filter, Maximize2, RefreshCw, Layers, GitBranch, ArrowRight, CheckCircle2 } from "lucide-react";
+import { X, MapPin, Hash, Tag, FileText, Cable, Filter, Maximize2, RefreshCw, Layers, GitBranch, ArrowRight, CheckCircle2, Monitor, Cpu, Lightbulb, Server } from "lucide-react";
 
 // ─── Full device + cable dataset ─────────────────────────────────────────────
 const DEVICES = [
@@ -286,8 +286,32 @@ function Legend({ filter, onFilter }) {
   );
 }
 
+// ─── Placeholder tab panels ───────────────────────────────────────────────────
+function PlaceholderTab({ icon: Icon, title, body, color = "text-cyan-400" }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
+      <div className="w-16 h-16 rounded-2xl bg-white/4 border border-white/8 flex items-center justify-center">
+        <Icon size={28} className={color} />
+      </div>
+      <div>
+        <p className="text-base font-semibold text-white mb-1">{title}</p>
+        <p className="text-sm text-slate-500 max-w-md leading-relaxed">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+const TOPOLOGY_TABS = [
+  { key: "network",  label: "Network",        icon: Layers },
+  { key: "av",       label: "AV signal flow",  icon: Monitor },
+  { key: "control",  label: "Control path",    icon: Cpu },
+  { key: "lighting", label: "Lighting map",    icon: Lightbulb },
+  { key: "rack",     label: "Rack layout",     icon: Server },
+];
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function TopologyPage() {
+  const [activeTab, setActiveTab] = useState("network");
   const graphRef = useRef();
   const containerRef = useRef();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -512,8 +536,8 @@ export default function TopologyPage() {
             <Layers size={14} className="text-cyan-400" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white leading-none">Network Topology</h1>
-            <p className="text-xs text-slate-500 mt-0.5">{DEVICES.length} devices · {CABLES.length} links</p>
+            <h1 className="text-sm font-bold text-white leading-none">Topology &amp; racks</h1>
+            <p className="text-xs text-slate-500 mt-0.5">Signal flow, patching, VLAN overlays, rack elevation, weight, thermal, power, uplinks.</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
@@ -562,9 +586,35 @@ export default function TopologyPage() {
         </div>
       </div>
 
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 px-5 py-2 border-b border-white/6 bg-[#070b13]/60 flex-shrink-0 overflow-x-auto">
+        {TOPOLOGY_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
+              activeTab === tab.key
+                ? "bg-cyan-500/15 text-cyan-400 border border-cyan-500/30"
+                : "text-slate-500 hover:text-slate-200 hover:bg-white/4 border border-transparent"
+            }`}
+          >
+            <tab.icon size={12} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {/* Graph canvas */}
       <div ref={containerRef} className="flex-1 relative overflow-hidden">
 
+        {/* Non-network tabs render placeholder */}
+        {activeTab === "av" && <PlaceholderTab icon={Monitor} color="text-blue-400" title="AV signal flow" body="NVX encoder → core → decoder → display. Live route analytics plug into the AV driver bus." />}
+        {activeTab === "control" && <PlaceholderTab icon={Cpu} color="text-purple-400" title="Control signal flow" body="CP4 orchestration to subsystems — REST/CIP placeholders per integration driver." />}
+        {activeTab === "lighting" && <PlaceholderTab icon={Lightbulb} color="text-amber-400" title="Deck lighting map" body="Deck-by-deck heatmaps connect to DALI groups, Lutron zones, and DMX universes." />}
+        {activeTab === "rack" && <PlaceholderTab icon={Server} color="text-emerald-400" title="Rack elevation" body="RU positions derive from equipment.rackUnit — drag-and-drop rack designer scheduled." />}
+
+        {/* Network tab only */}
+        {activeTab === "network" && <>
         {/* Contextual hint */}
         <div className="absolute top-3 left-1/2 -translate-x-1/2 text-xs pointer-events-none z-10 select-none">
           {pathMode ? (
@@ -631,6 +681,7 @@ export default function TopologyPage() {
             No physical path found between {pathSource.name} and {pathTarget.name}
           </motion.div>
         )}
+        </>}
       </div>
     </div>
   );

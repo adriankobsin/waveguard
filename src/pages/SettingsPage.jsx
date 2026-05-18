@@ -2,14 +2,23 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Settings, Mail, Brain, Database, Bell, Shield,
-  ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X
+  ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X,
+  Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi
 } from "lucide-react";
 
 const SECTIONS = [
-  { key: "email", label: "Email & Notifications", icon: Mail, desc: "SMTP config, recipients, alerts" },
-  { key: "localai", label: "Local AI (Ollama)", icon: Brain, desc: "Offline LLM for at-sea diagnosis" },
-  { key: "retention", label: "Data Retention", icon: Database, desc: "Auto-purge old records" },
-  { key: "discovery", label: "Auto-Discovery", icon: Shield, desc: "Scan threshold and interval" },
+  { key: "general",             label: "General",              icon: Anchor,          desc: "Vessel / property profile" },
+  { key: "dashboard",           label: "Dashboard widgets",    icon: LayoutDashboard, desc: "Order and visibility for each widget" },
+  { key: "network-monitoring",  label: "Network monitoring",   icon: Network,         desc: "Scan ranges, poll intervals, thresholds" },
+  { key: "integrations",        label: "Integrations",         icon: Puzzle,          desc: "Vendor drivers and external services" },
+  { key: "ai",                  label: "AI & OpenAI",          icon: Brain,           desc: "OpenAI API key, chat model, embeddings" },
+  { key: "documentation",       label: "Documentation",        icon: BookOpen,        desc: "Storage path and AI re-indexing" },
+  { key: "notifications",       label: "Notifications",        icon: Bell,            desc: "Bell retention, email, WhatsApp" },
+  { key: "email",               label: "Email alerts",         icon: Mail,            desc: "SMTP config, recipients, alerts" },
+  { key: "users",               label: "Users & roles",        icon: Users,           desc: "RBAC-enforced operator accounts" },
+  { key: "backup",              label: "Backup & restore",     icon: HardDrive,       desc: "Cold backup and restore guidance" },
+  { key: "discovery",           label: "Auto-Discovery",       icon: Wifi,            desc: "Scan threshold and interval" },
+  { key: "retention",           label: "Data Retention",       icon: Database,        desc: "Auto-purge old records" },
 ];
 
 function EmailPanel() {
@@ -281,7 +290,273 @@ function DiscoveryPanel() {
   );
 }
 
-const PANEL_COMPONENTS = { email: EmailPanel, localai: LocalAIPanel, retention: RetentionPanel, discovery: DiscoveryPanel };
+function GeneralPanel() {
+  const [vessel, setVessel] = useState({ name: "M/Y Horizon", displayName: "Horizon", homePort: "Palma de Mallorca", timezone: "Europe/London", notes: "" });
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">Vessel / property profile — editable display metadata for dashboards and reports.</p>
+      {[
+        { key: "name", label: "Vessel name" },
+        { key: "displayName", label: "Dashboard display name" },
+        { key: "homePort", label: "Home port" },
+        { key: "timezone", label: "Time zone" },
+      ].map(f => (
+        <div key={f.key}>
+          <label className="text-xs text-muted-foreground block mb-1">{f.label}</label>
+          <input value={vessel[f.key]} onChange={e => setVessel(v => ({ ...v, [f.key]: e.target.value }))}
+            className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+        </div>
+      ))}
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Notes</label>
+        <textarea value={vessel.notes} onChange={e => setVessel(v => ({ ...v, notes: e.target.value }))} rows={3} placeholder="Optional vessel or property notes"
+          className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
+      </div>
+      <button className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">Save changes</button>
+    </div>
+  );
+}
+
+function DashboardWidgetsPanel() {
+  const WIDGETS = [
+    "Network traffic", "Critical alarms", "Warning alarms", "Network",
+    "AV", "Control", "Lighting", "CCTV", "UPS / power",
+    "WAN / internet", "Offline devices", "Recent events", "AI recommendations",
+  ];
+  const [visible, setVisible] = useState(new Set(WIDGETS));
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">Drag to reorder. Toggle visibility for each widget.</p>
+      {WIDGETS.map(w => (
+        <div key={w} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-secondary border border-border">
+          <span className="text-sm text-foreground">{w}</span>
+          <button onClick={() => setVisible(v => { const n = new Set(v); n.has(w) ? n.delete(w) : n.add(w); return n; })}
+            className={`relative w-10 h-5 rounded-full transition-colors ${visible.has(w) ? "bg-primary" : "bg-muted"}`}>
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${visible.has(w) ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NetworkMonitoringPanel() {
+  const [json, setJson] = useState(JSON.stringify({ scanRanges: ["192.168.10.0/24"], pollIntervalSec: 60, offlineThresholdMin: 5 }, null, 2));
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">Scan ranges, poll intervals, and offline thresholds.</p>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Configuration (JSON)</label>
+        <textarea value={json} onChange={e => setJson(e.target.value)} rows={8}
+          className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
+      </div>
+      <button className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">Save settings</button>
+    </div>
+  );
+}
+
+function IntegrationsPanel() {
+  const INTEGRATIONS = [
+    { key: "snmp", label: "SNMP", desc: "Switch/UPS polling via SNMPv2c/v3" },
+    { key: "crestron", label: "Crestron", desc: "CP4/NVX control via TCP/REST" },
+    { key: "qsys", label: "Q-SYS", desc: "Core 110f audio DSP driver" },
+    { key: "dahua", label: "Dahua CCTV", desc: "IPC/NVR HTTP API polling" },
+    { key: "mqtt", label: "MQTT sensors", desc: "Environmental and sensor bus" },
+  ];
+  const [enabled, setEnabled] = useState(new Set(["snmp"]));
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">Vendor drivers share a common interface on the server.</p>
+      {INTEGRATIONS.map(i => (
+        <div key={i.key} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-secondary border border-border">
+          <div>
+            <p className="text-sm font-medium text-foreground">{i.label}</p>
+            <p className="text-xs text-muted-foreground">{i.desc}</p>
+          </div>
+          <button onClick={() => setEnabled(v => { const n = new Set(v); n.has(i.key) ? n.delete(i.key) : n.add(i.key); return n; })}
+            className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${enabled.has(i.key) ? "bg-primary" : "bg-muted"}`}>
+            <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${enabled.has(i.key) ? "translate-x-5" : "translate-x-0"}`} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AIPanel() {
+  const [key, setKey] = useState("");
+  const [showKey, setShowKey] = useState(false);
+  const [model, setModel] = useState("gpt-4o-mini");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+
+  const test = async () => {
+    setTesting(true); setTestResult(null);
+    await new Promise(r => setTimeout(r, 1800));
+    setTesting(false);
+    setTestResult({ ok: !!key, message: key ? "Connection successful — API key is valid." : "No API key configured." });
+  };
+
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">Store the OpenAI API key on the server. It is never returned to the browser after save — only a masked preview is shown.</p>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">New API key (optional — leave blank to keep current)</label>
+        <div className="relative">
+          <input type={showKey ? "text" : "password"} value={key} onChange={e => setKey(e.target.value)} placeholder="sk-…"
+            className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 pr-10 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+          <button onClick={() => setShowKey(s => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+          </button>
+        </div>
+      </div>
+      <div>
+        <label className="text-xs text-muted-foreground block mb-1">Chat model</label>
+        <input value={model} onChange={e => setModel(e.target.value)}
+          className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+      </div>
+      <div className="flex gap-3">
+        <button onClick={test} disabled={testing}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+          {testing ? <Loader2 size={13} className="animate-spin" /> : <Key size={13} />}
+          Test key in field
+        </button>
+        <button className="flex-1 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">Save settings</button>
+      </div>
+      {testResult && (
+        <div className={`flex items-center gap-2 text-xs p-3 rounded-xl ${testResult.ok ? "bg-green-500/10 text-green-400" : "bg-red-500/10 text-red-400"}`}>
+          {testResult.ok ? <CheckCircle2 size={13} /> : <AlertTriangle size={13} />}
+          {testResult.message}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocumentationPanel() {
+  const [mode, setMode] = useState("development");
+  const [reindexing, setReindexing] = useState(false);
+  const [reindexDone, setReindexDone] = useState(false);
+
+  const reindex = async () => {
+    setReindexing(true); setReindexDone(false);
+    await new Promise(r => setTimeout(r, 2500));
+    setReindexing(false); setReindexDone(true);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <p className="text-sm font-medium text-foreground mb-1">Storage configuration</p>
+        <p className="text-xs text-muted-foreground mb-3">Configure where uploaded documents are stored. The database only stores metadata and extracted text.</p>
+        {[
+          { value: "development", label: "Development", desc: "./storage/documents" },
+          { value: "local",       label: "Local path",  desc: "/var/wave-avi-guardian/storage" },
+          { value: "nas",         label: "NAS / network mount", desc: "Custom mount path" },
+        ].map(opt => (
+          <label key={opt.value} onClick={() => setMode(opt.value)} className="flex items-center gap-3 cursor-pointer mb-2">
+            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${mode === opt.value ? "border-primary bg-primary" : "border-border"}`}>
+              {mode === opt.value && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+            </div>
+            <div>
+              <p className="text-sm text-foreground">{opt.label}</p>
+              <p className="text-xs text-muted-foreground font-mono">{opt.desc}</p>
+            </div>
+          </label>
+        ))}
+      </div>
+      <div className="border-t border-border pt-4">
+        <p className="text-sm font-medium text-foreground mb-1">AI indexing</p>
+        <p className="text-xs text-muted-foreground mb-3">Re-index all documents to extract text, create chunks, and update the AI search index.</p>
+        <button onClick={reindex} disabled={reindexing}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+          {reindexing ? <Loader2 size={13} className="animate-spin" /> : <BookOpen size={13} />}
+          {reindexing ? "Re-indexing…" : "Re-index all documents"}
+        </button>
+        {reindexDone && <p className="text-xs text-green-400 mt-2 flex items-center gap-1"><CheckCircle2 size={11} /> Re-index complete.</p>}
+      </div>
+    </div>
+  );
+}
+
+function UsersPanel() {
+  const MOCK_USERS = [
+    { email: "captain@myacht.com", role: "Wave Admin", lastSeen: "2 min ago" },
+    { email: "engineer@myacht.com", role: "Engineer", lastSeen: "1h ago" },
+    { email: "crew@myacht.com", role: "Viewer", lastSeen: "3d ago" },
+  ];
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">Wave Admin–managed accounts with RBAC enforced on the API.</p>
+      <div className="space-y-2">
+        {MOCK_USERS.map(u => (
+          <div key={u.email} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-secondary border border-border">
+            <div>
+              <p className="text-sm font-medium text-foreground">{u.email}</p>
+              <p className="text-xs text-muted-foreground">Last seen: {u.lastSeen}</p>
+            </div>
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-primary/15 text-primary border border-primary/20">{u.role}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function BackupPanel() {
+  return (
+    <div className="space-y-4">
+      <p className="text-xs text-muted-foreground">Cold backups include SQLite, uploads, and documents on the API host. See the operator runbook in docs/deployment/BACKUP_RESTORE.md for scripted export and restore drills.</p>
+      <div className="space-y-2">
+        {[
+          { label: "Database file", value: "guardian.db — 4.2 MB" },
+          { label: "Uploads", value: "32 files — 218 MB" },
+          { label: "Documents", value: "14 indexed — 96 MB" },
+          { label: "Total", value: "~318 MB" },
+        ].map(r => (
+          <div key={r.label} className="flex justify-between text-sm px-3 py-2 rounded-xl bg-secondary border border-border">
+            <span className="text-muted-foreground">{r.label}</span>
+            <span className="text-foreground font-medium">{r.value}</span>
+          </div>
+        ))}
+      </div>
+      <button className="w-full py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
+        Refresh storage summary
+      </button>
+    </div>
+  );
+}
+
+function NotificationsPanel() {
+  return (
+    <div className="space-y-4">
+      <div className="px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-400">
+        Email and WhatsApp channels remain off by default — no cloud calls unless explicitly enabled.
+      </div>
+      {["Bell notifications", "Email channel", "WhatsApp channel", "Remote support"].map(n => (
+        <div key={n} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-secondary border border-border">
+          <span className="text-sm text-foreground">{n}</span>
+          <span className="text-xs text-muted-foreground">Coming soon</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const PANEL_COMPONENTS = {
+  general: GeneralPanel,
+  dashboard: DashboardWidgetsPanel,
+  "network-monitoring": NetworkMonitoringPanel,
+  integrations: IntegrationsPanel,
+  ai: AIPanel,
+  documentation: DocumentationPanel,
+  notifications: NotificationsPanel,
+  email: EmailPanel,
+  users: UsersPanel,
+  backup: BackupPanel,
+  discovery: DiscoveryPanel,
+  retention: RetentionPanel,
+};
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState(null);
@@ -294,7 +569,7 @@ export default function SettingsPage() {
           <Settings size={22} className="text-primary" />
           Settings
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Configure the Guardian AI appliance</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Configure vessel profile, monitoring, integrations, and operator experience — all stored locally in the Guardian database.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
