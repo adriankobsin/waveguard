@@ -5,11 +5,12 @@ import RadialNetworkGraph from "./RadialNetworkGraph";
 import { GroupManager } from "./GroupManager";
 import { DeviceEditModal } from "./DeviceEditModal";
 import LayoutSelector from "./LayoutSelector";
+import DeviceImportModal from "./DeviceImportModal";
 import { toast } from "sonner";
 import {
   Search, Filter, RefreshCw, Maximize2, GitBranch, ArrowRight,
   CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable,
-  Cpu, Wifi, Activity, ScanLine, Edit2, Link, Save, LayoutGrid
+  Cpu, Wifi, Activity, ScanLine, Edit2, Link, Save, LayoutGrid, Upload
 } from "lucide-react";
 
 const CATEGORY_COLORS = {
@@ -320,6 +321,7 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const [connectionMode, setConnectionMode] = useState(false);
   const [customPositions, setCustomPositions] = useState({});
   const [currentLayout, setCurrentLayout] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
 
   // Load groups
   useEffect(() => {
@@ -631,6 +633,13 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
           Save Layout
         </button>
         <button
+          onClick={() => setShowImportModal(true)}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
+        >
+          <Upload size={12} />
+          Import CSV
+        </button>
+        <button
           onClick={onRefresh}
           className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
         >
@@ -712,6 +721,16 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
           onClose={() => setEditingDevice(null)}
         />
       )}
+
+      {/* Device Import Modal */}
+      <DeviceImportModal
+        isOpen={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onImportComplete={() => {
+          setShowImportModal(false);
+          onRefresh?.();
+        }}
+      />
 
       {/* Path mode hint */}
       {pathMode && !pathSource && (
