@@ -240,6 +240,21 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [zoom, setZoom] = useState(1);
   const [pathMode, setPathMode] = useState(false);
+
+  // Mouse wheel zoom
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.1 : 0.1;
+      setZoom(z => Math.max(0.5, Math.min(2, z + delta)));
+    };
+
+    container.addEventListener("wheel", handleWheel, { passive: false });
+    return () => container.removeEventListener("wheel", handleWheel);
+  }, []);
   const [pathSource, setPathSource] = useState(null);
   const [pathTarget, setPathTarget] = useState(null);
   const [activePath, setActivePath] = useState(null);
@@ -427,6 +442,13 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
         dimensions={dimensions}
         zoom={zoom}
       />
+
+      {/* Pan hint */}
+      <div className="absolute bottom-4 right-4 z-10">
+        <div className="px-3 py-1.5 rounded-lg bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 text-xs text-slate-400">
+          Drag to pan · Scroll to zoom
+        </div>
+      </div>
 
       {/* Overlays */}
       <Legend filter={categoryFilter} onFilter={setCategoryFilter} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />

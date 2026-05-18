@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useRef, useEffect, useCallback, useMemo, useState } from "react";
 
 const CATEGORY_COLORS = {
   Network: "#06b6d4",
@@ -40,6 +40,9 @@ export default function RadialNetworkGraph({
   zoom = 1,
 }) {
   const canvasRef = useRef();
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
 
   // Categorize and position nodes
   const nodePositions = useMemo(() => {
@@ -96,9 +99,9 @@ export default function RadialNetworkGraph({
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Apply zoom transform
+    // Apply zoom and pan transform
     ctx.save();
-    ctx.translate(centerX, centerY);
+    ctx.translate(centerX + pan.x, centerY + pan.y);
     ctx.scale(zoom, zoom);
     ctx.translate(-centerX, -centerY);
 
@@ -217,6 +220,8 @@ export default function RadialNetworkGraph({
   }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom]);
 
   const handleCanvasClick = useCallback((e) => {
+    if (isDragging) return;
+    
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -228,9 +233,9 @@ export default function RadialNetworkGraph({
     const centerX = width / 2;
     const centerY = height / 2;
 
-    // Adjust for zoom
-    const adjustedX = centerX + (clickX - centerX) / zoom;
-    const adjustedY = centerY + (clickY - centerY) / zoom;
+    // Adjust for zoom and pan
+    const adjustedX = centerX + (clickX - centerX - pan.x) / zoom;
+    const adjustedY = centerY + (clickY - centerY - pan.y) / zoom;
 
     for (const node of Object.values(nodePositions)) {
       const dist = Math.sqrt((adjustedX - node.x) ** 2 + (adjustedY - node.y) ** 2);
@@ -239,17 +244,58 @@ export default function RadialNetworkGraph({
         return;
       }
     }
-  }, [nodePositions, onNodeClick, dimensions, zoom]);
+  }, [nodePositions, onNodeClick, dimensions, zoom, pan, isDragging]);
+
+  const handleMouseDown = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    setDragStart({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+    setIsDragging(true);
+  }, []);
+
+  const handleMouseMove = useCallback((e) => {
+    if (!isDragging) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const currentX = e.clientX - rect.left;
+    const currentY = e.clientY - rect.top;
+
+    const deltaX = currentX - dragStart.x;
+    const deltaY = currentY - dragStart.y;
+
+    setPan(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
+    setDragStart({ x: currentX, y: currentY });
+  }, [isDragging, dragStart]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   return (
     <canvas
       ref={canvasRef}
       onClick={handleCanvasClick}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseLeave}
       style={{
         display: "block",
         width: "100%",
         height: "100%",
-        cursor: "pointer",
+        cursor: isDragging ? "grabbing" : "grab",
       }}
     />
   );
