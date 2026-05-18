@@ -47,6 +47,26 @@
   body {
     @apply bg-background text-foreground font-inter;
   }
+  
+  /* Hide scrollbars globally while maintaining scroll functionality */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.3);
+  }
 }
 
 @layer utilities {
@@ -71,4 +91,12 @@
   .status-dot-offline { @apply w-2 h-2 rounded-full bg-red-500; }
   .status-dot-warning { @apply w-2 h-2 rounded-full bg-yellow-500; }
   .status-dot-unknown { @apply w-2 h-2 rounded-full bg-gray-500; }
+
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
