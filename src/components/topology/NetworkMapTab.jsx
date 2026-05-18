@@ -2,10 +2,13 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import RadialNetworkGraph from "./RadialNetworkGraph";
+import { GroupManager } from "./GroupManager";
+import { DeviceEditModal } from "./DeviceEditModal";
+import { toast } from "sonner";
 import {
   Search, Filter, RefreshCw, Maximize2, GitBranch, ArrowRight,
   CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable,
-  Cpu, Wifi, Activity, ScanLine
+  Cpu, Wifi, Activity, ScanLine, Edit2
 } from "lucide-react";
 
 const CATEGORY_COLORS = {
@@ -70,12 +73,12 @@ function findPath(sourceId, targetId, connections) {
   return null;
 }
 
-function DetailPanel({ node, onClose, onScan }) {
+function DetailPanel({ node, onClose, onScan, onEdit }) {
+  const [scanning, setScanning] = useState(false);
   if (!node) return null;
   const status = node.status || "unknown";
   const cfg = STATUS_CONFIG[status];
   const connections = node.connections || [];
-  const [scanning, setScanning] = useState(false);
 
   const handleScan = async () => {
     setScanning(true);
@@ -99,9 +102,19 @@ function DetailPanel({ node, onClose, onScan }) {
             <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
             <p className="text-sm font-semibold text-white leading-tight">{node.name}</p>
           </div>
-          <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white">
-            <X size={12} />
-          </button>
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <button 
+                onClick={onEdit} 
+                className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
+              >
+                <Edit2 size={12} />
+              </button>
+            )}
+            <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white">
+              <X size={12} />
+            </button>
+          </div>
         </div>
         <div className="px-4 pt-3 pb-1 flex items-center gap-2 flex-wrap">
           <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
@@ -222,7 +235,18 @@ function PathPanel({ path, onClose }) {
   );
 }
 
-function Legend({ filter, onFilter, statusFilter, onStatusFilter }) {
+function Legend({ filter, onFilter, statusFilter, onStatusFilter, groups, onGroupFilter, groupFilter }) {
+  const GROUP_COLORS = {
+    cyan: "#06b6d4",
+    blue: "#3b82f6",
+    purple: "#a855f7",
+    green: "#22c55e",
+    yellow: "#eab308",
+    orange: "#f97316",
+    red: "#ef4444",
+    pink: "#ec4899",
+  };
+
   return (
     <div className="absolute bottom-4 left-4 z-10 rounded-xl border border-white/10 bg-[#0a0f1c]/90 backdrop-blur-md p-3 space-y-1.5 max-h-[80vh] overflow-y-auto">
       <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-2">Category</p>
@@ -236,6 +260,32 @@ function Legend({ filter, onFilter, statusFilter, onStatusFilter }) {
           <span className="text-slate-400">{cat}</span>
         </button>
       ))}
+      
+      {groups && groups.length > 0 && (
+        <div className="border-t border-white/6 mt-2 pt-2 space-y-1.5">
+          <p className="text-[10px] text-slate-500 uppercase tracking-widest">Groups</p>
+          {groups.map(group => {
+            const groupColor = GROUP_COLORS[group.color] || "#94a3b8";
+            const deviceCount = group.device_ids?.length || 0;
+            return (
+              <button
+                key={group.id}
+                onClick={() => onGroupFilter?.(g => g === group.id ? null : group.id)}
+                className={`flex items-center justify-between gap-2 text-xs w-full transition-opacity ${
+                  groupFilter && groupFilter !== group.id ? "opacity-30" : "opacity-100"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: groupColor }} />
+                  <span className="text-slate-400">{group.name}</span>
+                </div>
+                <span className="text-[10px] text-slate-600">{deviceCount}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <div className="border-t border-white/6 mt-2 pt-2 space-y-1.5">
         <p className="text-[10px] text-slate-500 uppercase tracking-widest">Status</p>
         {Object.entries(STATUS_COLORS).map(([s, color]) => (
@@ -260,9 +310,25 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const [selectedNode, setSelectedNode] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState(null);
   const [statusFilter, setStatusFilter] = useState(null);
+  const [groupFilter, setGroupFilter] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [zoom, setZoom] = useState(1);
   const [pathMode, setPathMode] = useState(false);
+  const [editingDevice, setEditingDevice] = useState(null);
+  const [groups, setGroups] = useState([]);
+
+  // Load groups
+  useEffect(() => {
+    const loadGroups = async () => {
+      try {
+        const response = await base44.entities.DeviceGroup.list();
+        setGroups(response);
+      } catch (error) {
+        console.error('Failed to load groups:', error);
+      }
+    };
+    loadGroups();
+  }, []);
 
   // Mouse wheel zoom
   useEffect(() => {
@@ -321,6 +387,13 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
     if (statusFilter) {
       devices = devices.filter(d => d.status === statusFilter);
     }
+    if (groupFilter) {
+      const group = groups.find(g => g.id === groupFilter);
+      if (group) {
+        const groupDeviceIds = new Set(group.device_ids || []);
+        devices = devices.filter(d => groupDeviceIds.has(d.id));
+      }
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       devices = devices.filter(d =>
@@ -331,7 +404,7 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
       );
     }
     return devices;
-  }, [topologyData, categoryFilter, statusFilter, searchQuery]);
+  }, [topologyData, categoryFilter, statusFilter, groupFilter, groups, searchQuery]);
 
   const visibleIds = new Set(visibleDevices.map(d => d.id));
   const visibleConnections = useMemo(() => {
@@ -400,13 +473,29 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
     try {
       const response = await base44.functions.invoke('networkScan', { target: node.ip });
       if (response.data.success) {
-        // Optionally refresh topology data after scan
         onRefresh?.();
       }
     } catch (error) {
       console.error('Failed to scan device:', error);
     }
   }, [onRefresh]);
+
+  const handleUpdateDevice = useCallback(async (deviceData) => {
+    try {
+      const response = await base44.functions.invoke('updateDevice', {
+        deviceId: editingDevice.id,
+        deviceData,
+      });
+      if (response.data.success) {
+        toast.success("Device updated successfully");
+        onRefresh?.();
+        setEditingDevice(null);
+      }
+    } catch (error) {
+      console.error('Failed to update device:', error);
+      toast.error("Failed to update device");
+    }
+  }, [editingDevice, onRefresh]);
 
   if (loading) {
     return (
@@ -485,10 +574,34 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
         </div>
       </div>
 
+      {/* Group Manager */}
+      <GroupManager devices={topologyData?.devices || []} onGroupChange={() => {}} />
+
       {/* Overlays */}
-      <Legend filter={categoryFilter} onFilter={setCategoryFilter} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />
-      <DetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} onScan={handleScanDevice} />
+      <Legend 
+        filter={categoryFilter} 
+        onFilter={setCategoryFilter} 
+        statusFilter={statusFilter} 
+        onStatusFilter={setStatusFilter}
+        groups={groups}
+        onGroupFilter={setGroupFilter}
+      />
+      <DetailPanel 
+        node={selectedNode} 
+        onClose={() => setSelectedNode(null)} 
+        onScan={handleScanDevice}
+        onEdit={() => setEditingDevice(selectedNode)}
+      />
       <PathPanel path={activePath} onClose={clearPath} />
+
+      {/* Device Edit Modal */}
+      {editingDevice && (
+        <DeviceEditModal
+          device={editingDevice}
+          onSubmit={handleUpdateDevice}
+          onClose={() => setEditingDevice(null)}
+        />
+      )}
 
       {/* Path mode hint */}
       {pathMode && !pathSource && (
