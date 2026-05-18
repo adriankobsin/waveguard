@@ -2,7 +2,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Package, Plus, Search, X, Filter, Pencil, Trash2,
-  Wifi, Camera, Monitor, Zap, Server, HardDrive, Check
+  Wifi, Camera, Monitor, Zap, Server, HardDrive, Check,
+  LayoutGrid, List
 } from "lucide-react";
 
 const CATEGORIES = ["All", "Network", "Camera", "AV", "Power", "Control", "Other"];
@@ -62,6 +63,7 @@ export default function InventoryPage() {
   const [category, setCategory] = useState("All");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
+  const [viewMode, setViewMode] = useState("grid");
 
   const filtered = equipment.filter(e => {
     const matchCat = category === "All" || e.category === category;
@@ -118,7 +120,7 @@ export default function InventoryPage() {
           />
           {search && <button onClick={() => setSearch("")}><X size={12} className="text-muted-foreground" /></button>}
         </div>
-        <div className="flex items-center gap-1 flex-wrap">
+        <div className="flex items-center gap-1 flex-wrap flex-1">
           <Filter size={13} className="text-muted-foreground mr-1" />
           {CATEGORIES.map(cat => (
             <button
@@ -131,6 +133,14 @@ export default function InventoryPage() {
               {cat}
             </button>
           ))}
+        </div>
+        <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
+          <button onClick={() => setViewMode("grid")} className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <LayoutGrid size={14} />
+          </button>
+          <button onClick={() => setViewMode("list")} className={`p-1.5 rounded transition-colors ${viewMode === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            <List size={14} />
+          </button>
         </div>
       </div>
 
@@ -187,35 +197,87 @@ export default function InventoryPage() {
         )}
       </AnimatePresence>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        <AnimatePresence>
-          {filtered.map((eq, i) => (
-            <motion.div
-              key={eq.id}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ delay: i * 0.03 }}
-              className="glass rounded-xl p-4 flex gap-3"
-            >
-              <EquipmentIcon category={eq.category} />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{eq.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{eq.model}</p>
+      {/* Grid view */}
+      {viewMode === "grid" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          <AnimatePresence>
+            {filtered.map((eq, i) => (
+              <motion.div
+                key={eq.id}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ delay: i * 0.03 }}
+                className="glass rounded-xl p-4 flex gap-3"
+              >
+                <EquipmentIcon category={eq.category} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{eq.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{eq.model}</p>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${CONDITION_COLORS[eq.condition]}`}>
+                      {eq.condition}
+                    </span>
                   </div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${CONDITION_COLORS[eq.condition]}`}>
-                    {eq.condition}
-                  </span>
+                  <div className="mt-2 space-y-1">
+                    {eq.ip && <p className="text-xs text-muted-foreground font-mono">{eq.ip}</p>}
+                    {eq.location && <p className="text-xs text-muted-foreground">{eq.location}</p>}
+                    {eq.notes && <p className="text-xs text-muted-foreground/70 truncate">{eq.notes}</p>}
+                  </div>
+                  <div className="flex gap-1 mt-3">
+                    <button onClick={() => openEdit(eq)} className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
+                      <Pencil size={12} />
+                    </button>
+                    <button onClick={() => remove(eq.id)} className="p-1.5 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
-                <div className="mt-2 space-y-1">
-                  {eq.ip && <p className="text-xs text-muted-foreground font-mono">{eq.ip}</p>}
-                  {eq.location && <p className="text-xs text-muted-foreground">{eq.location}</p>}
-                  {eq.notes && <p className="text-xs text-muted-foreground/70 truncate">{eq.notes}</p>}
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* List view */}
+      {viewMode === "list" && (
+        <div className="glass rounded-xl overflow-hidden">
+          <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2 border-b border-border/50 text-[10px] text-muted-foreground uppercase tracking-widest">
+            <div className="w-7" />
+            <div>Device</div>
+            <div className="hidden sm:block">IP / Location</div>
+            <div className="hidden md:block">Serial</div>
+            <div>Condition</div>
+            <div />
+          </div>
+          <AnimatePresence>
+            {filtered.map((eq, i) => (
+              <motion.div
+                key={eq.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ delay: i * 0.02 }}
+                className="grid grid-cols-[auto_1fr_1fr_auto_auto] sm:grid-cols-[auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2.5 border-b border-border/30 last:border-0 hover:bg-white/[0.02] transition-colors"
+              >
+                <EquipmentIcon category={eq.category} />
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">{eq.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{eq.model}</p>
                 </div>
-                <div className="flex gap-1 mt-3">
+                <div className="hidden sm:block min-w-0">
+                  {eq.ip && <p className="text-xs font-mono text-muted-foreground">{eq.ip}</p>}
+                  {eq.location && <p className="text-xs text-muted-foreground truncate">{eq.location}</p>}
+                </div>
+                <div className="hidden md:block min-w-0">
+                  <p className="text-xs font-mono text-muted-foreground truncate">{eq.serial || "—"}</p>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full whitespace-nowrap ${CONDITION_COLORS[eq.condition]}`}>
+                  {eq.condition}
+                </span>
+                <div className="flex gap-1">
                   <button onClick={() => openEdit(eq)} className="p-1.5 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors">
                     <Pencil size={12} />
                   </button>
@@ -223,11 +285,11 @@ export default function InventoryPage() {
                     <Trash2 size={12} />
                   </button>
                 </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+        </div>
+      )}
 
       {filtered.length === 0 && (
         <div className="glass rounded-xl p-8 text-center text-muted-foreground text-sm">
