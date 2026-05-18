@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
-  Wifi, Menu, X, Smartphone, Search, Bell, Share2, GitCommit, Zap,
+  Wifi, Menu, X, Search, Bell, Share2, GitCommit, Zap,
   BookOpen, Bot, Cable, Package, FileText, Lightbulb, Radar
 } from "lucide-react";
 
@@ -21,7 +21,6 @@ const NAV = [
   { to: "/automation", icon: Zap, label: "Automation" },
   { to: "/reports", icon: FileText, label: "Reports" },
   { to: "/commit-velocity", icon: GitCommit, label: "Commit Velocity" },
-  { to: "/mobile", icon: Smartphone, label: "Mobile View" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
