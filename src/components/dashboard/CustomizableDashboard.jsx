@@ -62,10 +62,10 @@ export default function CustomizableDashboard() {
   };
 
   const handleDragStart = (e, widget) => {
-    if (!editMode) return;
+    if (!editMode || !gridContainer) return;
     setDraggingId(widget.id);
     const rect = e.currentTarget.getBoundingClientRect();
-    const gridRect = gridContainer?.getBoundingClientRect();
+    const gridRect = gridContainer.getBoundingClientRect();
     if (gridRect) {
       setDragOffset({
         x: e.clientX - rect.left,
@@ -77,6 +77,8 @@ export default function CustomizableDashboard() {
   const handleDrag = (e) => {
     if (!draggingId || !editMode || !gridContainer) return;
     const gridRect = gridContainer.getBoundingClientRect();
+    if (!gridRect) return;
+    
     const x = e.clientX - gridRect.left - dragOffset.x;
     const y = e.clientY - gridRect.top - dragOffset.y;
     
@@ -209,7 +211,10 @@ export default function CustomizableDashboard() {
                       const startH = widget.h;
                       
                       const onMove = (moveEvent) => {
-                        const deltaX = Math.round((moveEvent.clientX - startX) / (gridContainer?.getBoundingClientRect().width / GRID_COLS));
+                        if (!gridContainer) return;
+                        const gridRect = gridContainer.getBoundingClientRect();
+                        if (!gridRect) return;
+                        const deltaX = Math.round((moveEvent.clientX - startX) / (gridRect.width / GRID_COLS));
                         const deltaY = Math.round((moveEvent.clientY - startY) / CELL_HEIGHT);
                         handleResize(widget.id, 'se', Math.max(deltaX, deltaY));
                       };
