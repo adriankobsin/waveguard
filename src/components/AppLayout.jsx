@@ -43,12 +43,12 @@ export default function AppLayout() {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-30
-        w-60 bg-[#070b13] border-r border-white/6 flex flex-col
+        w-60 bg-card border-r border-border flex flex-col
         transition-transform duration-300
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}>
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/6">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-cyan-500/12 flex items-center justify-center ring-1 ring-cyan-500/20">
               <Wifi size={15} className="text-cyan-400" />
@@ -64,7 +64,7 @@ export default function AppLayout() {
         </div>
 
         {/* Vessel badge */}
-        <div className="mx-4 mt-3 mb-2 px-3 py-2.5 bg-white/4 rounded-xl border border-white/6">
+        <div className="mx-4 mt-3 mb-2 px-3 py-2.5 bg-secondary rounded-xl border border-border">
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500/50" />
@@ -86,8 +86,8 @@ export default function AppLayout() {
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                   isActive
-                    ? "bg-cyan-500/12 text-cyan-400 ring-1 ring-cyan-500/20"
-                    : "text-slate-500 hover:text-slate-200 hover:bg-white/4"
+                    ? "bg-primary/15 text-primary ring-1 ring-primary/30"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`
               }
             >
@@ -104,30 +104,30 @@ export default function AppLayout() {
         </nav>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-white/6">
-          <p className="text-xs text-slate-600">v1.0.0 · Wave-AVI</p>
+        <div className="px-4 py-3 border-t border-border">
+          <p className="text-xs text-muted-foreground">v1.0.0 · Wave-AVI</p>
         </div>
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-[#060912]">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         {/* Topbar */}
-        <header className="flex items-center gap-3 px-4 py-3 border-b border-white/6 bg-[#070b13]/80 backdrop-blur-xl flex-shrink-0">
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/80 backdrop-blur-xl flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/6 transition-colors text-slate-500"
+            className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
           >
             <Menu size={16} />
           </button>
-          <div className="flex-1 flex items-center gap-2 max-w-sm bg-white/4 border border-white/8 rounded-xl px-3 py-1.5">
-            <Search size={13} className="text-slate-600 flex-shrink-0" />
+          <div className="flex-1 flex items-center gap-2 max-w-sm bg-secondary border border-border rounded-xl px-3 py-1.5">
+            <Search size={13} className="text-muted-foreground flex-shrink-0" />
             <input
               placeholder="Search devices, alarms…"
-              className="flex-1 bg-transparent text-sm text-slate-300 placeholder:text-slate-600 focus:outline-none"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
             />
           </div>
           <div className="flex items-center gap-2 ml-auto">
-            <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/6 transition-colors text-slate-500 hover:text-slate-200">
+            <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
               <Bell size={15} />
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
             </button>
