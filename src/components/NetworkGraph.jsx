@@ -64,35 +64,23 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
     });
   });
 
-  // Add cable endpoints not in inventory
+  // Add cable endpoints not in inventory (support both from/to and source/target shapes)
   cables.forEach(c => {
-    const fromName = c.from.split(" (")[0];
-    const toName = c.to.split(" (")[0];
+    const fromName = (c.source ?? c.from ?? "").split(" (")[0];
+    const toName = (c.target ?? c.to ?? "").split(" (")[0];
     [fromName, toName].forEach(name => {
-      if (!nodeMap.has(name)) {
-        nodeMap.set(name, {
-          id: name,
-          label: name,
-          category: "Other",
-          name,
-          status: MOCK_STATUS[name] || "unknown",
-        });
+      if (name && !nodeMap.has(name)) {
+        nodeMap.set(name, { id: name, label: name, category: "Other", name, status: MOCK_STATUS[name] || "unknown" });
       }
     });
   });
 
   const nodes = Array.from(nodeMap.values());
   const links = cables.map(c => {
-    // Support both {from/to} and {source/target} cable shapes
-    const rawSource = c.source ?? c.from ?? "";
-    const rawTarget = c.target ?? c.to ?? "";
-    return {
-      source: rawSource.split(" (")[0],
-      target: rawTarget.split(" (")[0],
-      label: c.type,
-      cableLabel: c.label,
-    };
-  }).filter(l => nodeMap.has(l.source) && nodeMap.has(l.target));
+    const src = (c.source ?? c.from ?? "").split(" (")[0];
+    const tgt = (c.target ?? c.to ?? "").split(" (")[0];
+    return { source: src, target: tgt, label: c.type, cableLabel: c.label };
+  }).filter(l => l.source && l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
 
   const graphData = { nodes, links };
 
