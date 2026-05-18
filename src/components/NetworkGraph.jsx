@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState, useMemo } from "react";
+import { useRef, useEffect, useCallback, useState, useMemo, memo } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 
 const CATEGORY_COLORS = {
@@ -17,7 +17,6 @@ const STATUS_COLORS = {
   unknown: "#64748b",
 };
 
-// Map equipment names to mock statuses
 const MOCK_STATUS = {
   "SW-Bridge": "online",
   "SW-Saloon": "online",
@@ -32,7 +31,44 @@ const MOCK_STATUS = {
   "Rack-Comms": "online",
 };
 
-export default function NetworkGraph({ equipment, cables, onNodeClick, selectedNode }) {
+// Build stable graph data once — never rebuild so force-graph doesn't lose node refs
+function buildGraphData(equipment, cables) {
+  const nodeMap = new Map();
+  equipment.forEach(eq => {
+    nodeMap.set(eq.name, {
+      id: eq.name,
+      label: eq.name,
+      category: eq.category,
+      ...eq,
+      status: MOCK_STATUS[eq.name] || "online",
+    });
+  });
+
+  cables.forEach(c => {
+    const fromName = (c.source ?? c.from ?? "").split(" (")[0];
+    const toName = (c.target ?? c.to ?? "").split(" (")[0];
+    [fromName, toName].forEach(name => {
+      if (name && !nodeMap.has(name)) {
+        nodeMap.set(name, { id: name, label: name, category: "Other", name, status: MOCK_STATUS[name] || "unknown" });
+      }
+    });
+  });
+
+  const nodes = Array.from(nodeMap.values());
+  const links = cables
+    .map(c => ({
+      source: (c.source ?? c.from ?? "").split(" (")[0],
+      target: (c.target ?? c.to ?? "").split(" (")[0],
+      label: c.type,
+      cableLabel: c.label,
+    }))
+    .filter(l => l.source && l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
+
+  return { nodes, links };
+}
+
+// Inner graph isolated from selectedNode re-renders via memo
+const GraphCanvas = memo(function GraphCanvas({ graphData, selectedNodeId, onNodeClick }) {
   const graphRef = useRef();
   const containerRef = useRef();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -40,10 +76,7 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
   useEffect(() => {
     const update = () => {
       if (containerRef.current) {
-        setDimensions({
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-        });
+        setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
       }
     };
     update();
@@ -52,65 +85,20 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
     return () => ro.disconnect();
   }, []);
 
-  // Memoize graphData so react-force-graph-2d never receives a new object reference
-  // on re-renders — it mutates source/target to node objects internally and breaks
-  // if it gets fresh string IDs after that.
-  const graphData = useMemo(() => {
-    const nodeMap = new Map();
-    equipment.forEach(eq => {
-      nodeMap.set(eq.name, {
-        id: eq.name,
-        label: eq.name,
-        category: eq.category,
-        ...eq,
-        status: MOCK_STATUS[eq.name] || "online",
-      });
-    });
-
-    cables.forEach(c => {
-      const fromName = (c.source ?? c.from ?? "").split(" (")[0];
-      const toName = (c.target ?? c.to ?? "").split(" (")[0];
-      [fromName, toName].forEach(name => {
-        if (name && !nodeMap.has(name)) {
-          nodeMap.set(name, { id: name, label: name, category: "Other", name, status: MOCK_STATUS[name] || "unknown" });
-        }
-      });
-    });
-
-    const nodes = Array.from(nodeMap.values());
-    const links = cables.map(c => {
-      const src = (c.source ?? c.from ?? "").split(" (")[0];
-      const tgt = (c.target ?? c.to ?? "").split(" (")[0];
-      return { source: src, target: tgt, label: c.type, cableLabel: c.label };
-    }).filter(l => l.source && l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
-
-    return { nodes, links };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
-    // Guard: skip if position not yet assigned by force simulation
     if (!isFinite(node.x) || !isFinite(node.y)) return;
-
-    const isSelected = selectedNode?.id === node.id;
-    const status = node.status || "unknown";
+    const isSelected = selectedNodeId === node.id;
     const catColor = CATEGORY_COLORS[node.category] || "#94a3b8";
-    const statusColor = STATUS_COLORS[status];
+    const statusColor = STATUS_COLORS[node.status] || STATUS_COLORS.unknown;
     const radius = isSelected ? 14 : 10;
 
-    // Glow for selected
-    if (isSelected) {
-      ctx.shadowColor = catColor;
-      ctx.shadowBlur = 20;
-    }
+    if (isSelected) { ctx.shadowColor = catColor; ctx.shadowBlur = 20; }
 
-    // Outer ring (status)
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius + 3, 0, 2 * Math.PI);
     ctx.fillStyle = statusColor + "33";
     ctx.fill();
 
-    // Category fill
     ctx.beginPath();
     ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
     const grad = ctx.createRadialGradient(node.x - 2, node.y - 2, 1, node.x, node.y, radius);
@@ -119,27 +107,23 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
     ctx.fillStyle = grad;
     ctx.fill();
 
-    // Status dot
     ctx.beginPath();
     ctx.arc(node.x + radius * 0.65, node.y - radius * 0.65, 3.5, 0, 2 * Math.PI);
     ctx.fillStyle = statusColor;
     ctx.fill();
-
     ctx.shadowBlur = 0;
 
-    // Label
     const fontSize = Math.max(8, 10 / globalScale);
     ctx.font = `${isSelected ? "600" : "500"} ${fontSize}px Inter, sans-serif`;
     ctx.fillStyle = isSelected ? "#ffffff" : "rgba(255,255,255,0.75)";
     ctx.textAlign = "center";
     ctx.fillText(node.label, node.x, node.y + radius + fontSize + 2);
-  }, [selectedNode]);
+  }, [selectedNodeId]);
 
   const linkCanvasObject = useCallback((link, ctx) => {
     const start = link.source;
     const end = link.target;
     if (!start?.x || !end?.x || !isFinite(start.x) || !isFinite(end.x)) return;
-
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
     ctx.lineTo(end.x, end.y);
@@ -171,5 +155,18 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
         enableZoomInteraction={true}
       />
     </div>
+  );
+});
+
+export default function NetworkGraph({ equipment, cables, onNodeClick, selectedNode }) {
+  // Build once — stable reference prevents force-graph from re-initializing
+  const graphData = useMemo(() => buildGraphData(equipment, cables), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <GraphCanvas
+      graphData={graphData}
+      selectedNodeId={selectedNode?.id ?? null}
+      onNodeClick={onNodeClick}
+    />
   );
 }
