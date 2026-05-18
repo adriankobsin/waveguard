@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ForceGraph2D from "react-force-graph-2d";
 import { X, MapPin, Hash, Tag, FileText, Cable, Filter, Maximize2, RefreshCw, Layers, GitBranch, ArrowRight, CheckCircle2, Monitor, Cpu, Lightbulb, Server } from "lucide-react";
+import LightingMapTab from "../components/topology/LightingMapTab";
 
 // ─── Full device + cable dataset ─────────────────────────────────────────────
 const DEVICES = [
@@ -610,7 +611,7 @@ export default function TopologyPage() {
         {/* Non-network tabs render placeholder */}
         {activeTab === "av" && <PlaceholderTab icon={Monitor} color="text-blue-400" title="AV signal flow" body="NVX encoder → core → decoder → display. Live route analytics plug into the AV driver bus." />}
         {activeTab === "control" && <PlaceholderTab icon={Cpu} color="text-purple-400" title="Control signal flow" body="CP4 orchestration to subsystems — REST/CIP placeholders per integration driver." />}
-        {activeTab === "lighting" && <PlaceholderTab icon={Lightbulb} color="text-amber-400" title="Deck lighting map" body="Deck-by-deck heatmaps connect to DALI groups, Lutron zones, and DMX universes." />}
+        {activeTab === "lighting" && <LightingMapTab />}
         {activeTab === "rack" && <PlaceholderTab icon={Server} color="text-emerald-400" title="Rack elevation" body="RU positions derive from equipment.rackUnit — drag-and-drop rack designer scheduled." />}
 
         {/* Network tab only */}
