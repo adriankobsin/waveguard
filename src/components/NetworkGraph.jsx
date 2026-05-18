@@ -1,6 +1,7 @@
 import { useRef, useEffect, useCallback, useState } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 
+
 const CATEGORY_COLORS = {
   Network: "#06b6d4",
   Camera: "#a78bfa",
@@ -79,11 +80,24 @@ function buildGraphData(equipment, cables) {
 
 export default function NetworkGraph({ equipment, cables, onNodeClick, selectedNode }) {
   const containerRef = useRef();
+  const graphRef = useRef();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
 
   // selectedNode in a ref so callbacks stay stable and never cause re-renders
   const selectedNodeIdRef = useRef(selectedNode?.id ?? null);
   selectedNodeIdRef.current = selectedNode?.id ?? null;
+
+  // Configure D3 forces after mount for better node spread
+  useEffect(() => {
+    const fg = graphRef.current;
+    if (!fg) return;
+    fg.d3Force("charge").strength(-500).distanceMax(600);
+    fg.d3Force("link").distance(120);
+    if (fg.d3Force("collide")) {
+      fg.d3Force("collide").radius(30);
+    }
+    fg.d3ReheatSimulation();
+  }, [dimensions]);
 
   // Build once and never rebuild — the ref to graphData never changes,
   // so ForceGraph2D is never handed a new prop that triggers re-init
@@ -95,16 +109,16 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
   useEffect(() => {
     const update = () => {
       if (containerRef.current) {
-        setDimensions({
-          width: containerRef.current.offsetWidth,
-          height: containerRef.current.offsetHeight,
-        });
+        const w = containerRef.current.offsetWidth;
+        const h = containerRef.current.offsetHeight;
+        if (w > 0 && h > 0) setDimensions({ width: w, height: h });
       }
     };
-    update();
+    // Delay initial read slightly to let the DOM settle
+    const t = setTimeout(update, 50);
     const ro = new ResizeObserver(update);
     if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
+    return () => { clearTimeout(t); ro.disconnect(); };
   }, []);
 
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
@@ -157,8 +171,9 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
   }, []);
 
   return (
-    <div ref={containerRef} className="w-full h-full">
+    <div ref={containerRef} className="w-full h-full absolute inset-0">
       <ForceGraph2D
+        ref={graphRef}
         graphData={graphDataRef.current}
         width={dimensions.width}
         height={dimensions.height}
@@ -174,6 +189,7 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
         d3VelocityDecay={0.3}
         enableNodeDrag={true}
         enableZoomInteraction={true}
+        onEngineStop={() => graphRef.current?.zoomToFit(500, 80)}
       />
     </div>
   );
