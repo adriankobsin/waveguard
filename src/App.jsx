@@ -21,6 +21,7 @@ import AssistantPage from './pages/AssistantPage';
 import CablesPage from './pages/CablesPage';
 import InventoryPage from './pages/InventoryPage';
 import ReportsPage from './pages/ReportsPage';
+import LightingPage from './pages/LightingPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -51,6 +52,7 @@ function App() {
             <Route path="/cables" element={<CablesPage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/lighting" element={<LightingPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 
