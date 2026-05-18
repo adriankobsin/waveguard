@@ -64,9 +64,9 @@ export default function CustomizableDashboard() {
   const handleDragStart = (e, widget) => {
     if (!editMode || !gridContainer) return;
     setDraggingId(widget.id);
-    const rect = e.currentTarget.getBoundingClientRect();
+    const rect = e.currentTarget?.getBoundingClientRect();
     const gridRect = gridContainer.getBoundingClientRect();
-    if (gridRect) {
+    if (rect && gridRect) {
       setDragOffset({
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
@@ -83,15 +83,15 @@ export default function CustomizableDashboard() {
     const x = e.clientX - gridRect.left - dragOffset.x;
     const y = e.clientY - gridRect.top - dragOffset.y;
     
-    const newGridX = Math.round(x / cellWidth);
-    const newGridY = Math.round(y / CELL_HEIGHT);
+    const newGridX = Math.max(0, Math.min(Math.round(x / cellWidth), GRID_COLS - 1));
+    const newGridY = Math.max(0, Math.round(y / CELL_HEIGHT));
     
     setLayout(prev => prev.map(w => {
       if (w.id === draggingId) {
         return {
           ...w,
-          x: Math.max(0, Math.min(newGridX, GRID_COLS - w.w)),
-          y: Math.max(0, newGridY),
+          x: newGridX,
+          y: newGridY,
         };
       }
       return w;
