@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ForceGraph2D from "react-force-graph-2d";
-import { X, MapPin, Hash, Tag, FileText, Cable, Filter, Maximize2, RefreshCw, Layers, GitBranch, ArrowRight, CheckCircle2, Monitor, Cpu, Lightbulb, Server } from "lucide-react";
+import { X, MapPin, Hash, Tag, FileText, Cable, Filter, Maximize2, RefreshCw, Layers, GitBranch, ArrowRight, CheckCircle2, Monitor, Cpu, Lightbulb, Server, Map } from "lucide-react";
+import DeckMapTab from "../components/topology/DeckMapTab";
 import LightingMapTab from "../components/topology/LightingMapTab";
 import RackElevationTab from "../components/topology/RackElevationTab";
 import NetworkMapTab from "../components/topology/NetworkMapTab";
@@ -306,6 +307,7 @@ function PlaceholderTab({ icon: Icon, title, body, color = "text-cyan-400" }) {
 
 const TOPOLOGY_TABS = [
   { key: "network",  label: "Network",        icon: Layers },
+  { key: "deckmap",  label: "Deck Map",        icon: Map },
   { key: "av",       label: "AV signal flow",  icon: Monitor },
   { key: "control",  label: "Control path",    icon: Cpu },
   { key: "lighting", label: "Lighting map",    icon: Lightbulb },
@@ -576,6 +578,7 @@ export default function TopologyPage() {
         {activeTab === "control" && <PlaceholderTab icon={Cpu} color="text-purple-400" title="Control signal flow" body="CP4 orchestration to subsystems — REST/CIP placeholders per integration driver." />}
         {activeTab === "lighting" && <LightingMapTab />}
         {activeTab === "rack" && <RackElevationTab />}
+        {activeTab === "deckmap" && <DeckMapTab />}
 
         {/* Network tab */}
         {activeTab === "network" && <NetworkMapTab />}

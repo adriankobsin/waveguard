@@ -1,0 +1,134 @@
+import { useRef, useState } from "react";
+
+const STATUS_COLORS = {
+  online:  { ring: "#22c55e", bg: "#166534", dot: "#4ade80" },
+  offline: { ring: "#ef4444", bg: "#7f1d1d", dot: "#f87171" },
+  warning: { ring: "#f59e0b", bg: "#78350f", dot: "#fbbf24" },
+  unknown: { ring: "#64748b", bg: "#1e293b", dot: "#94a3b8" },
+};
+
+const CATEGORY_ICONS = {
+  Network: "⬡",
+  Camera:  "◎",
+  AV:      "▶",
+  Server:  "▪",
+  Power:   "⚡",
+};
+
+export default function DeckMapCanvas({
+  floorPlan, pins, devices, mockStatus, placingDevice, onCanvasClick, onPinClick,
+}) {
+  const containerRef = useRef();
+  const [hoveredPin, setHoveredPin] = useState(null);
+
+  const handleClick = (e) => {
+    if (!placingDevice) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+    const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+    onCanvasClick(xPct, yPct);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      onClick={handleClick}
+      className={`flex-1 relative overflow-hidden ${placingDevice ? "cursor-crosshair" : "cursor-default"}`}
+      style={{ minHeight: 0 }}
+    >
+      {/* Floor plan image */}
+      <img
+        src={floorPlan.url}
+        alt="Floor plan"
+        className="w-full h-full object-contain select-none pointer-events-none"
+        draggable={false}
+      />
+
+      {/* Pins */}
+      {pins.map(pin => {
+        const device = devices.find(d => d.id === pin.deviceId);
+        if (!device) return null;
+        const status = mockStatus[pin.deviceId] || "unknown";
+        const colors = STATUS_COLORS[status];
+        const isHovered = hoveredPin === pin.id;
+
+        return (
+          <button
+            key={pin.id}
+            onClick={(e) => { e.stopPropagation(); onPinClick(pin); }}
+            onMouseEnter={() => setHoveredPin(pin.id)}
+            onMouseLeave={() => setHoveredPin(null)}
+            style={{
+              position: "absolute",
+              left: `${pin.x}%`,
+              top: `${pin.y}%`,
+              transform: "translate(-50%, -100%)",
+              zIndex: isHovered ? 20 : 10,
+            }}
+            className="group focus:outline-none"
+          >
+            {/* Tooltip */}
+            {isHovered && (
+              <div
+                className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap pointer-events-none"
+                style={{ zIndex: 30 }}
+              >
+                <div className="px-2.5 py-1.5 rounded-lg bg-[#0a0f1c]/95 border border-white/15 text-xs text-white shadow-xl">
+                  <p className="font-semibold">{device.name}</p>
+                  <p className="text-slate-400">{device.model}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: colors.dot }}>● {status}</p>
+                </div>
+                <div className="w-2 h-2 bg-[#0a0f1c] border-r border-b border-white/15 rotate-45 mx-auto -mt-1" />
+              </div>
+            )}
+
+            {/* Pin body */}
+            <div className="flex flex-col items-center">
+              <div
+                className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shadow-lg transition-transform group-hover:scale-110"
+                style={{
+                  background: colors.bg,
+                  border: `2px solid ${colors.ring}`,
+                  boxShadow: `0 0 10px ${colors.ring}55, 0 2px 8px rgba(0,0,0,0.6)`,
+                  color: colors.dot,
+                }}
+              >
+                {CATEGORY_ICONS[device.category] || "●"}
+              </div>
+              {/* Pin tail */}
+              <div
+                className="w-0.5 h-3"
+                style={{ background: `linear-gradient(to bottom, ${colors.ring}, transparent)` }}
+              />
+              <div
+                className="w-1.5 h-1.5 rounded-full opacity-60"
+                style={{ background: colors.ring }}
+              />
+            </div>
+
+            {/* Pulse ring for offline/warning */}
+            {(status === "offline" || status === "warning") && (
+              <div
+                className="absolute inset-0 top-0 rounded-full animate-ping opacity-30"
+                style={{
+                  width: 36, height: 36,
+                  margin: "0 auto",
+                  background: colors.ring,
+                }}
+              />
+            )}
+          </button>
+        );
+      })}
+
+      {/* Placing hint overlay */}
+      {placingDevice && (
+        <div className="absolute inset-0 pointer-events-none border-2 border-dashed border-cyan-500/30 rounded-sm">
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-xs text-cyan-300">
+            Click to place <b>{placingDevice.name}</b>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
