@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback, useState } from "react";
+import { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 
 const CATEGORY_COLORS = {
@@ -52,37 +52,41 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
     return () => ro.disconnect();
   }, []);
 
-  // Build nodes from equipment + any extra devices mentioned in cables
-  const nodeMap = new Map();
-  equipment.forEach(eq => {
-    nodeMap.set(eq.name, {
-      id: eq.name,
-      label: eq.name,
-      category: eq.category,
-      ...eq,
-      status: MOCK_STATUS[eq.name] || "online",
+  // Memoize graphData so react-force-graph-2d never receives a new object reference
+  // on re-renders — it mutates source/target to node objects internally and breaks
+  // if it gets fresh string IDs after that.
+  const graphData = useMemo(() => {
+    const nodeMap = new Map();
+    equipment.forEach(eq => {
+      nodeMap.set(eq.name, {
+        id: eq.name,
+        label: eq.name,
+        category: eq.category,
+        ...eq,
+        status: MOCK_STATUS[eq.name] || "online",
+      });
     });
-  });
 
-  // Add cable endpoints not in inventory (support both from/to and source/target shapes)
-  cables.forEach(c => {
-    const fromName = (c.source ?? c.from ?? "").split(" (")[0];
-    const toName = (c.target ?? c.to ?? "").split(" (")[0];
-    [fromName, toName].forEach(name => {
-      if (name && !nodeMap.has(name)) {
-        nodeMap.set(name, { id: name, label: name, category: "Other", name, status: MOCK_STATUS[name] || "unknown" });
-      }
+    cables.forEach(c => {
+      const fromName = (c.source ?? c.from ?? "").split(" (")[0];
+      const toName = (c.target ?? c.to ?? "").split(" (")[0];
+      [fromName, toName].forEach(name => {
+        if (name && !nodeMap.has(name)) {
+          nodeMap.set(name, { id: name, label: name, category: "Other", name, status: MOCK_STATUS[name] || "unknown" });
+        }
+      });
     });
-  });
 
-  const nodes = Array.from(nodeMap.values());
-  const links = cables.map(c => {
-    const src = (c.source ?? c.from ?? "").split(" (")[0];
-    const tgt = (c.target ?? c.to ?? "").split(" (")[0];
-    return { source: src, target: tgt, label: c.type, cableLabel: c.label };
-  }).filter(l => l.source && l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
+    const nodes = Array.from(nodeMap.values());
+    const links = cables.map(c => {
+      const src = (c.source ?? c.from ?? "").split(" (")[0];
+      const tgt = (c.target ?? c.to ?? "").split(" (")[0];
+      return { source: src, target: tgt, label: c.type, cableLabel: c.label };
+    }).filter(l => l.source && l.target && nodeMap.has(l.source) && nodeMap.has(l.target));
 
-  const graphData = { nodes, links };
+    return { nodes, links };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
     // Guard: skip if position not yet assigned by force simulation
