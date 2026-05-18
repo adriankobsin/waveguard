@@ -4,7 +4,8 @@ import { base44 } from "@/api/base44Client";
 import RadialNetworkGraph from "./RadialNetworkGraph";
 import {
   Search, Filter, RefreshCw, Maximize2, GitBranch, ArrowRight,
-  CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable
+  CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable,
+  Cpu, Wifi, Activity, ScanLine
 } from "lucide-react";
 
 const CATEGORY_COLORS = {
@@ -69,11 +70,21 @@ function findPath(sourceId, targetId, connections) {
   return null;
 }
 
-function DetailPanel({ node, onClose }) {
+function DetailPanel({ node, onClose, onScan }) {
   if (!node) return null;
   const status = node.status || "unknown";
   const cfg = STATUS_CONFIG[status];
   const connections = node.connections || [];
+  const [scanning, setScanning] = useState(false);
+
+  const handleScan = async () => {
+    setScanning(true);
+    try {
+      await onScan?.(node);
+    } finally {
+      setScanning(false);
+    }
+  };
 
   return (
     <motion.div
@@ -105,8 +116,10 @@ function DetailPanel({ node, onClose }) {
           {node.model && <Row icon={Tag} label="Model" value={node.model} />}
           {node.ip && <Row icon={Hash} label="IP Address" value={node.ip} mono />}
           {node.mac && <Row icon={Hash} label="MAC Address" value={node.mac} mono />}
+          {node.firmware && <Row icon={Cpu} label="Firmware" value={node.firmware} mono />}
           {node.location && <Row icon={MapPin} label="Location" value={node.location} />}
           {node.serial && <Row icon={Hash} label="Serial" value={node.serial} mono />}
+          {node.uptime && <Row icon={Activity} label="Uptime" value={node.uptime} />}
           {node.notes && (
             <div className="pt-1 border-t border-white/6">
               <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><FileText size={10} /> Notes</p>
@@ -132,6 +145,16 @@ function DetailPanel({ node, onClose }) {
             </div>
           </div>
         )}
+        <div className="px-4 pb-4 border-t border-white/6 pt-3">
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {scanning ? <Loader2 size={12} className="animate-spin" /> : <ScanLine size={12} />}
+            {scanning ? "Scanning..." : "Scan Device"}
+          </button>
+        </div>
       </div>
     </motion.div>
   );
@@ -373,6 +396,18 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
     });
   }, [clearPath]);
 
+  const handleScanDevice = useCallback(async (node) => {
+    try {
+      const response = await base44.functions.invoke('networkScan', { target: node.ip });
+      if (response.data.success) {
+        // Optionally refresh topology data after scan
+        onRefresh?.();
+      }
+    } catch (error) {
+      console.error('Failed to scan device:', error);
+    }
+  }, [onRefresh]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -452,7 +487,7 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
 
       {/* Overlays */}
       <Legend filter={categoryFilter} onFilter={setCategoryFilter} statusFilter={statusFilter} onStatusFilter={setStatusFilter} />
-      <DetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} />
+      <DetailPanel node={selectedNode} onClose={() => setSelectedNode(null)} onScan={handleScanDevice} />
       <PathPanel path={activePath} onClose={clearPath} />
 
       {/* Path mode hint */}
