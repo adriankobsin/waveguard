@@ -82,16 +82,24 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
   });
 
   const nodes = Array.from(nodeMap.values());
-  const links = cables.map(c => ({
-    source: c.from.split(" (")[0],
-    target: c.to.split(" (")[0],
-    label: c.type,
-    cableLabel: c.label,
-  })).filter(l => nodeMap.has(l.source) && nodeMap.has(l.target));
+  const links = cables.map(c => {
+    // Support both {from/to} and {source/target} cable shapes
+    const rawSource = c.source ?? c.from ?? "";
+    const rawTarget = c.target ?? c.to ?? "";
+    return {
+      source: rawSource.split(" (")[0],
+      target: rawTarget.split(" (")[0],
+      label: c.type,
+      cableLabel: c.label,
+    };
+  }).filter(l => nodeMap.has(l.source) && nodeMap.has(l.target));
 
   const graphData = { nodes, links };
 
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
+    // Guard: skip if position not yet assigned by force simulation
+    if (!isFinite(node.x) || !isFinite(node.y)) return;
+
     const isSelected = selectedNode?.id === node.id;
     const status = node.status || "unknown";
     const catColor = CATEGORY_COLORS[node.category] || "#94a3b8";
@@ -138,7 +146,7 @@ export default function NetworkGraph({ equipment, cables, onNodeClick, selectedN
   const linkCanvasObject = useCallback((link, ctx) => {
     const start = link.source;
     const end = link.target;
-    if (!start.x || !end.x) return;
+    if (!start?.x || !end?.x || !isFinite(start.x) || !isFinite(end.x)) return;
 
     ctx.beginPath();
     ctx.moveTo(start.x, start.y);
