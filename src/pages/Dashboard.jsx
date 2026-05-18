@@ -1,4 +1,4 @@
-import { useState, Suspense } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -12,8 +12,7 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
 import StatusPulse from "../components/StatusPulse";
-import NetworkGraph from "../components/NetworkGraph";
-import NodeSidePanel from "../components/NodeSidePanel";
+import LiveStatusFeed from "../components/LiveStatusFeed";
 
 // ─── Full device + cable dataset (mirrors TopologyPage) ──────────────────────
 const EQUIPMENT = [
@@ -119,8 +118,6 @@ const ChartTooltip = ({ active, payload, label }) => {
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const [selectedNode, setSelectedNode] = useState(null);
-
   return (
     <div className="min-h-screen bg-[#060912] p-4 md:p-6 space-y-6">
 
@@ -157,62 +154,14 @@ export default function Dashboard() {
         <StatCard label="Open Alarms" value={STATS.alarms} icon={Activity} color="text-cyan-400" bg="bg-cyan-500" delay={0.15} />
       </div>
 
-      {/* ── Network Graph (hero) ────────────────────────────────────────────── */}
+      {/* ── Live Status Feed (hero) ─────────────────────────────────────────── */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.18 }}
-        className="relative rounded-2xl border border-white/8 bg-gradient-to-br from-[#0d1321] to-[#07090f] overflow-hidden"
         style={{ height: 460 }}
       >
-        {/* Radial glow */}
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="w-96 h-96 rounded-full bg-cyan-500/5 blur-3xl" />
-        </div>
-
-        {/* Title overlay */}
-        <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-cyan-500/15 flex items-center justify-center">
-            <Activity size={13} className="text-cyan-400" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-white leading-none">Live Network Graph</p>
-            <p className="text-xs text-slate-500 mt-0.5">{EQUIPMENT.length} devices · {CABLES.length} connections · Cat6/Cat6A/Power IEC</p>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="absolute bottom-4 left-4 z-10 flex flex-wrap gap-3">
-          {[
-            { label: "Network", color: "#06b6d4" },
-            { label: "Camera", color: "#a78bfa" },
-            { label: "AV", color: "#60a5fa" },
-            { label: "Server", color: "#34d399" },
-            { label: "Power", color: "#fbbf24" },
-          ].map(l => (
-            <div key={l.label} className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full" style={{ background: l.color }} />
-              <span className="text-xs text-slate-500">{l.label}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Graph */}
-        <Suspense fallback={<div className="flex items-center justify-center h-full text-slate-500 text-sm">Loading graph…</div>}>
-          <NetworkGraph
-            equipment={EQUIPMENT}
-            cables={CABLES}
-            onNodeClick={node => setSelectedNode(prev => prev?.id === node.id ? null : node)}
-            selectedNode={selectedNode}
-          />
-        </Suspense>
-
-        {/* Node side panel */}
-        <NodeSidePanel
-          node={selectedNode}
-          cables={CABLES}
-          onClose={() => setSelectedNode(null)}
-        />
+        <LiveStatusFeed />
       </motion.div>
 
       {/* ── Lower grid ─────────────────────────────────────────────────────── */}
