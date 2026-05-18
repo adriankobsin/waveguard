@@ -246,6 +246,7 @@ export default function TopologyPage() {
   };
 
   const nodeCanvasObject = useCallback((node, ctx, globalScale) => {
+    if (!isFinite(node.x) || !isFinite(node.y)) return;
     const isSelected = selectedNode?.id === node.id;
     const catColor = CATEGORY_COLORS[node.category] || "#94a3b8";
     const statusColor = STATUS_COLORS[node.status] || STATUS_COLORS.unknown;
@@ -298,7 +299,7 @@ export default function TopologyPage() {
   const linkCanvasObject = useCallback((link, ctx) => {
     const s = link.source;
     const t = link.target;
-    if (!s.x || !t.x) return;
+    if (!isFinite(s.x) || !isFinite(s.y) || !isFinite(t.x) || !isFinite(t.y)) return;
     const isPower = link.type === "Power IEC";
     ctx.beginPath();
     ctx.moveTo(s.x, s.y);
@@ -390,6 +391,7 @@ export default function TopologyPage() {
           d3AlphaDecay={0.015}
           d3VelocityDecay={0.25}
           nodePointerAreaPaint={(node, color, ctx) => {
+            if (!isFinite(node.x) || !isFinite(node.y)) return;
             ctx.fillStyle = color;
             ctx.beginPath();
             ctx.arc(node.x, node.y, 16, 0, 2 * Math.PI);
