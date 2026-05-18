@@ -15,23 +15,45 @@ import StatusPulse from "../components/StatusPulse";
 import NetworkGraph from "../components/NetworkGraph";
 import NodeSidePanel from "../components/NodeSidePanel";
 
-// ─── shared mock data (mirrors InventoryPage & CablesPage) ───────────────────
+// ─── Full device + cable dataset (mirrors TopologyPage) ──────────────────────
 const EQUIPMENT = [
-  { id: "1", name: "SW-Bridge", model: "Cisco CBS350-24T", category: "Network", ip: "192.168.10.1", condition: "Good", location: "Bridge Rack", serial: "FOC2241X0AB", notes: "Primary distribution switch" },
-  { id: "2", name: "SW-Saloon", model: "Cisco CBS350-16T", category: "Network", ip: "192.168.10.2", condition: "Good", location: "Saloon Cabinet", serial: "FOC2241X0CD", notes: "" },
-  { id: "3", name: "Cam-Bridge-01", model: "Dahua IPC-HDW3849H", category: "Camera", ip: "192.168.10.51", condition: "Fair", location: "Bridge Exterior", serial: "DH2023051201", notes: "PoE — requires port bounce" },
-  { id: "4", name: "AV-Proc-Saloon", model: "Crestron NVX-350", category: "AV", ip: "192.168.10.22", condition: "Good", location: "Saloon AV Rack", serial: "CRE7462183", notes: "4K HDR matrix" },
-  { id: "5", name: "UPS-Main", model: "APC Smart-UPS 3000VA", category: "Power", ip: "192.168.10.80", condition: "Good", location: "Engine Room", serial: "AS1720140893", notes: "Battery at 42%" },
-  { id: "6", name: "Router-WAN", model: "MikroTik CCR2004-1G", category: "Network", ip: "192.168.1.1", condition: "Excellent", location: "Bridge Rack", serial: "MT220B0041", notes: "BGP + failover configured" },
+  { id: "router-wan", name: "Router-WAN",      category: "Network", model: "MikroTik CCR2004-1G",  ip: "192.168.1.1",   location: "Bridge Rack",    condition: "Excellent", notes: "BGP + failover configured" },
+  { id: "sw-bridge",  name: "SW-Bridge",        category: "Network", model: "Cisco CBS350-24T",     ip: "192.168.10.1",  location: "Bridge Rack",    condition: "Good",      notes: "Primary distribution switch" },
+  { id: "sw-saloon",  name: "SW-Saloon",        category: "Network", model: "Cisco CBS350-16T",     ip: "192.168.10.2",  location: "Saloon Cabinet", condition: "Good",      notes: "" },
+  { id: "sw-deck",    name: "SW-Deck-Lower",    category: "Network", model: "Cisco SG250-18",       ip: "192.168.10.5",  location: "Deck Cabinet",   condition: "Fair",      notes: "CPU spikes noted" },
+  { id: "sw-engine",  name: "SW-Engine",        category: "Network", model: "Cisco SG250-18",       ip: "192.168.10.6",  location: "Engine Room",    condition: "Good",      notes: "" },
+  { id: "ap-bridge",  name: "AP-Bridge",        category: "Network", model: "Ubiquiti UAP-AC-Pro",  ip: "192.168.10.20", location: "Bridge Mast",    condition: "Good",      notes: "" },
+  { id: "ap-deck",    name: "AP-Deck-Aft",      category: "Network", model: "Ubiquiti UAP-AC-Pro",  ip: "192.168.10.21", location: "Aft Deck",       condition: "Good",      notes: "" },
+  { id: "cam-bridge", name: "Cam-Bridge-01",    category: "Camera",  model: "Dahua IPC-HDW3849H",   ip: "192.168.10.51", location: "Bridge Ext.",    condition: "Fair",      notes: "PoE — requires port bounce" },
+  { id: "cam-saloon", name: "Cam-Saloon-01",    category: "Camera",  model: "Dahua IPC-HDW3849H",   ip: "192.168.10.52", location: "Saloon",         condition: "Good",      notes: "" },
+  { id: "cam-deck1",  name: "Cam-Deck-01",      category: "Camera",  model: "Dahua IPC-HDW3849H",   ip: "192.168.10.53", location: "Fore Deck",      condition: "Good",      notes: "" },
+  { id: "cam-deck2",  name: "Cam-Deck-02",      category: "Camera",  model: "Dahua IPC-HDW3849H",   ip: "192.168.10.54", location: "Aft Deck",       condition: "Good",      notes: "" },
+  { id: "av-proc",    name: "AV-Proc-Saloon",   category: "AV",      model: "Crestron NVX-350",     ip: "192.168.10.22", location: "Saloon AV Rack", condition: "Good",      notes: "4K HDR matrix" },
+  { id: "av-matrix",  name: "AV-Matrix-Saloon", category: "AV",      model: "Kramer VS-88H",        ip: "192.168.10.23", location: "Saloon AV Rack", condition: "Good",      notes: "" },
+  { id: "qsys-core",  name: "Q-SYS Core",       category: "AV",      model: "Q-SYS Core 110f",      ip: "192.168.10.30", location: "Bridge Rack",    condition: "Good",      notes: "Audio DSP main" },
+  { id: "nas",        name: "NAS-Synology",      category: "Server",  model: "Synology DS1522+",     ip: "192.168.10.80", location: "Engine Room",    condition: "Good",      notes: "" },
+  { id: "ups-main",   name: "UPS-Main",          category: "Power",   model: "APC Smart-UPS 3000VA", ip: "192.168.10.90", location: "Engine Room",    condition: "Good",      notes: "Battery at 42%" },
+  { id: "ups-av",     name: "UPS-AV",            category: "Power",   model: "APC Smart-UPS 750VA",  ip: "192.168.10.91", location: "Saloon AV Rack", condition: "Good",      notes: "" },
 ];
 
 const CABLES = [
-  { id: "1", label: "C-001", from: "SW-Bridge (Port 1)", to: "Router-WAN", type: "Cat6A", notes: "Primary uplink" },
-  { id: "2", label: "C-002", from: "SW-Bridge (Port 12)", to: "Cam-Bridge-01", type: "Cat6", notes: "PoE camera" },
-  { id: "3", label: "C-003", from: "AV-Proc-Saloon", to: "SW-Saloon", type: "Cat6A", notes: "" },
-  { id: "4", label: "C-004", from: "SW-Saloon (Port 4)", to: "UPS-Main", type: "Cat6", notes: "" },
-  { id: "5", label: "C-005", from: "UPS-Main", to: "SW-Bridge", type: "Power IEC", notes: "Protected feed" },
-  { id: "6", label: "C-006", from: "Router-WAN", to: "SW-Bridge", type: "Cat6A", notes: "" },
+  { id: "c01", label: "C-001", from: "Router-WAN",      to: "SW-Bridge",        source: "router-wan", target: "sw-bridge",  type: "Cat6A",     notes: "Primary WAN uplink" },
+  { id: "c02", label: "C-002", from: "SW-Bridge",       to: "SW-Saloon",        source: "sw-bridge",  target: "sw-saloon",  type: "Cat6A",     notes: "Trunk" },
+  { id: "c03", label: "C-003", from: "SW-Bridge",       to: "SW-Deck-Lower",    source: "sw-bridge",  target: "sw-deck",    type: "Cat6A",     notes: "Trunk" },
+  { id: "c04", label: "C-004", from: "SW-Bridge",       to: "SW-Engine",        source: "sw-bridge",  target: "sw-engine",  type: "Cat6A",     notes: "Trunk" },
+  { id: "c05", label: "C-005", from: "SW-Bridge",       to: "AP-Bridge",        source: "sw-bridge",  target: "ap-bridge",  type: "Cat6",      notes: "PoE" },
+  { id: "c06", label: "C-006", from: "SW-Bridge",       to: "Cam-Bridge-01",    source: "sw-bridge",  target: "cam-bridge", type: "Cat6",      notes: "PoE camera" },
+  { id: "c07", label: "C-007", from: "SW-Bridge",       to: "Q-SYS Core",       source: "sw-bridge",  target: "qsys-core",  type: "Cat6A",     notes: "" },
+  { id: "c08", label: "C-008", from: "SW-Bridge",       to: "NAS-Synology",     source: "sw-bridge",  target: "nas",        type: "Cat6A",     notes: "" },
+  { id: "c09", label: "C-009", from: "SW-Saloon",       to: "AP-Deck-Aft",      source: "sw-saloon",  target: "ap-deck",    type: "Cat6",      notes: "PoE" },
+  { id: "c10", label: "C-010", from: "SW-Saloon",       to: "Cam-Saloon-01",    source: "sw-saloon",  target: "cam-saloon", type: "Cat6",      notes: "PoE camera" },
+  { id: "c11", label: "C-011", from: "SW-Saloon",       to: "AV-Proc-Saloon",   source: "sw-saloon",  target: "av-proc",    type: "Cat6A",     notes: "" },
+  { id: "c12", label: "C-012", from: "SW-Saloon",       to: "AV-Matrix-Saloon", source: "sw-saloon",  target: "av-matrix",  type: "Cat6A",     notes: "" },
+  { id: "c13", label: "C-013", from: "SW-Saloon",       to: "UPS-AV",           source: "sw-saloon",  target: "ups-av",     type: "Cat6",      notes: "SNMP monitoring" },
+  { id: "c14", label: "C-014", from: "SW-Deck-Lower",   to: "Cam-Deck-01",      source: "sw-deck",    target: "cam-deck1",  type: "Cat6",      notes: "PoE camera" },
+  { id: "c15", label: "C-015", from: "SW-Deck-Lower",   to: "Cam-Deck-02",      source: "sw-deck",    target: "cam-deck2",  type: "Cat6",      notes: "PoE camera" },
+  { id: "c16", label: "C-016", from: "UPS-Main",        to: "SW-Bridge",        source: "ups-main",   target: "sw-bridge",  type: "Power IEC", notes: "Protected feed" },
+  { id: "c17", label: "C-017", from: "UPS-Main",        to: "Router-WAN",       source: "ups-main",   target: "router-wan", type: "Power IEC", notes: "Protected feed" },
 ];
 
 const STATS = { online: 47, offline: 3, warning: 5, alarms: 8 };
@@ -121,10 +143,7 @@ export default function Dashboard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Link to="/mobile" className="text-xs text-slate-400 hover:text-cyan-400 transition-colors border border-white/10 rounded-xl px-3 py-2 hover:border-cyan-500/40">
-            Mobile View
-          </Link>
-          <Link to="/setup" className="text-xs bg-cyan-500 text-black font-semibold rounded-xl px-4 py-2 hover:bg-cyan-400 transition-colors">
+          <Link to="/discovery" className="text-xs bg-cyan-500 text-black font-semibold rounded-xl px-4 py-2 hover:bg-cyan-400 transition-colors">
             Run Discovery
           </Link>
         </div>
@@ -158,7 +177,7 @@ export default function Dashboard() {
           </div>
           <div>
             <p className="text-sm font-semibold text-white leading-none">Live Network Graph</p>
-            <p className="text-xs text-slate-500 mt-0.5">{EQUIPMENT.length} devices · {CABLES.length} connections</p>
+            <p className="text-xs text-slate-500 mt-0.5">{EQUIPMENT.length} devices · {CABLES.length} connections · Cat6/Cat6A/Power IEC</p>
           </div>
         </div>
 
@@ -168,6 +187,7 @@ export default function Dashboard() {
             { label: "Network", color: "#06b6d4" },
             { label: "Camera", color: "#a78bfa" },
             { label: "AV", color: "#60a5fa" },
+            { label: "Server", color: "#34d399" },
             { label: "Power", color: "#fbbf24" },
           ].map(l => (
             <div key={l.label} className="flex items-center gap-1.5">
