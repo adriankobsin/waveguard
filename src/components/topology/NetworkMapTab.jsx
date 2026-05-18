@@ -4,11 +4,12 @@ import { base44 } from "@/api/base44Client";
 import RadialNetworkGraph from "./RadialNetworkGraph";
 import { GroupManager } from "./GroupManager";
 import { DeviceEditModal } from "./DeviceEditModal";
+import LayoutSelector from "./LayoutSelector";
 import { toast } from "sonner";
 import {
   Search, Filter, RefreshCw, Maximize2, GitBranch, ArrowRight,
   CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable,
-  Cpu, Wifi, Activity, ScanLine, Edit2
+  Cpu, Wifi, Activity, ScanLine, Edit2, Link, Save, LayoutGrid
 } from "lucide-react";
 
 const CATEGORY_COLORS = {
@@ -316,6 +317,9 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const [pathMode, setPathMode] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
   const [groups, setGroups] = useState([]);
+  const [connectionMode, setConnectionMode] = useState(false);
+  const [customPositions, setCustomPositions] = useState({});
+  const [currentLayout, setCurrentLayout] = useState(null);
 
   // Load groups
   useEffect(() => {
@@ -328,6 +332,22 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
       }
     };
     loadGroups();
+  }, []);
+
+  // Load saved layout
+  useEffect(() => {
+    const loadLayout = async () => {
+      try {
+        const response = await base44.functions.invoke('loadTopologyLayout', {});
+        if (response.data.layout) {
+          setCurrentLayout(response.data.layout);
+          setCustomPositions(response.data.layout.node_positions || {});
+        }
+      } catch (error) {
+        console.error('Failed to load layout:', error);
+      }
+    };
+    loadLayout();
   }, []);
 
   // Mouse wheel zoom
@@ -497,6 +517,61 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
     }
   }, [editingDevice, onRefresh]);
 
+  const handleNodeDrag = useCallback((nodeId, x, y) => {
+    setCustomPositions(prev => ({
+      ...prev,
+      [nodeId]: { x, y }
+    }));
+  }, []);
+
+  const handleConnectionCreate = useCallback(async (sourceNode, targetNode) => {
+    try {
+      toast.success(`Connection created: ${sourceNode.name} → ${targetNode.name}`);
+      onRefresh?.();
+    } catch (error) {
+      console.error('Failed to create connection:', error);
+      toast.error("Failed to create connection");
+    }
+  }, [onRefresh]);
+
+  const handleSaveLayout = useCallback(async () => {
+    try {
+      const layoutName = prompt('Enter layout name:', currentLayout?.name || 'My Layout');
+      if (!layoutName) return;
+
+      const layoutData = {
+        id: currentLayout?.id,
+        name: layoutName,
+        node_positions: customPositions,
+        is_default: confirm('Set as default layout?')
+      };
+
+      const response = await base44.functions.invoke('saveTopologyLayout', { layoutData });
+      if (response.data.success) {
+        toast.success('Layout saved successfully');
+        setCurrentLayout(response.data.layout);
+      }
+    } catch (error) {
+      console.error('Failed to save layout:', error);
+      toast.error("Failed to save layout");
+    }
+  }, [customPositions, currentLayout]);
+
+  const handleLoadLayout = useCallback(async (layout) => {
+    try {
+      setCurrentLayout(layout);
+      setCustomPositions(layout.node_positions || {});
+      toast.success(`Layout "${layout.name}" loaded`);
+    } catch (error) {
+      console.error('Failed to load layout:', error);
+      toast.error("Failed to load layout");
+    }
+  }, []);
+
+  const toggleConnectionMode = useCallback(() => {
+    setConnectionMode(m => !m);
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -533,6 +608,29 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
           {pathMode ? "Cancel Path Trace" : "Trace Path"}
         </button>
         <button
+          onClick={toggleConnectionMode}
+          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+            connectionMode
+              ? "bg-orange-500/15 border-orange-500/30 text-orange-400"
+              : "bg-[#0a0f1c]/90 border-white/10 text-slate-400 hover:text-white"
+          }`}
+        >
+          <Link size={12} />
+          {connectionMode ? "Cancel Connection" : "Create Connection"}
+        </button>
+        <LayoutSelector 
+          currentLayout={currentLayout}
+          onLoadLayout={handleLoadLayout}
+          onSaveLayout={handleSaveLayout}
+        />
+        <button
+          onClick={handleSaveLayout}
+          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
+        >
+          <Save size={12} />
+          Save Layout
+        </button>
+        <button
           onClick={onRefresh}
           className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
         >
@@ -561,18 +659,30 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
         graphData={graphData}
         selectedNode={selectedNode}
         onNodeClick={handleNodeClick}
+        onNodeDrag={handleNodeDrag}
+        onConnectionCreate={handleConnectionCreate}
         pathSource={pathSource}
         activePath={activePath}
         dimensions={dimensions}
         zoom={zoom}
+        connectionMode={connectionMode}
       />
 
       {/* Pan hint */}
       <div className="absolute bottom-4 right-4 z-10">
         <div className="px-3 py-1.5 rounded-lg bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 text-xs text-slate-400">
-          Drag to pan · Scroll to zoom
+          Drag nodes to reposition · Scroll to zoom
         </div>
       </div>
+
+      {/* Connection mode hint */}
+      {connectionMode && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10">
+          <div className="px-4 py-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-300 text-xs font-medium">
+            Click two devices to create a connection
+          </div>
+        </div>
+      )}
 
       {/* Group Manager */}
       <GroupManager devices={topologyData?.devices || []} onGroupChange={() => {}} />

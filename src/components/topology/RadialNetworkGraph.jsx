@@ -34,15 +34,21 @@ export default function RadialNetworkGraph({
   graphData,
   selectedNode,
   onNodeClick,
+  onNodeDrag,
   pathSource,
   activePath,
   dimensions,
   zoom = 1,
+  connectionMode = false,
+  onConnectionCreate,
 }) {
   const canvasRef = useRef();
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [draggedNode, setDraggedNode] = useState(null);
+  const [connectionStartNode, setConnectionStartNode] = useState(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
   // Categorize and position nodes
   const nodePositions = useMemo(() => {
@@ -215,12 +221,25 @@ export default function RadialNetworkGraph({
       ctx.globalAlpha = 1;
     });
 
+    // Draw connection creation line
+    if (connectionMode && connectionStartNode) {
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(connectionStartNode.x, connectionStartNode.y);
+      ctx.lineTo(mousePos.x, mousePos.y);
+      ctx.strokeStyle = "#f97316";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     ctx.shadowBlur = 0;
     ctx.restore();
-  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom, pan]);
+  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom, pan, connectionMode, connectionStartNode, mousePos]);
 
   const handleCanvasClick = useCallback((e) => {
-    if (isDragging) return;
+    if (isDragging || draggedNode) return;
     
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -237,6 +256,28 @@ export default function RadialNetworkGraph({
     const adjustedX = centerX + (clickX - centerX - pan.x) / zoom;
     const adjustedY = centerY + (clickY - centerY - pan.y) / zoom;
 
+    // Handle connection mode
+    if (connectionMode) {
+      for (const node of Object.values(nodePositions)) {
+        const dist = Math.sqrt((adjustedX - node.x) ** 2 + (adjustedY - node.y) ** 2);
+        if (dist < 18) {
+          if (!connectionStartNode) {
+            setConnectionStartNode(node);
+            return;
+          } else if (connectionStartNode.id !== node.id) {
+            onConnectionCreate?.(connectionStartNode, node);
+            setConnectionStartNode(null);
+            return;
+          } else {
+            setConnectionStartNode(null);
+            return;
+          }
+        }
+      }
+      setConnectionStartNode(null);
+      return;
+    }
+
     for (const node of Object.values(nodePositions)) {
       const dist = Math.sqrt((adjustedX - node.x) ** 2 + (adjustedY - node.y) ** 2);
       if (dist < 18) {
@@ -244,23 +285,41 @@ export default function RadialNetworkGraph({
         return;
       }
     }
-  }, [nodePositions, onNodeClick, dimensions, zoom, pan, isDragging]);
+  }, [nodePositions, onNodeClick, dimensions, zoom, pan, isDragging, draggedNode, connectionMode, connectionStartNode, onConnectionCreate]);
 
   const handleMouseDown = useCallback((e) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    setDragStart({
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    });
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    const width = dimensions.width || 800;
+    const height = dimensions.height || 600;
+    const centerX = width / 2;
+    const centerY = height / 2;
+
+    const adjustedX = centerX + (clickX - centerX - pan.x) / zoom;
+    const adjustedY = centerY + (clickY - centerY - pan.y) / zoom;
+
+    // Check if clicking on a node (for dragging)
+    if (!connectionMode) {
+      for (const node of Object.values(nodePositions)) {
+        const dist = Math.sqrt((adjustedX - node.x) ** 2 + (adjustedY - node.y) ** 2);
+        if (dist < 18) {
+          setDraggedNode(node);
+          setIsDragging(true);
+          setDragStart({ x: clickX, y: clickY });
+          return;
+        }
+      }
+    }
+
+    setDragStart({ x: clickX, y: clickY });
     setIsDragging(true);
-  }, []);
+  }, [nodePositions, dimensions, zoom, pan, connectionMode]);
 
   const handleMouseMove = useCallback((e) => {
-    if (!isDragging) return;
-
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -268,15 +327,37 @@ export default function RadialNetworkGraph({
     const currentX = e.clientX - rect.left;
     const currentY = e.clientY - rect.top;
 
-    const deltaX = currentX - dragStart.x;
-    const deltaY = currentY - dragStart.y;
+    setMousePos({
+      x: ((dimensions.width || 800) / 2 + (currentX - (dimensions.width || 800) / 2 - pan.x) / zoom),
+      y: ((dimensions.height || 600) / 2 + (currentY - (dimensions.height || 600) / 2 - pan.y) / zoom)
+    });
 
-    setPan(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
-    setDragStart({ x: currentX, y: currentY });
-  }, [isDragging, dragStart]);
+    if (!isDragging) return;
+
+    if (draggedNode) {
+      // Node dragging
+      const width = dimensions.width || 800;
+      const height = dimensions.height || 600;
+      const centerX = width / 2;
+      const centerY = height / 2;
+
+      const adjustedX = centerX + (currentX - centerX - pan.x) / zoom;
+      const adjustedY = centerY + (currentY - centerY - pan.y) / zoom;
+
+      onNodeDrag?.(draggedNode.id, adjustedX, adjustedY);
+    } else {
+      // Pan
+      const deltaX = currentX - dragStart.x;
+      const deltaY = currentY - dragStart.y;
+
+      setPan(prev => ({ x: prev.x + deltaX, y: prev.y + deltaY }));
+      setDragStart({ x: currentX, y: currentY });
+    }
+  }, [isDragging, dragStart, draggedNode, dimensions, zoom, pan, onNodeDrag]);
 
   const handleMouseUp = useCallback(() => {
     setIsDragging(false);
+    setDraggedNode(null);
   }, []);
 
   const handleMouseLeave = useCallback(() => {
