@@ -159,11 +159,26 @@ const GraphCanvas = memo(function GraphCanvas({ graphData, selectedNodeId, onNod
 });
 
 export default function NetworkGraph({ equipment, cables, onNodeClick, selectedNode }) {
-  // Build once — stable reference prevents force-graph from re-initializing
-  const graphData = useMemo(() => buildGraphData(equipment, cables), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Build a fresh deep-copy each mount so force-graph can freely mutate it
+  // without corrupting our source arrays. The memo key is a stable string so
+  // it only rebuilds if the actual data identity changes.
+  const dataKey = useMemo(
+    () => equipment.map(e => e.name).join(","),
+    [equipment]
+  );
+
+  const graphData = useMemo(() => {
+    const base = buildGraphData(equipment, cables);
+    // Deep copy so force-graph's internal mutations don't affect our source
+    return {
+      nodes: base.nodes.map(n => ({ ...n })),
+      links: base.links.map(l => ({ ...l })),
+    };
+  }, [dataKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <GraphCanvas
+      key={dataKey}
       graphData={graphData}
       selectedNodeId={selectedNode?.id ?? null}
       onNodeClick={onNodeClick}
