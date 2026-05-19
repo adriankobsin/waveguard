@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Layers, Map, Monitor, Cpu, Lightbulb, Server, Loader2 } from "lucide-react";
+import { Layers, Map, Monitor, Cpu, Server, Loader2 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import DeckMapTab from "../components/topology/DeckMapTab";
-import LightingMapTab from "../components/topology/LightingMapTab";
 import RackElevationTab from "../components/topology/RackElevationTab";
 import NetworkMapTab from "../components/topology/NetworkMapTab";
 
@@ -12,7 +11,6 @@ const TOPOLOGY_TABS = [
   { key: "deckmap", label: "Deck Map", icon: Map },
   { key: "av", label: "AV signal flow", icon: Monitor },
   { key: "control", label: "Control path", icon: Cpu },
-  { key: "lighting", label: "Lighting map", icon: Lightbulb },
   { key: "rack", label: "Rack layout", icon: Server },
 ];
 
@@ -137,7 +135,6 @@ export default function TopologyPage() {
             )}
             {activeTab === "av" && <PlaceholderTab icon={Monitor} color="text-blue-400" title="AV signal flow" body="NVX encoder → core → decoder → display. Live route analytics plug into the AV driver bus." />}
             {activeTab === "control" && <PlaceholderTab icon={Cpu} color="text-purple-400" title="Control signal flow" body="CP4 orchestration to subsystems — REST/CIP placeholders per integration driver." />}
-            {activeTab === "lighting" && <LightingMapTab />}
             {activeTab === "rack" && <RackElevationTab />}
             {activeTab === "deckmap" && <DeckMapTab topologyData={topologyData} />}
           </>

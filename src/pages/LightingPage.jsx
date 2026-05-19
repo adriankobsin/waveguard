@@ -1,13 +1,20 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Lightbulb, Layers, Zap, Settings, Play, Moon, Music2, Anchor, Sun, Coffee, ChevronDown, LayoutGrid, Map } from "lucide-react";
+import { Lightbulb, Layers, Zap, Settings, Play, Moon, Music2, Anchor, Sun, Coffee, ChevronDown, LayoutGrid, Map, GitBranch } from "lucide-react";
 import LightingZoneMap from "../components/lighting/LightingZoneMap";
 import LightingZoneList from "../components/lighting/LightingZoneList";
 import LightingScenePanel from "../components/lighting/LightingScenePanel";
 import LightingSystemStatus from "../components/lighting/LightingSystemStatus";
+import LightingMapTab from "../components/topology/LightingMapTab";
 import { INITIAL_ZONES, DECKS, SCENES, GATEWAYS } from "../components/lighting/lightingData";
 
+const PAGE_TABS = [
+  { key: "control", label: "Zone Control", icon: Lightbulb },
+  { key: "topology", label: "Lighting Map", icon: GitBranch },
+];
+
 export default function LightingPage() {
+  const [activePageTab, setActivePageTab] = useState("control");
   const [zones, setZones] = useState(INITIAL_ZONES);
   const [activeDeck, setActiveDeck] = useState("main");
   const [selectedZone, setSelectedZone] = useState(null);
@@ -39,7 +46,7 @@ export default function LightingPage() {
   const faultZones = zones.filter(z => z.fault).length;
 
   return (
-    <div className="min-h-screen bg-[#060912] flex flex-col">
+    <div className="h-full bg-[#060912] flex flex-col">
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/6 bg-[#070b13]/90 backdrop-blur-xl flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -68,29 +75,57 @@ export default function LightingPage() {
             </span>
           </div>
 
-          {/* View toggle */}
-          <div className="flex items-center gap-1 bg-white/5 border border-white/8 rounded-xl p-1">
-            {[
-              { key: "map",  icon: Map,        label: "Map"  },
-              { key: "list", icon: LayoutGrid,  label: "List" },
-            ].map(v => (
-              <button
-                key={v.key}
-                onClick={() => setViewMode(v.key)}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  viewMode === v.key
-                    ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                    : "text-slate-500 hover:text-slate-300"
-                }`}
-              >
-                <v.icon size={12} />{v.label}
-              </button>
-            ))}
-          </div>
+          {/* View toggle — only shown on control tab */}
+          {activePageTab === "control" && (
+            <div className="flex items-center gap-1 bg-white/5 border border-white/8 rounded-xl p-1">
+              {[
+                { key: "map",  icon: Map,        label: "Map"  },
+                { key: "list", icon: LayoutGrid,  label: "List" },
+              ].map(v => (
+                <button
+                  key={v.key}
+                  onClick={() => setViewMode(v.key)}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    viewMode === v.key
+                      ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                      : "text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  <v.icon size={12} />{v.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
+      {/* ── Page tab bar ── */}
+      <div className="flex items-center gap-1 px-5 py-2 border-b border-white/6 bg-[#070b13]/60 flex-shrink-0">
+        {PAGE_TABS.map(tab => (
+          <button
+            key={tab.key}
+            onClick={() => setActivePageTab(tab.key)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
+              activePageTab === tab.key
+                ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                : "text-slate-500 hover:text-slate-200 hover:bg-white/4 border-transparent"
+            }`}
+          >
+            <tab.icon size={12} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Topology tab ── */}
+      {activePageTab === "topology" && (
+        <div className="flex-1 overflow-hidden">
+          <LightingMapTab />
+        </div>
+      )}
+
+      {/* ── Control tab ── */}
+      {activePageTab === "control" && <div className="flex flex-1 overflow-hidden">
         {/* ── Left: Scene panel + System status ── */}
         <div className="w-64 flex-shrink-0 border-r border-white/6 bg-[#070b13]/70 flex flex-col overflow-y-auto">
           <LightingScenePanel
@@ -182,7 +217,7 @@ export default function LightingPage() {
             />
           )}
         </AnimatePresence>
-      </div>
+      </div>}
     </div>
   );
 }
