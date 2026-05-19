@@ -127,7 +127,7 @@ function StatCard({ label, value, icon: Icon, color, bg }) {
 // ─── Widget Components ────────────────────────────────────────────────────────
 export function StatsGridWidget() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 h-full">
+    <div className="grid grid-cols-2 gap-3 h-full">
       <StatCard label="Online" value={STATS.online} icon={CheckCircle2} color="text-emerald-400" bg="bg-emerald-500" />
       <StatCard label="Offline" value={STATS.offline} icon={WifiOff} color="text-red-400" bg="bg-red-500" />
       <StatCard label="Warnings" value={STATS.warning} icon={AlertTriangle} color="text-amber-400" bg="bg-amber-500" />

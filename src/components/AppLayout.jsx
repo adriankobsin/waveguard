@@ -119,11 +119,11 @@ export default function AppLayout() {
           >
             <Menu size={16} />
           </button>
-          <div className="flex-1 flex items-center gap-2 max-w-sm bg-secondary border border-border rounded-xl px-3 py-1.5">
+          <div className="flex-1 flex items-center gap-2 max-w-xs bg-secondary border border-border rounded-xl px-3 py-1.5 min-w-0">
             <Search size={13} className="text-muted-foreground flex-shrink-0" />
             <input
-              placeholder="Search devices, alarms…"
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              placeholder="Search…"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none min-w-0"
             />
           </div>
           <div className="flex items-center gap-2 ml-auto">

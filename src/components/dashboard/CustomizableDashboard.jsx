@@ -124,36 +124,72 @@ export default function CustomizableDashboard() {
     }));
   };
 
+  // Determine if we're on mobile via window width
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
+
   return (
-    <div className="min-h-screen bg-[#060912] p-4 md:p-6 space-y-6">
+    <div className="min-h-screen bg-[#060912] p-3 md:p-6 space-y-4 md:space-y-6">
       {/* Header with Edit Mode Toggle */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-sm text-slate-500">Customize your widget layout</p>
+          <h1 className="text-xl md:text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-xs md:text-sm text-slate-500">System overview</p>
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant={editMode ? "default" : "outline"}
+            size="sm"
             onClick={() => setEditMode(!editMode)}
-            className="gap-2"
+            className="gap-1.5 text-xs md:text-sm"
           >
-            <Move size={14} />
-            {editMode ? "Done" : "Edit Layout"}
+            <Move size={13} />
+            <span className="hidden sm:inline">{editMode ? "Done" : "Edit Layout"}</span>
+            <span className="sm:hidden">{editMode ? "Done" : "Edit"}</span>
           </Button>
           {editMode && (
-            <Button onClick={() => setShowAddModal(true)} className="gap-2">
-              <Plus size={14} />
-              Add Widget
+            <Button size="sm" onClick={() => setShowAddModal(true)} className="gap-1.5 text-xs md:text-sm">
+              <Plus size={13} />
+              <span className="hidden sm:inline">Add Widget</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           )}
         </div>
       </div>
 
-      {/* Grid Container */}
+      {/* Mobile: stacked single-column layout */}
+      <div className="md:hidden space-y-3">
+        {layout.map(widget => {
+          const WidgetComponent = WIDGET_COMPONENTS[widget.type];
+          const widgetDef = WIDGET_TYPES[widget.type];
+          const isChart = widget.type === "traffic_chart" || widget.type === "wan_latency";
+          return (
+            <motion.div
+              key={widget.id}
+              className="relative rounded-2xl overflow-hidden"
+              style={{ minHeight: isChart ? 220 : 160 }}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <div className="h-full">
+                <WidgetComponent />
+              </div>
+              {editMode && (
+                <button
+                  onClick={() => handleRemoveWidget(widget.id)}
+                  className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-red-500/20 hover:bg-red-500/40 rounded-lg transition-colors z-10"
+                >
+                  <Trash2 size={12} className="text-red-400" />
+                </button>
+              )}
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Desktop: 12-column grid layout */}
       <div
         ref={setGridContainer}
-        className="relative grid gap-3 md:gap-4"
+        className="relative hidden md:grid gap-4"
         style={{
           gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
           gridAutoRows: `${CELL_HEIGHT}px`,
@@ -184,15 +220,12 @@ export default function CustomizableDashboard() {
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
             >
-              {/* Widget Content */}
               <div className="h-full">
                 <WidgetComponent />
               </div>
 
-              {/* Edit Mode Overlay */}
               {editMode && (
                 <>
-                  {/* Drag Handle */}
                   <div className="absolute top-2 left-1/2 -translate-x-1/2 z-10">
                     <div className="flex items-center gap-1 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-lg">
                       <Move size={12} className="text-white/70" />
@@ -200,16 +233,12 @@ export default function CustomizableDashboard() {
                     </div>
                   </div>
 
-                  {/* Resize Handles */}
                   <div
                     className="absolute bottom-2 right-2 w-6 h-6 cursor-se-resize z-10 flex items-center justify-center"
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       const startX = e.clientX;
                       const startY = e.clientY;
-                      const startW = widget.w;
-                      const startH = widget.h;
-                      
                       const onMove = (moveEvent) => {
                         if (!gridContainer) return;
                         const gridRect = gridContainer.getBoundingClientRect();
@@ -218,12 +247,10 @@ export default function CustomizableDashboard() {
                         const deltaY = Math.round((moveEvent.clientY - startY) / CELL_HEIGHT);
                         handleResize(widget.id, 'se', Math.max(deltaX, deltaY));
                       };
-                      
                       const onUp = () => {
                         window.removeEventListener('mousemove', onMove);
                         window.removeEventListener('mouseup', onUp);
                       };
-                      
                       window.addEventListener('mousemove', onMove);
                       window.addEventListener('mouseup', onUp);
                     }}
@@ -231,7 +258,6 @@ export default function CustomizableDashboard() {
                     <div className="w-3 h-3 border-r-2 border-b-2 border-white/50" />
                   </div>
 
-                  {/* Remove Button */}
                   <button
                     onClick={() => handleRemoveWidget(widget.id)}
                     className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center bg-red-500/20 hover:bg-red-500/40 rounded-lg transition-colors z-10"
