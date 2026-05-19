@@ -33,7 +33,7 @@ const DEFAULT_LAYOUT = [
 ];
 
 const GRID_COLS = 12;
-const CELL_HEIGHT = 100;
+const CELL_HEIGHT = 80;
 
 export default function CustomizableDashboard() {
   const [layout, setLayout] = useState(DEFAULT_LAYOUT);

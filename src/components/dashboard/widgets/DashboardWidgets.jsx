@@ -111,15 +111,17 @@ function StatCard({ label, value, icon: Icon, color, bg }) {
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      className="relative overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#0d1321] to-[#080c14] p-5 shadow-xl"
+      className="relative overflow-hidden rounded-2xl border border-white/8 bg-gradient-to-br from-[#0d1321] to-[#080c14] px-4 py-3 shadow-xl flex items-center gap-3"
     >
       <div className={`absolute inset-0 opacity-[0.04] ${bg}`} />
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-4 ${bg} bg-opacity-20`}>
-        <Icon size={18} className={color} />
+      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${bg} bg-opacity-20`}>
+        <Icon size={16} className={color} />
       </div>
-      <p className="text-3xl font-bold text-white tracking-tight">{value}</p>
-      <p className="text-xs text-slate-500 mt-1 font-medium uppercase tracking-widest">{label}</p>
-      <div className={`absolute bottom-0 left-0 h-0.5 w-1/3 ${bg.replace("bg-", "bg-")}`} style={{ background: `hsl(var(--primary))`, opacity: 0.5 }} />
+      <div className="min-w-0">
+        <p className="text-2xl font-bold text-white tracking-tight leading-none">{value}</p>
+        <p className="text-[10px] text-slate-500 mt-1 font-medium uppercase tracking-widest truncate">{label}</p>
+      </div>
+      <div className={`absolute bottom-0 left-0 h-0.5 w-1/3`} style={{ background: `hsl(var(--primary))`, opacity: 0.5 }} />
     </motion.div>
   );
 }
