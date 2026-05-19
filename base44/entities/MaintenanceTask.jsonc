@@ -1,0 +1,55 @@
+{
+  "name": "MaintenanceTask",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Task title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Task description"
+    },
+    "equipment": {
+      "type": "string",
+      "description": "Equipment name"
+    },
+    "interval_days": {
+      "type": "number",
+      "default": 90,
+      "description": "Recurrence interval in days"
+    },
+    "next_due_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Next due date (YYYY-MM-DD)"
+    },
+    "planned_due_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Planned/overridden due date"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Assigned person"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "completed",
+        "not_completed"
+      ],
+      "default": "pending"
+    },
+    "last_performed_at": {
+      "type": "string",
+      "format": "date",
+      "description": "Last completion date"
+    }
+  },
+  "required": [
+    "title"
+  ]
+}
