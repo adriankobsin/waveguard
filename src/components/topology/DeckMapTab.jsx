@@ -4,7 +4,9 @@ import DevicePinDrawer from "./DevicePinDrawer";
 import DeckMapUploader from "./DeckMapUploader";
 import DeckMapCanvas from "./DeckMapCanvas";
 import CablePathDrawer from "./CablePathDrawer";
+import CablePathResultOverlay from "./CablePathResultOverlay";
 import { DEVICES, MOCK_STATUS, MOCK_EVENTS, MOCK_DOCS } from "./deckMapData";
+import { base44 } from "@/api/base44Client";
 import { Cable, MapPin, Layers, X } from "lucide-react";
 
 export default function DeckMapTab({ topologyData }) {
@@ -20,6 +22,11 @@ export default function DeckMapTab({ topologyData }) {
   const [cableDrawStart, setCableDrawStart] = useState(null); // { deviceId, x, y }
   const [selectedCable, setSelectedCable] = useState(null);
   const [cableDrawerOpen, setCableDrawerOpen] = useState(false);
+
+  // Diagnostic overlay state
+  const [diagCable, setDiagCable] = useState(null);
+  const [diagResult, setDiagResult] = useState(null);
+  const [diagLoading, setDiagLoading] = useState(false);
 
   // Use live topology devices if available, fall back to mock
   const devices = topologyData?.devices?.length ? topologyData.devices : DEVICES;
@@ -84,6 +91,26 @@ export default function DeckMapTab({ topologyData }) {
 
   const handleRemoveCable = (cableId) => {
     setCablePaths(prev => prev.filter(c => c.id !== cableId));
+  };
+
+  const runDiagnostic = async (cable) => {
+    const fromDev = devices.find(d => d.id === cable.fromDeviceId);
+    const toDev   = devices.find(d => d.id === cable.toDeviceId);
+    setDiagCable(cable);
+    setDiagResult(null);
+    setDiagLoading(true);
+    // Close any device drawer
+    setDrawerOpen(false);
+    try {
+      const res = await base44.functions.invoke("cablePathDiagnostic", {
+        fromDevice: { name: fromDev?.name, ip: fromDev?.ip },
+        toDevice:   { name: toDev?.name,   ip: toDev?.ip },
+        testType: "both",
+      });
+      setDiagResult(res.data);
+    } finally {
+      setDiagLoading(false);
+    }
   };
 
   const pinnedDeviceIds = new Set(pins.map(p => p.deviceId));
@@ -207,18 +234,35 @@ export default function DeckMapTab({ topologyData }) {
               </button>
             </div>
 
-            <DeckMapCanvas
-              floorPlan={floorPlan}
-              pins={pins}
-              devices={devices}
-              mockStatus={statusMap}
-              placingDevice={placingDevice}
-              onCanvasClick={handleCanvasClick}
-              onPinClick={handlePinClick}
-              cablePaths={cablePaths}
-              cableDrawMode={cableDrawMode}
-              cableDrawStart={cableDrawStart}
-            />
+            <div className="relative flex-1 min-h-0 overflow-hidden flex flex-col">
+              <DeckMapCanvas
+                floorPlan={floorPlan}
+                pins={pins}
+                devices={devices}
+                mockStatus={statusMap}
+                placingDevice={placingDevice}
+                onCanvasClick={handleCanvasClick}
+                onPinClick={handlePinClick}
+                cablePaths={cablePaths}
+                cableDrawMode={cableDrawMode}
+                cableDrawStart={cableDrawStart}
+                onCableClick={runDiagnostic}
+              />
+
+              {/* Diagnostic result overlay */}
+              <AnimatePresence>
+                {(diagCable) && (
+                  <CablePathResultOverlay
+                    cable={diagCable}
+                    devices={devices}
+                    result={diagResult}
+                    loading={diagLoading}
+                    onClose={() => { setDiagCable(null); setDiagResult(null); }}
+                    onRetest={() => runDiagnostic(diagCable)}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
           </>
         )}
       </div>

@@ -25,7 +25,7 @@ const CABLE_COLORS = {
 
 export default function DeckMapCanvas({
   floorPlan, pins, devices, mockStatus, placingDevice, onCanvasClick, onPinClick,
-  cablePaths = [], cableDrawMode = false, cableDrawStart = null,
+  cablePaths = [], cableDrawMode = false, cableDrawStart = null, onCableClick,
 }) {
   const containerRef = useRef();
   const [hoveredPin, setHoveredPin] = useState(null);
@@ -41,8 +41,8 @@ export default function DeckMapCanvas({
   // Build SVG cable lines overlaid on top of the image
   const renderCables = () => (
     <svg
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      style={{ zIndex: 5 }}
+    className="absolute inset-0 w-full h-full"
+    style={{ zIndex: 5, pointerEvents: "none" }}
     >
       <defs>
         {Object.entries(CABLE_COLORS).map(([type, color]) => (
@@ -60,11 +60,22 @@ export default function DeckMapCanvas({
         const y1 = fromPin.y;
         const x2 = toPin.x;
         const y2 = toPin.y;
-        // Bezier midpoint
         const mx = (x1 + x2) / 2;
         const my = (y1 + y2) / 2 - 5;
         return (
-          <g key={cable.id}>
+          <g
+            key={cable.id}
+            style={{ cursor: "pointer", pointerEvents: "all" }}
+            onClick={(e) => { e.stopPropagation(); onCableClick?.(cable); }}
+          >
+            {/* Wider invisible hit area */}
+            <path
+              d={`M ${x1}% ${y1}% Q ${mx}% ${my}% ${x2}% ${y2}%`}
+              fill="none"
+              stroke="transparent"
+              strokeWidth="14"
+            />
+            {/* Visible cable line */}
             <path
               d={`M ${x1}% ${y1}% Q ${mx}% ${my}% ${x2}% ${y2}%`}
               fill="none"
@@ -74,7 +85,7 @@ export default function DeckMapCanvas({
               opacity="0.75"
               markerEnd={`url(#arrow-${cable.category || "Other"})`}
             />
-            {/* Label */}
+            {/* Label with click affordance background */}
             <text
               x={`${mx}%`}
               y={`${my - 1.5}%`}
@@ -82,9 +93,9 @@ export default function DeckMapCanvas({
               fill={color}
               fontSize="9"
               fontFamily="JetBrains Mono, monospace"
-              opacity="0.85"
+              opacity="0.9"
             >
-              {cable.label}
+              {cable.label} ▸
             </text>
           </g>
         );
