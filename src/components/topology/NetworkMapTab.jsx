@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import RadialNetworkGraph from "./RadialNetworkGraph";
@@ -308,6 +309,7 @@ function Legend({ filter, onFilter, statusFilter, onStatusFilter, groups, onGrou
 export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const graphRef = useRef();
   const containerRef = useRef();
+  const location = useLocation();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [selectedNode, setSelectedNode] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState(null);
@@ -322,6 +324,31 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const [customPositions, setCustomPositions] = useState({});
   const [currentLayout, setCurrentLayout] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [cableBanner, setCableBanner] = useState(null); // { label, from, to }
+
+  // Auto-highlight cable path from URL params (e.g. coming from Cable Register)
+  useEffect(() => {
+    if (!topologyData?.devices || !topologyData?.connections) return;
+    const params = new URLSearchParams(location.search);
+    const cableLabel = params.get("cableLabel");
+    const fromName = params.get("from");
+    const toName = params.get("to");
+    if (!fromName && !toName) return;
+
+    setCableBanner({ label: cableLabel, from: fromName, to: toName });
+
+    // Find devices by name (case-insensitive fuzzy match)
+    const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const fromDevice = topologyData.devices.find(d => normalize(d.name).includes(normalize(fromName)) || normalize(fromName).includes(normalize(d.name)));
+    const toDevice = topologyData.devices.find(d => normalize(d.name).includes(normalize(toName)) || normalize(toName).includes(normalize(d.name)));
+
+    if (fromDevice && toDevice) {
+      const result = findPath(fromDevice.id, toDevice.id, topologyData.connections);
+      setPathSource(fromDevice);
+      setPathTarget(toDevice);
+      setActivePath(result);
+    }
+  }, [topologyData, location.search]);
 
   // Load groups
   useEffect(() => {
@@ -711,7 +738,32 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
         onScan={handleScanDevice}
         onEdit={() => setEditingDevice(selectedNode)}
       />
-      <PathPanel path={activePath} onClose={clearPath} />
+      {/* Cable path banner — shown when navigated from Cable Register */}
+      {cableBanner && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#0a0f1c]/95 border border-cyan-500/30 backdrop-blur-xl shadow-2xl">
+            <Cable size={13} className="text-cyan-400 flex-shrink-0" />
+            <div className="text-xs">
+              <span className="text-slate-400">Showing cable path for </span>
+              <span className="text-cyan-300 font-mono font-semibold">{cableBanner.label || "cable"}</span>
+              {cableBanner.from && cableBanner.to && (
+                <span className="text-slate-400"> · {cableBanner.from} <span className="text-cyan-400">→</span> {cableBanner.to}</span>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setCableBanner(null);
+                clearPath();
+              }}
+              className="w-5 h-5 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-colors"
+            >
+              <X size={11} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <PathPanel path={activePath} onClose={() => { clearPath(); setCableBanner(null); }} />
 
       {/* Device Edit Modal */}
       {editingDevice && (
