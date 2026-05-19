@@ -1,0 +1,72 @@
+{
+  "name": "LayoutTopology",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Layout name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Layout description"
+    },
+    "node_positions": {
+      "type": "object",
+      "description": "Custom node positions with node IDs as keys",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ]
+      }
+    },
+    "custom_connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "source_port": {
+            "type": "string"
+          },
+          "target_port": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "target"
+        ]
+      },
+      "default": []
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this is the default layout"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "name": "ActionLog",
+  "type": "object",
+  "properties": {
+    "rule_id": {
+      "type": "string"
+    },
+    "rule_name": {
+      "type": "string"
+    },
+    "trigger_metric": {
+      "type": "string"
+    },
+    "trigger_device": {
+      "type": "string"
+    },
+    "observed_value": {
+      "type": "number"
+    },
+    "trigger_unit": {
+      "type": "string"
+    },
+    "action": {
+      "type": "string"
+    },
+    "action_target": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failed",
+        "pending_approval",
+        "skipped"
+      ],
+      "default": "success"
+    },
+    "result_message": {
+      "type": "string"
+    },
+    "approved_by": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "rule_name",
+    "action",
+    "status"
+  ]
+}

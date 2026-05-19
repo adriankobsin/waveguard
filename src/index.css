@@ -1,0 +1,174 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 224 28% 5%;
+    --foreground: 210 20% 92%;
+    --card: 224 24% 7%;
+    --card-foreground: 210 20% 92%;
+    --popover: 224 24% 7%;
+    --popover-foreground: 210 20% 92%;
+    --primary: 187 100% 42%;
+    --primary-foreground: 224 28% 5%;
+    --secondary: 224 20% 11%;
+    --secondary-foreground: 210 20% 75%;
+    --muted: 224 20% 11%;
+    --muted-foreground: 215 15% 42%;
+    --accent: 187 80% 16%;
+    --accent-foreground: 187 100% 65%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 224 18% 13%;
+    --input: 224 20% 11%;
+    --ring: 187 100% 42%;
+    --radius: 1rem;
+
+    --status-online: 145 65% 45%;
+    --status-offline: 0 75% 55%;
+    --status-warning: 38 92% 50%;
+    --status-unknown: 220 15% 45%;
+
+    --chart-1: 192 100% 48%;
+    --chart-2: 145 65% 45%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 270 70% 60%;
+    --chart-5: 0 75% 55%;
+  }
+
+  .light {
+    --background: 0 0% 100%;
+    --foreground: 224 28% 5%;
+    --card: 0 0% 98%;
+    --card-foreground: 224 28% 5%;
+    --popover: 0 0% 98%;
+    --popover-foreground: 224 28% 5%;
+    --primary: 187 100% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 20% 96%;
+    --secondary-foreground: 224 28% 15%;
+    --muted: 224 20% 96%;
+    --muted-foreground: 224 15% 35%;
+    --accent: 187 80% 92%;
+    --accent-foreground: 187 100% 30%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 224 15% 88%;
+    --input: 224 20% 92%;
+    --ring: 187 100% 42%;
+
+    --status-online: 145 65% 35%;
+    --status-offline: 0 75% 45%;
+    --status-warning: 38 92% 40%;
+    --status-unknown: 220 15% 35%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-inter;
+  }
+  
+  /* Hide scrollbars globally while maintaining scroll functionality */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 3px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.3);
+  }
+}
+
+@layer utilities {
+  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .font-inter { font-family: 'Inter', sans-serif; }
+
+  .glow-cyan {
+    box-shadow: 0 0 20px hsl(192 100% 48% / 0.25), 0 0 40px hsl(192 100% 48% / 0.1);
+  }
+  .glow-red {
+    box-shadow: 0 0 20px hsl(0 75% 55% / 0.3), 0 0 40px hsl(0 75% 55% / 0.1);
+  }
+  .glow-green {
+    box-shadow: 0 0 20px hsl(145 65% 45% / 0.25), 0 0 40px hsl(145 65% 45% / 0.1);
+  }
+
+  .glass {
+    @apply bg-card/80 backdrop-blur-md border border-border/50;
+  }
+
+  .status-dot-online  { @apply w-2 h-2 rounded-full bg-green-500; }
+  .status-dot-offline { @apply w-2 h-2 rounded-full bg-red-500; }
+  .status-dot-warning { @apply w-2 h-2 rounded-full bg-yellow-500; }
+  .status-dot-unknown { @apply w-2 h-2 rounded-full bg-gray-500; }
+
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* react-grid-layout — dashboard edit mode */
+.dashboard-grid {
+  min-height: 200px;
+}
+
+.dashboard-grid .react-grid-item {
+  transition: box-shadow 0.15s ease;
+}
+
+.dashboard-grid--editing .react-grid-item > div {
+  touch-action: none;
+}
+
+.dashboard-grid--editing .react-grid-item {
+  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.15);
+}
+
+.dashboard-grid .react-grid-item.react-grid-placeholder {
+  background: rgba(6, 182, 212, 0.12);
+  border: 1px dashed rgba(6, 182, 212, 0.45);
+  border-radius: 1rem;
+  opacity: 1;
+}
+
+.dashboard-grid--editing .react-resizable-handle {
+  opacity: 0.35;
+}
+
+.dashboard-grid--editing .react-grid-item:hover .react-resizable-handle {
+  opacity: 1;
+}
+
+.dashboard-grid--editing .react-resizable-handle::after {
+  border-color: rgba(255, 255, 255, 0.55);
+  width: 10px;
+  height: 10px;
+  right: 4px;
+  bottom: 4px;
+}
+
+.dashboard-grid .react-grid-item.react-draggable-dragging {
+  z-index: 10;
+  opacity: 0.92;
+}

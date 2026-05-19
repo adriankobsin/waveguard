@@ -1,0 +1,13 @@
+{
+  "name": "waveguard-mock-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.0",
+    "multer": "^2.1.1"
+  }
+}

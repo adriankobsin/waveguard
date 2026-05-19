@@ -1,0 +1,51 @@
+{
+  "name": "Cable",
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string",
+      "description": "Cable label / ID"
+    },
+    "type": {
+      "type": "string",
+      "description": "Cable type e.g. Cat6A, Fibre OM3"
+    },
+    "system_category": {
+      "type": "string",
+      "description": "System category e.g. Network, AV, CCTV"
+    },
+    "from_equipment": {
+      "type": "string",
+      "description": "Source device name"
+    },
+    "to_equipment": {
+      "type": "string",
+      "description": "Destination device name"
+    },
+    "length": {
+      "type": "string",
+      "description": "Cable length"
+    },
+    "deck": {
+      "type": "string",
+      "description": "Deck / location"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "installed",
+        "planned",
+        "spare",
+        "removed"
+      ],
+      "default": "installed"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notes"
+    }
+  },
+  "required": [
+    "label"
+  ]
+}

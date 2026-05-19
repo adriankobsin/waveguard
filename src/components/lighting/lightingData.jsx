@@ -1,0 +1,150 @@
+export const DECKS = [
+  { id: "bridge",  label: "Bridge Deck",  order: 0 },
+  { id: "upper",   label: "Upper Deck",   order: 1 },
+  { id: "main",    label: "Main Deck",    order: 2 },
+  { id: "lower",   label: "Lower Deck",   order: 3 },
+  { id: "engine",  label: "Engine Room",  order: 4 },
+];
+
+export const INITIAL_ZONES = [
+  // Bridge Deck
+  { id: "z01", name: "Bridge Console",      deck: "bridge", location: "Helm Station",   protocol: "DALI",   gateway: "DALI-GW-1", universe: null, channel: "1",  fixtures: 8,  on: true,  level: 40,  colorTemp: 4000, fault: false, x: 22, y: 30, w: 22, h: 18 },
+  { id: "z02", name: "Chart Table",         deck: "bridge", location: "Navigation",     protocol: "DALI",   gateway: "DALI-GW-1", universe: null, channel: "2",  fixtures: 4,  on: true,  level: 30,  colorTemp: 3500, fault: false, x: 50, y: 30, w: 18, h: 18 },
+  { id: "z03", name: "Bridge Wings",        deck: "bridge", location: "Port/Stbd",      protocol: "DMX",    gateway: "DMX-GW-1",  universe: 1,    channel: "1",  fixtures: 12, on: false, level: 0,   colorTemp: null, fault: false, x: 74, y: 25, w: 18, h: 28 },
+  { id: "z04", name: "Sky Lounge",          deck: "bridge", location: "Aft Bridge",     protocol: "KNX",    gateway: "KNX-GW-1",  universe: null, channel: "11", fixtures: 24, on: true,  level: 60,  colorTemp: 2800, fault: false, x: 22, y: 58, w: 50, h: 24 },
+  // Upper Deck
+  { id: "z05", name: "Sun Deck Perimeter",  deck: "upper",  location: "Aft Sun Deck",   protocol: "DMX",    gateway: "DMX-GW-1",  universe: 1,    channel: "17", fixtures: 36, on: false, level: 0,   colorTemp: null, fault: false, x: 15, y: 20, w: 70, h: 18 },
+  { id: "z06", name: "Jacuzzi Surround",    deck: "upper",  location: "Sun Deck Centre",protocol: "DMX",    gateway: "DMX-GW-1",  universe: 1,    channel: "33", fixtures: 24, on: true,  level: 80,  colorTemp: null, fault: false, x: 32, y: 44, w: 36, h: 28 },
+  { id: "z07", name: "Sun Deck Bar",        deck: "upper",  location: "Fwd Sun Deck",   protocol: "KNX",    gateway: "KNX-GW-1",  universe: null, channel: "21", fixtures: 16, on: true,  level: 100, colorTemp: 3000, fault: false, x: 15, y: 72, w: 30, h: 18 },
+  { id: "z08", name: "Mast Flood Lights",   deck: "upper",  location: "Mast",           protocol: "DMX",    gateway: "DMX-GW-1",  universe: 1,    channel: "49", fixtures: 4,  on: false, level: 0,   colorTemp: null, fault: true,  x: 55, y: 72, w: 30, h: 18 },
+  // Main Deck
+  { id: "z09", name: "Main Saloon",         deck: "main",   location: "Saloon",         protocol: "Lutron", gateway: "LUT-GW-1",  universe: null, channel: "1",  fixtures: 32, on: true,  level: 70,  colorTemp: 2700, fault: false, x: 10, y: 20, w: 35, h: 32 },
+  { id: "z10", name: "Dining Area",         deck: "main",   location: "Dining",         protocol: "Lutron", gateway: "LUT-GW-1",  universe: null, channel: "5",  fixtures: 18, on: true,  level: 55,  colorTemp: 2700, fault: false, x: 50, y: 20, w: 30, h: 32 },
+  { id: "z11", name: "Cockpit",             deck: "main",   location: "Aft Cockpit",    protocol: "DMX",    gateway: "DMX-GW-1",  universe: 2,    channel: "1",  fixtures: 20, on: false, level: 0,   colorTemp: null, fault: false, x: 10, y: 60, w: 30, h: 26 },
+  { id: "z12", name: "Aft Deck",            deck: "main",   location: "Aft Deck",       protocol: "DMX",    gateway: "DMX-GW-1",  universe: 2,    channel: "21", fixtures: 28, on: true,  level: 45,  colorTemp: null, fault: false, x: 45, y: 60, w: 35, h: 26 },
+  { id: "z13", name: "Galley",              deck: "main",   location: "Galley",         protocol: "DALI",   gateway: "DALI-GW-1", universe: null, channel: "8",  fixtures: 14, on: true,  level: 90,  colorTemp: 5000, fault: false, x: 82, y: 20, w: 14, h: 66 },
+  // Lower Deck
+  { id: "z14", name: "Owner Cabin",         deck: "lower",  location: "Fwd Cabin",      protocol: "Lutron", gateway: "LUT-GW-1",  universe: null, channel: "9",  fixtures: 22, on: true,  level: 20,  colorTemp: 2700, fault: false, x: 10, y: 20, w: 38, h: 35 },
+  { id: "z15", name: "Guest Cabin 1",       deck: "lower",  location: "Port Cabin",     protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "12", fixtures: 12, on: false, level: 0,   colorTemp: 2700, fault: false, x: 52, y: 20, w: 22, h: 35 },
+  { id: "z16", name: "Guest Cabin 2",       deck: "lower",  location: "Stbd Cabin",     protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "15", fixtures: 12, on: false, level: 0,   colorTemp: 2700, fault: false, x: 76, y: 20, w: 20, h: 35 },
+  { id: "z17", name: "Corridor",            deck: "lower",  location: "Main Corridor",  protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "18", fixtures: 8,  on: true,  level: 15,  colorTemp: 2700, fault: false, x: 10, y: 62, w: 86, h: 12 },
+  { id: "z18", name: "Crew Mess",           deck: "lower",  location: "Crew Area",      protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "20", fixtures: 10, on: true,  level: 80,  colorTemp: 4500, fault: false, x: 10, y: 76, w: 42, h: 18 },
+  { id: "z19", name: "Crew Cabins",         deck: "lower",  location: "Crew Fwd",       protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "22", fixtures: 16, on: false, level: 0,   colorTemp: 3000, fault: true,  x: 55, y: 76, w: 41, h: 18 },
+  // Engine
+  { id: "z20", name: "Engine Room",         deck: "engine", location: "Engine Space",   protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "30", fixtures: 18, on: true,  level: 100, colorTemp: 6500, fault: false, x: 10, y: 20, w: 80, h: 40 },
+  { id: "z21", name: "Generator Flat",      deck: "engine", location: "Gen Flat",       protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "32", fixtures: 6,  on: true,  level: 100, colorTemp: 6500, fault: false, x: 10, y: 66, w: 36, h: 22 },
+  { id: "z22", name: "Bilge Access",        deck: "engine", location: "Bilge",          protocol: "DALI",   gateway: "DALI-GW-2", universe: null, channel: "34", fixtures: 4,  on: false, level: 0,   colorTemp: 6500, fault: false, x: 54, y: 66, w: 36, h: 22 },
+];
+
+export const SCENES = [
+  {
+    id: "night",
+    name: "Night Mode",
+    icon: "moon",
+    description: "Minimal warm lighting for overnight navigation",
+    color: "border-indigo-500/30 bg-indigo-500/10 text-indigo-400",
+    activeBg: "bg-indigo-500/20 border-indigo-500/40",
+    zones: {
+      z01: { on: true,  level: 10, color: null },
+      z02: { on: true,  level: 5  },
+      z03: { on: false, level: 0  },
+      z04: { on: false, level: 0  },
+      z09: { on: true,  level: 5  },
+      z10: { on: false, level: 0  },
+      z11: { on: false, level: 0  },
+      z12: { on: true,  level: 8  },
+      z14: { on: true,  level: 5  },
+      z17: { on: true,  level: 8  },
+    },
+  },
+  {
+    id: "entertain",
+    name: "Entertain",
+    icon: "music",
+    description: "Dynamic warm ambience for guest entertaining",
+    color: "border-pink-500/30 bg-pink-500/10 text-pink-400",
+    activeBg: "bg-pink-500/20 border-pink-500/40",
+    zones: {
+      z04: { on: true, level: 80 },
+      z05: { on: true, level: 60 },
+      z06: { on: true, level: 100 },
+      z07: { on: true, level: 100 },
+      z09: { on: true, level: 75 },
+      z10: { on: true, level: 70 },
+      z11: { on: true, level: 60 },
+      z12: { on: true, level: 80 },
+    },
+  },
+  {
+    id: "docking",
+    name: "Docking",
+    icon: "anchor",
+    description: "Maximum deck illumination for safe docking",
+    color: "border-amber-500/30 bg-amber-500/10 text-amber-400",
+    activeBg: "bg-amber-500/20 border-amber-500/40",
+    zones: {
+      z03: { on: true, level: 100 },
+      z05: { on: true, level: 100 },
+      z08: { on: true, level: 100 },
+      z11: { on: true, level: 100 },
+      z12: { on: true, level: 100 },
+    },
+  },
+  {
+    id: "morning",
+    name: "Morning",
+    icon: "sun",
+    description: "Bright cool-white for morning routines",
+    color: "border-yellow-500/30 bg-yellow-500/10 text-yellow-400",
+    activeBg: "bg-yellow-500/20 border-yellow-500/40",
+    zones: {
+      z09: { on: true, level: 100 },
+      z10: { on: true, level: 100 },
+      z13: { on: true, level: 100 },
+      z14: { on: true, level: 80  },
+      z15: { on: true, level: 80  },
+      z16: { on: true, level: 80  },
+      z17: { on: true, level: 60  },
+      z18: { on: true, level: 100 },
+    },
+  },
+  {
+    id: "crew",
+    name: "Crew Only",
+    icon: "coffee",
+    description: "Crew spaces on, guest spaces off",
+    color: "border-emerald-500/30 bg-emerald-500/10 text-emerald-400",
+    activeBg: "bg-emerald-500/20 border-emerald-500/40",
+    zones: {
+      z01: { on: true,  level: 50 },
+      z09: { on: false, level: 0  },
+      z10: { on: false, level: 0  },
+      z14: { on: false, level: 0  },
+      z15: { on: false, level: 0  },
+      z16: { on: false, level: 0  },
+      z17: { on: true,  level: 40 },
+      z18: { on: true,  level: 100},
+      z19: { on: true,  level: 80 },
+      z20: { on: true,  level: 100},
+    },
+  },
+  {
+    id: "alloff",
+    name: "All Off",
+    icon: "zap",
+    description: "Cut all non-essential lighting",
+    color: "border-slate-500/30 bg-slate-500/10 text-slate-400",
+    activeBg: "bg-slate-500/20 border-slate-500/40",
+    zones: Object.fromEntries(
+      Array.from({ length: 22 }, (_, i) => [`z${String(i + 1).padStart(2, "0")}`, { on: false, level: 0 }])
+    ),
+  },
+];
+
+export const GATEWAYS = [
+  { id: "DMX-GW-1",  label: "DMX Gateway 1",   protocol: "DMX",    status: "online",  ip: "192.168.10.41", universes: 4,  zones: 6,  location: "Bridge Rack" },
+  { id: "DALI-GW-1", label: "DALI Gateway 1",  protocol: "DALI",   status: "online",  ip: "192.168.10.42", channels: 64, zones: 5,  location: "Bridge Rack" },
+  { id: "DALI-GW-2", label: "DALI Gateway 2",  protocol: "DALI",   status: "online",  ip: "192.168.10.43", channels: 64, zones: 7,  location: "Engine Room" },
+  { id: "KNX-GW-1",  label: "KNX Gateway",     protocol: "KNX",    status: "warning", ip: "192.168.10.44", zones: 3,     location: "Main Rack",   notes: "Bus reset 2h ago" },
+  { id: "LUT-GW-1",  label: "Lutron Processor", protocol: "Lutron", status: "online",  ip: "192.168.10.45", zones: 4,     location: "Saloon Rack" },
+];

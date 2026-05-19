@@ -1,0 +1,58 @@
+{
+  "name": "DeviceGroup",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Group name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Group description"
+    },
+    "color": {
+      "type": "string",
+      "enum": [
+        "cyan",
+        "blue",
+        "purple",
+        "green",
+        "yellow",
+        "orange",
+        "red",
+        "pink"
+      ],
+      "default": "cyan",
+      "description": "Group color for visualization"
+    },
+    "device_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Array of device IDs in this group"
+    },
+    "collapsed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the group is collapsed in topology view"
+    },
+    "icon": {
+      "type": "string",
+      "enum": [
+        "network",
+        "camera",
+        "av",
+        "server",
+        "power",
+        "other"
+      ],
+      "default": "other",
+      "description": "Group icon type"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}
