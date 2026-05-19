@@ -14,7 +14,7 @@ import SnmpPage from './pages/SnmpPage';
 import SettingsPage from './pages/SettingsPage';
 import TopologyPage from './pages/TopologyPage';
 import EquipmentDetailPage from './pages/EquipmentDetailPage';
-import CommitVelocityPage from './pages/CommitVelocityPage';
+import HelpPage from './pages/HelpPage';
 import AutomationPage from './pages/AutomationPage';
 import DocumentsPage from './pages/DocumentsPage';
 import AssistantPage from './pages/AssistantPage';
@@ -46,7 +46,7 @@ function App() {
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/topology" element={<TopologyPage />} />
             <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
-            <Route path="/commit-velocity" element={<CommitVelocityPage />} />
+            <Route path="/help" element={<HelpPage />} />
             <Route path="/automation" element={<AutomationPage />} />
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/assistant" element={<AssistantPage />} />
