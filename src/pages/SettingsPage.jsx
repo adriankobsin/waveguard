@@ -6,7 +6,7 @@ import {
   Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi,
   Moon, Sun, Save
 } from "lucide-react";
-import { useSettings } from "../hooks/useSettings";
+import { useSettings } from "@/hooks/useSettings";
 import { base44 } from "@/api/base44Client";
 
 // ─── Sections list ─────────────────────────────────────────────────────────────
