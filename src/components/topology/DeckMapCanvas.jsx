@@ -15,8 +15,17 @@ const CATEGORY_ICONS = {
   Power:   "⚡",
 };
 
+const CABLE_COLORS = {
+  Network: "#06b6d4",
+  AV:      "#60a5fa",
+  CCTV:    "#a78bfa",
+  Power:   "#fbbf24",
+  Other:   "#94a3b8",
+};
+
 export default function DeckMapCanvas({
   floorPlan, pins, devices, mockStatus, placingDevice, onCanvasClick, onPinClick,
+  cablePaths = [], cableDrawMode = false, cableDrawStart = null,
 }) {
   const containerRef = useRef();
   const [hoveredPin, setHoveredPin] = useState(null);
@@ -28,6 +37,72 @@ export default function DeckMapCanvas({
     const yPct = ((e.clientY - rect.top) / rect.height) * 100;
     onCanvasClick(xPct, yPct);
   };
+
+  // Build SVG cable lines overlaid on top of the image
+  const renderCables = () => (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ zIndex: 5 }}
+    >
+      <defs>
+        {Object.entries(CABLE_COLORS).map(([type, color]) => (
+          <marker key={type} id={`arrow-${type}`} markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L6,3 z" fill={color} opacity="0.7" />
+          </marker>
+        ))}
+      </defs>
+      {cablePaths.map(cable => {
+        const fromPin = pins.find(p => p.deviceId === cable.fromDeviceId);
+        const toPin = pins.find(p => p.deviceId === cable.toDeviceId);
+        if (!fromPin || !toPin) return null;
+        const color = CABLE_COLORS[cable.category] || CABLE_COLORS.Other;
+        const x1 = fromPin.x;
+        const y1 = fromPin.y;
+        const x2 = toPin.x;
+        const y2 = toPin.y;
+        // Bezier midpoint
+        const mx = (x1 + x2) / 2;
+        const my = (y1 + y2) / 2 - 5;
+        return (
+          <g key={cable.id}>
+            <path
+              d={`M ${x1}% ${y1}% Q ${mx}% ${my}% ${x2}% ${y2}%`}
+              fill="none"
+              stroke={color}
+              strokeWidth="2"
+              strokeDasharray={cable.status === "planned" ? "6 3" : undefined}
+              opacity="0.75"
+              markerEnd={`url(#arrow-${cable.category || "Other"})`}
+            />
+            {/* Label */}
+            <text
+              x={`${mx}%`}
+              y={`${my - 1.5}%`}
+              textAnchor="middle"
+              fill={color}
+              fontSize="9"
+              fontFamily="JetBrains Mono, monospace"
+              opacity="0.85"
+            >
+              {cable.label}
+            </text>
+          </g>
+        );
+      })}
+      {/* In-progress cable draw line */}
+      {cableDrawStart && (
+        <circle
+          cx={`${cableDrawStart.x}%`}
+          cy={`${cableDrawStart.y}%`}
+          r="6"
+          fill="none"
+          stroke="#f97316"
+          strokeWidth="2"
+          opacity="0.8"
+        />
+      )}
+    </svg>
+  );
 
   return (
     <div
@@ -44,13 +119,17 @@ export default function DeckMapCanvas({
         draggable={false}
       />
 
+      {/* Cable paths SVG overlay */}
+      {renderCables()}
+
       {/* Pins */}
       {pins.map(pin => {
         const device = devices.find(d => d.id === pin.deviceId);
         if (!device) return null;
-        const status = mockStatus[pin.deviceId] || "unknown";
+        const status = (mockStatus && mockStatus[pin.deviceId]) || pin.status || "unknown";
         const colors = STATUS_COLORS[status];
         const isHovered = hoveredPin === pin.id;
+        const isDrawStart = cableDrawStart?.deviceId === pin.deviceId;
 
         return (
           <button
@@ -75,7 +154,7 @@ export default function DeckMapCanvas({
               >
                 <div className="px-2.5 py-1.5 rounded-lg bg-[#0a0f1c]/95 border border-white/15 text-xs text-white shadow-xl">
                   <p className="font-semibold">{device.name}</p>
-                  <p className="text-slate-400">{device.model}</p>
+                  <p className="text-slate-400">{device.model || device.category}</p>
                   <p className="text-[10px] mt-0.5" style={{ color: colors.dot }}>● {status}</p>
                 </div>
                 <div className="w-2 h-2 bg-[#0a0f1c] border-r border-b border-white/15 rotate-45 mx-auto -mt-1" />
@@ -87,34 +166,23 @@ export default function DeckMapCanvas({
               <div
                 className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold shadow-lg transition-transform group-hover:scale-110"
                 style={{
-                  background: colors.bg,
-                  border: `2px solid ${colors.ring}`,
-                  boxShadow: `0 0 10px ${colors.ring}55, 0 2px 8px rgba(0,0,0,0.6)`,
-                  color: colors.dot,
+                  background: isDrawStart ? "#431407" : colors.bg,
+                  border: `2px solid ${isDrawStart ? "#f97316" : colors.ring}`,
+                  boxShadow: `0 0 10px ${isDrawStart ? "#f97316" : colors.ring}55, 0 2px 8px rgba(0,0,0,0.6)`,
+                  color: isDrawStart ? "#fb923c" : colors.dot,
                 }}
               >
                 {CATEGORY_ICONS[device.category] || "●"}
               </div>
-              {/* Pin tail */}
-              <div
-                className="w-0.5 h-3"
-                style={{ background: `linear-gradient(to bottom, ${colors.ring}, transparent)` }}
-              />
-              <div
-                className="w-1.5 h-1.5 rounded-full opacity-60"
-                style={{ background: colors.ring }}
-              />
+              <div className="w-0.5 h-3" style={{ background: `linear-gradient(to bottom, ${isDrawStart ? "#f97316" : colors.ring}, transparent)` }} />
+              <div className="w-1.5 h-1.5 rounded-full opacity-60" style={{ background: isDrawStart ? "#f97316" : colors.ring }} />
             </div>
 
             {/* Pulse ring for offline/warning */}
             {(status === "offline" || status === "warning") && (
               <div
                 className="absolute inset-0 top-0 rounded-full animate-ping opacity-30"
-                style={{
-                  width: 36, height: 36,
-                  margin: "0 auto",
-                  background: colors.ring,
-                }}
+                style={{ width: 36, height: 36, margin: "0 auto", background: colors.ring }}
               />
             )}
           </button>

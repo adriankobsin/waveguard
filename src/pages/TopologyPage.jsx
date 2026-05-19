@@ -139,7 +139,7 @@ export default function TopologyPage() {
             {activeTab === "control" && <PlaceholderTab icon={Cpu} color="text-purple-400" title="Control signal flow" body="CP4 orchestration to subsystems — REST/CIP placeholders per integration driver." />}
             {activeTab === "lighting" && <LightingMapTab />}
             {activeTab === "rack" && <RackElevationTab />}
-            {activeTab === "deckmap" && <DeckMapTab />}
+            {activeTab === "deckmap" && <DeckMapTab topologyData={topologyData} />}
           </>
         )}
       </div>
