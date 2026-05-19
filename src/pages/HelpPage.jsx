@@ -2,8 +2,9 @@ import { useState } from "react";
 import {
   HelpCircle, Server, Cpu, Lightbulb, Music, Network, Zap,
   ChevronDown, ChevronRight, Terminal, BookOpen, Globe, Shield,
-  Radio, CheckCircle2, AlertTriangle, Info
+  Radio, CheckCircle2, AlertTriangle, Info, FileDown, Loader2
 } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -1005,6 +1006,24 @@ const COLOR_MAP = {
 
 export default function HelpPage() {
   const [tab, setTab] = useState("usage");
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportPdf = async () => {
+    setExporting(true);
+    try {
+      const response = await base44.functions.invoke('generateManualPdf', {});
+      // response.data is an ArrayBuffer from the PDF
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Guardian-AI-Manual.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const tabs = [
     { id: "usage",        label: "Using the Platform" },
@@ -1015,14 +1034,24 @@ export default function HelpPage() {
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-          <HelpCircle size={20} className="text-cyan-400" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
+            <HelpCircle size={20} className="text-cyan-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Help & Documentation</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Step-by-step guides for operation, local deployment, and all integration APIs</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Help & Documentation</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Step-by-step guides for operation, local deployment, and all integration APIs</p>
-        </div>
+        <button
+          onClick={handleExportPdf}
+          disabled={exporting}
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-sm font-medium transition-all disabled:opacity-50"
+        >
+          {exporting ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />}
+          {exporting ? 'Generating PDF…' : 'Export Full Manual (PDF)'}
+        </button>
       </div>
 
       {/* Info banner */}
