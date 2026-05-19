@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import LocationPicker from "@/components/location/LocationPicker";
+import { useSiteLocations } from "@/contexts/SiteLocationsContext";
+import { findLocationIds } from "@/lib/siteLocations";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,8 +11,16 @@ import { toast } from "sonner";
 
 const CATEGORIES = ["Network", "Camera", "AV", "Server", "Power", "Other"];
 const STATUSES = ["online", "offline", "warning", "unknown"];
+const CONTROL_TYPES = ["none", "Crestron-CIP", "REST", "KNX", "GPIO", "RS-232"];
+const AV_ROLES = ["none", "encoder", "decoder", "dsp", "display", "matrix"];
 
 export function DeviceEditModal({ device, onSubmit, onClose }) {
+  const { decks } = useSiteLocations();
+  const initialLoc = useMemo(
+    () => findLocationIds(decks, device.location || ""),
+    [decks, device.location]
+  );
+
   const [formData, setFormData] = useState({
     name: device.name || "",
     ip: device.ip || "",
@@ -17,9 +28,13 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
     model: device.model || "",
     firmware: device.firmware || "",
     location: device.location || "",
+    deckId: device.deckId || initialLoc.deckId,
+    roomId: device.roomId || initialLoc.roomId,
     serial: device.serial || "",
     category: device.category || "Other",
     status: device.status || "unknown",
+    controlType: device.controlType || "none",
+    avRole: device.avRole || "none",
     notes: device.notes || "",
   });
 
@@ -124,14 +139,15 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-4">
             <div>
-              <Label className="text-slate-300">Location</Label>
-              <Input
-                value={formData.location}
-                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                className="bg-white/5 border-white/10 text-white"
-                placeholder="e.g., Bridge Rack"
+              <Label className="text-slate-300 mb-2 block">Location (deck & room)</Label>
+              <LocationPicker
+                deckId={formData.deckId}
+                roomId={formData.roomId}
+                onChange={({ deckId, roomId, location }) =>
+                  setFormData((f) => ({ ...f, deckId, roomId, location }))
+                }
               />
             </div>
             <div>
@@ -162,6 +178,45 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-slate-300">Control type</Label>
+              <Select
+                value={formData.controlType}
+                onValueChange={(value) => setFormData({ ...formData, controlType: value })}
+              >
+                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0a0f1c] border border-white/10">
+                  {CONTROL_TYPES.map((t) => (
+                    <SelectItem key={t} value={t} className="text-white">
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-slate-300">AV role</Label>
+              <Select
+                value={formData.avRole}
+                onValueChange={(value) => setFormData({ ...formData, avRole: value })}
+              >
+                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0a0f1c] border border-white/10">
+                  {AV_ROLES.map((r) => (
+                    <SelectItem key={r} value={r} className="text-white">
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <div>

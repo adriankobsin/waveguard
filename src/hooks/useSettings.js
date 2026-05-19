@@ -3,6 +3,12 @@ import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { parseSettingsValue } from "@/lib/parseSettingsValue";
 import { loadGeneralSettingsLocal, saveGeneralSettingsLocal } from "@/lib/generalSettingsStorage";
+import {
+  loadSiteLocationsLocal,
+  saveSiteLocationsLocal,
+  SITE_LOCATIONS_SETTINGS_KEY,
+  normalizeSiteLocations,
+} from "@/lib/siteLocations";
 
 export function useSettings(key, defaults, options = {}) {
   const { onSaved } = options;
@@ -13,6 +19,10 @@ export function useSettings(key, defaults, options = {}) {
     if (key === "general") {
       const local = loadGeneralSettingsLocal();
       if (local) return { ...defaults, ...local };
+    }
+    if (key === SITE_LOCATIONS_SETTINGS_KEY) {
+      const local = loadSiteLocationsLocal();
+      if (local) return normalizeSiteLocations({ ...defaults, ...local });
     }
     return defaults;
   });
@@ -26,19 +36,31 @@ export function useSettings(key, defaults, options = {}) {
   const load = useCallback(async () => {
     setLoading(true);
     let merged = { ...defaultsRef.current };
-    const local = key === "general" ? loadGeneralSettingsLocal() : null;
+    const local =
+      key === "general"
+        ? loadGeneralSettingsLocal()
+        : key === SITE_LOCATIONS_SETTINGS_KEY
+          ? loadSiteLocationsLocal()
+          : null;
 
     try {
       const records = await base44.entities.SystemSettings.filter({ key });
       if (records.length > 0 && records[0].value != null) {
         const parsed = parseSettingsValue(records[0].value);
-        merged = { ...merged, ...parsed };
+        merged = key === SITE_LOCATIONS_SETTINGS_KEY
+          ? normalizeSiteLocations({ ...merged, ...parsed })
+          : { ...merged, ...parsed };
       }
     } catch (err) {
       console.warn(`[useSettings] API load failed for "${key}", using local defaults:`, err);
     }
 
-    if (local) merged = { ...merged, ...local };
+    if (local) {
+      merged =
+        key === SITE_LOCATIONS_SETTINGS_KEY
+          ? normalizeSiteLocations({ ...merged, ...local })
+          : { ...merged, ...local };
+    }
 
     setValue(merged);
     if (key === "general") {
@@ -71,6 +93,11 @@ export function useSettings(key, defaults, options = {}) {
           saveGeneralSettingsLocal(toSave);
           setValue(toSave);
         }
+        if (key === SITE_LOCATIONS_SETTINGS_KEY) {
+          const normalized = normalizeSiteLocations(toSave);
+          saveSiteLocationsLocal(normalized);
+          setValue(normalized);
+        }
 
         let apiOk = false;
         try {
@@ -83,13 +110,13 @@ export function useSettings(key, defaults, options = {}) {
           apiOk = true;
         } catch (err) {
           console.warn(`[useSettings] API save failed for "${key}":`, err);
-          if (key !== "general") {
+          if (key !== "general" && key !== SITE_LOCATIONS_SETTINGS_KEY) {
             toast.error("Could not save settings. Please try again.");
             return;
           }
         }
 
-        if (key !== "general") {
+        if (key !== "general" && key !== SITE_LOCATIONS_SETTINGS_KEY) {
           setValue(toSave);
         }
 

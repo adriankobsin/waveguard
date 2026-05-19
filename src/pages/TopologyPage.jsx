@@ -4,6 +4,8 @@ import { base44 } from "@/api/base44Client";
 import DeckMapTab from "../components/topology/DeckMapTab";
 import RackElevationTab from "../components/topology/RackElevationTab";
 import NetworkMapTab from "../components/topology/NetworkMapTab";
+import ControlPathTab from "../components/topology/ControlPathTab";
+import AvSignalFlowTab from "../components/topology/AvSignalFlowTab";
 
 const TOPOLOGY_TABS = [
   { key: "network", label: "Network", icon: Layers },
@@ -132,9 +134,13 @@ export default function TopologyPage() {
                 onRefresh={fetchTopology}
               />
             )}
-            {activeTab === "av" && <PlaceholderTab icon={Monitor} color="text-blue-400" title="AV signal flow" body="NVX encoder → core → decoder → display. Live route analytics plug into the AV driver bus." />}
-            {activeTab === "control" && <PlaceholderTab icon={Cpu} color="text-purple-400" title="Control signal flow" body="CP4 orchestration to subsystems — REST/CIP placeholders per integration driver." />}
-            {activeTab === "rack" && <RackElevationTab />}
+            {activeTab === "av" && (
+              <AvSignalFlowTab topologyData={topologyData} loading={loading} onRefresh={fetchTopology} />
+            )}
+            {activeTab === "control" && (
+              <ControlPathTab topologyData={topologyData} loading={loading} onRefresh={fetchTopology} />
+            )}
+            {activeTab === "rack" && <RackElevationTab topologyData={topologyData} onRefresh={fetchTopology} />}
             {activeTab === "deckmap" && <DeckMapTab topologyData={topologyData} />}
           </>
         )}

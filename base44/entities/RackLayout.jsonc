@@ -1,0 +1,8 @@
+{
+  "name": "string",
+  "is_default": "boolean",
+  "racks": "json",
+  "placements": "json",
+  "created_date": "string",
+  "updated_date": "string"
+}

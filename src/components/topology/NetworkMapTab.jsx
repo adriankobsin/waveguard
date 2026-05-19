@@ -11,8 +11,9 @@ import { toast } from "sonner";
 import {
   Search, RefreshCw, GitBranch, ArrowRight,
   CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable,
-  Cpu, Activity, ScanLine, Edit2, Link, Save, Upload
+  Cpu, Activity, ScanLine, Upload, Wrench, Users,
 } from "lucide-react";
+import { useTopologyAdmin } from "@/hooks/useTopologyAdmin";
 
 const CATEGORY_COLORS = {
   Network: "#06b6d4",
@@ -307,7 +308,7 @@ function Legend({ filter, onFilter, statusFilter, onStatusFilter, groups, onGrou
 }
 
 export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
-  const graphRef = useRef();
+  const { canEdit } = useTopologyAdmin();
   const containerRef = useRef();
   const location = useLocation();
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
@@ -320,7 +321,8 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   const [pathMode, setPathMode] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
   const [groups, setGroups] = useState([]);
-  const [connectionMode, setConnectionMode] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [showGroupManager, setShowGroupManager] = useState(false);
   const [customPositions, setCustomPositions] = useState({});
   const [currentLayout, setCurrentLayout] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -564,27 +566,31 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   }, [onRefresh]);
 
   const handleSaveLayout = useCallback(async () => {
+    if (!canEdit) {
+      toast.error("Admin access required to save layouts");
+      return;
+    }
     try {
-      const layoutName = prompt('Enter layout name:', currentLayout?.name || 'My Layout');
+      const layoutName = prompt("Enter layout name:", currentLayout?.name || "My Layout");
       if (!layoutName) return;
 
       const layoutData = {
         id: currentLayout?.id,
         name: layoutName,
         node_positions: customPositions,
-        is_default: confirm('Set as default layout?')
+        is_default: confirm("Set as default layout?"),
       };
 
-      const response = await base44.functions.invoke('saveTopologyLayout', { layoutData });
+      const response = await base44.functions.invoke("saveTopologyLayout", { layoutData });
       if (response.data.success) {
-        toast.success('Layout saved successfully');
+        toast.success("Layout saved successfully");
         setCurrentLayout(response.data.layout);
       }
     } catch (error) {
-      console.error('Failed to save layout:', error);
+      console.error("Failed to save layout:", error);
       toast.error("Failed to save layout");
     }
-  }, [customPositions, currentLayout]);
+  }, [customPositions, currentLayout, canEdit]);
 
   const handleLoadLayout = useCallback(async (layout) => {
     try {
@@ -595,10 +601,6 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
       console.error('Failed to load layout:', error);
       toast.error("Failed to load layout");
     }
-  }, []);
-
-  const toggleConnectionMode = useCallback(() => {
-    setConnectionMode(m => !m);
   }, []);
 
   if (loading) {
@@ -615,7 +617,7 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
   return (
     <div ref={containerRef} className="w-full h-full relative bg-[#060912] overflow-hidden">
       {/* Toolbar */}
-      <div className="absolute top-4 left-4 right-4 z-10 flex items-center gap-2">
+      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
         <div className="flex items-center gap-2 bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 rounded-xl px-3 py-2">
           <Search size={14} className="text-slate-500" />
           <input
@@ -626,67 +628,60 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
           />
         </div>
         <button
-          onClick={togglePathMode}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
-            pathMode
-              ? "bg-orange-500/15 border-orange-500/30 text-orange-400"
-              : "bg-[#0a0f1c]/90 border-white/10 text-slate-400 hover:text-white"
-          }`}
-        >
-          <GitBranch size={12} />
-          {pathMode ? "Cancel Path Trace" : "Trace Path"}
-        </button>
-        <button
-          onClick={toggleConnectionMode}
-          className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
-            connectionMode
-              ? "bg-orange-500/15 border-orange-500/30 text-orange-400"
-              : "bg-[#0a0f1c]/90 border-white/10 text-slate-400 hover:text-white"
-          }`}
-        >
-          <Link size={12} />
-          {connectionMode ? "Cancel Connection" : "Create Connection"}
-        </button>
-        <LayoutSelector 
-          currentLayout={currentLayout}
-          onLoadLayout={handleLoadLayout}
-          onSaveLayout={handleSaveLayout}
-        />
-        <button
-          onClick={handleSaveLayout}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
-        >
-          <Save size={12} />
-          Save Layout
-        </button>
-        <button
-          onClick={() => setShowImportModal(true)}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
-        >
-          <Upload size={12} />
-          Import CSV
-        </button>
-        <button
+          type="button"
           onClick={onRefresh}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium transition-all"
+          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium"
         >
           <RefreshCw size={12} />
           Refresh
         </button>
-        <div className="flex items-center gap-1 bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 rounded-xl px-2 py-2">
+        <LayoutSelector
+          currentLayout={currentLayout}
+          onLoadLayout={handleLoadLayout}
+          onSaveLayout={canEdit ? handleSaveLayout : undefined}
+          canSave={canEdit}
+        />
+        <div className="relative">
           <button
-            onClick={() => setZoom(z => Math.max(0.5, z - 0.25))}
-            className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
+            type="button"
+            onClick={() => setToolsOpen((o) => !o)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium"
           >
-            <span className="text-lg font-bold">−</span>
+            <Wrench size={12} />
+            Tools
           </button>
-          <span className="text-xs text-slate-500 w-12 text-center">{Math.round(zoom * 100)}%</span>
-          <button
-            onClick={() => setZoom(z => Math.min(2, z + 0.25))}
-            className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
-          >
-            <span className="text-lg font-bold">+</span>
-          </button>
+          {toolsOpen && (
+            <div className="absolute top-full left-0 mt-1 min-w-[180px] rounded-xl border border-white/10 bg-[#0a0f1c] shadow-xl py-1 z-30">
+              <button
+                type="button"
+                onClick={() => { togglePathMode(); setToolsOpen(false); }}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2 ${pathMode ? "text-orange-400" : "text-slate-300"}`}
+              >
+                <GitBranch size={12} />
+                {pathMode ? "Cancel path trace" : "Trace path"}
+              </button>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => { setShowImportModal(true); setToolsOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
+                >
+                  <Upload size={12} />
+                  Import CSV
+                </button>
+              )}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => { setShowGroupManager(true); setToolsOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
+                >
+                  <Users size={12} />
+                  Manage groups
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -696,41 +691,23 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
         selectedNode={selectedNode}
         onNodeClick={handleNodeClick}
         onNodeDrag={handleNodeDrag}
-        onConnectionCreate={handleConnectionCreate}
         pathSource={pathSource}
         activePath={activePath}
         dimensions={dimensions}
         zoom={zoom}
-        connectionMode={connectionMode}
+        customPositions={customPositions}
       />
 
-      {/* Pan hint */}
-      <div className="absolute bottom-4 right-4 z-10">
-        <div className="px-3 py-1.5 rounded-lg bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 text-xs text-slate-400">
-          Drag nodes to reposition · Scroll to zoom
-        </div>
-      </div>
-
-      {/* Connection mode hint */}
-      {connectionMode && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10">
-          <div className="px-4 py-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-300 text-xs font-medium">
-            Click two devices to create a connection
-          </div>
-        </div>
+      {showGroupManager && (
+        <GroupManager devices={topologyData?.devices || []} onGroupChange={() => {}} />
       )}
 
-      {/* Group Manager */}
-      <GroupManager devices={topologyData?.devices || []} onGroupChange={() => {}} />
-
       {/* Overlays */}
-      <Legend 
-        filter={categoryFilter} 
-        onFilter={setCategoryFilter} 
-        statusFilter={statusFilter} 
+      <Legend
+        filter={categoryFilter}
+        onFilter={setCategoryFilter}
+        statusFilter={statusFilter}
         onStatusFilter={setStatusFilter}
-        groups={groups}
-        onGroupFilter={setGroupFilter}
       />
       <DetailPanel 
         node={selectedNode} 

@@ -39,6 +39,7 @@ export default function RadialNetworkGraph({
   activePath,
   dimensions,
   zoom = 1,
+  customPositions = {},
   connectionMode = false,
   onConnectionCreate,
 }) {
@@ -84,8 +85,14 @@ export default function RadialNetworkGraph({
       positions[node.id] = { ...node, x: centerX + pos.x, y: centerY + pos.y, ring: "edges" };
     });
 
+    Object.entries(customPositions).forEach(([id, pos]) => {
+      if (positions[id] && pos?.x != null && pos?.y != null) {
+        positions[id] = { ...positions[id], x: pos.x, y: pos.y };
+      }
+    });
+
     return positions;
-  }, [graphData, dimensions]);
+  }, [graphData, dimensions, customPositions]);
 
   // Draw on canvas
   useEffect(() => {

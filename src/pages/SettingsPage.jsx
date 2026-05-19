@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Settings, Mail, Brain, Database, Bell,
   ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Upload, ImageIcon,
-  Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi,
+  Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi, MapPin,
   Moon, Sun, Save
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
@@ -19,6 +19,7 @@ import {
   UsersPanel,
   BackupPanel,
 } from "@/pages/settings/SettingsPanels";
+import DecksRoomsPanel from "@/pages/settings/DecksRoomsPanel";
 import { base44 } from "@/api/base44Client";
 import { uploadLogoFile } from "@/lib/uploadLogo";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ import { toast } from "sonner";
 // ─── Sections list ─────────────────────────────────────────────────────────────
 const SECTIONS = [
   { key: "general",            label: "General",             icon: Anchor,        desc: "Vessel / property profile" },
+  { key: "site-locations",     label: "Decks & rooms",       icon: MapPin,        desc: "Decks and rooms for equipment placement" },
   { key: "appearance",         label: "Appearance",          icon: Moon,          desc: "Light/dark mode theme switcher" },
   { key: "dashboard",          label: "Dashboard widgets",   icon: LayoutDashboard, desc: "Add and arrange dashboard widgets" },
   { key: "integrations",       label: "Integrations",        icon: Puzzle,        desc: "Vendor drivers and external services" },
@@ -423,6 +425,7 @@ function RetentionPanel() {
 // ─── Panel registry ─────────────────────────────────────────────────────────────
 const PANEL_COMPONENTS = {
   general:       GeneralPanel,
+  "site-locations": DecksRoomsPanel,
   appearance:    AppearancePanel,
   dashboard:     DashboardWidgetsPanel,
   integrations:  IntegrationsPanel,

@@ -1,0 +1,9 @@
+{
+  "kind": "string",
+  "protocol": "string",
+  "sourceEquipmentId": "string",
+  "targetEquipmentId": "string",
+  "label": "string",
+  "multicast": "string",
+  "status": "string"
+}

@@ -11,7 +11,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayout }) {
+export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayout, canSave = true }) {
   const [layouts, setLayouts] = useState([]);
   const [open, setOpen] = useState(false);
 
@@ -49,7 +49,7 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2 bg-[#0a0f1c]/90 border-white/10 text-slate-300">
           <LayoutGrid size={12} />
           Layouts
         </Button>
@@ -116,6 +116,13 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
             ))
           )}
         </div>
+        {canSave && onSaveLayout && (
+          <div className="pt-3 border-t border-white/10 flex justify-end">
+            <Button size="sm" onClick={() => { onSaveLayout(); setOpen(false); }}>
+              Save current layout
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -26,6 +26,7 @@ import NetworkDiscoveryPage from './pages/NetworkDiscoveryPage';
 // Layout
 import AppLayout from './components/AppLayout';
 import { BrandingProvider } from './contexts/BrandingContext';
+import { SiteLocationsProvider } from './contexts/SiteLocationsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './lib/AuthContext';
 import { Toaster } from 'sonner';
@@ -35,6 +36,7 @@ function App() {
     <QueryClientProvider client={queryClientInstance}>
       <ThemeProvider>
       <AuthProvider>
+      <SiteLocationsProvider>
       <BrandingProvider>
       <Router>
         <Routes>
@@ -68,8 +70,9 @@ function App() {
         </Routes>
       </Router>
       <Toaster position="top-right" richColors closeButton />
-    </BrandingProvider>
-    </AuthProvider>
+      </BrandingProvider>
+      </SiteLocationsProvider>
+      </AuthProvider>
     </ThemeProvider>
     </QueryClientProvider>
   );

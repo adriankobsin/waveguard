@@ -71,9 +71,42 @@ const db = {
   systemSettings: [
     { id: "setting-1", key: "snmp_community", value: "public", category: "snmp" },
     { id: "setting-2", key: "scan_interval_minutes", value: "60", category: "discovery" },
+    {
+      id: "setting-site-locations",
+      key: "site-locations",
+      category: "site",
+      value: {
+        decks: [
+          { id: "deck-bridge", name: "Bridge", rooms: [
+            { id: "room-bridge-rack", name: "Bridge Rack" },
+            { id: "room-bridge-console", name: "Bridge Console" },
+            { id: "room-bridge-mast", name: "Bridge Mast" },
+          ]},
+          { id: "deck-saloon", name: "Saloon", rooms: [
+            { id: "room-saloon-av", name: "Saloon AV Rack" },
+            { id: "room-saloon-cabinet", name: "Saloon Cabinet" },
+            { id: "room-saloon-main", name: "Saloon" },
+          ]},
+          { id: "deck-engine", name: "Engine Room", rooms: [
+            { id: "room-engine-main", name: "Engine Room" },
+          ]},
+          { id: "deck-upper", name: "Upper Deck", rooms: [
+            { id: "room-upper-open", name: "Upper Deck" },
+          ]},
+          { id: "deck-fore", name: "Fore Deck", rooms: [
+            { id: "room-fore-open", name: "Fore Deck" },
+          ]},
+          { id: "deck-aft", name: "Aft Deck", rooms: [
+            { id: "room-aft-open", name: "Aft Deck" },
+          ]},
+        ],
+      },
+    },
   ],
   layoutTopology: [],
-  equipment: generateMockEquipment(17),
+  equipment: generateMockEquipment(23),
+  rackLayouts: [generateDefaultRackLayout()],
+  signalLinks: generateSignalLinks(),
 };
 
 // ---- Helpers ----
@@ -132,6 +165,60 @@ function generateMockLogs(count) {
   }));
 }
 
+function enrichEquipmentMeta(item) {
+  const n = (item.name || "").toLowerCase();
+  const m = (item.model || "").toLowerCase();
+  const cat = item.category || "Other";
+  const base = {
+    ruHeight: 1,
+    defaultWatts: 35,
+    controlType: "none",
+    avRole: "none",
+  };
+  if (cat === "AV") {
+    base.ruHeight = 2;
+    base.defaultWatts = 85;
+    base.controlType = "REST";
+    if (m.includes("q-sys")) base.avRole = "dsp";
+    else if (m.includes("nvx")) base.avRole = n.includes("enc") ? "encoder" : "decoder";
+    else if (m.includes("qled") || n.startsWith("tv-")) base.avRole = "display";
+    else base.avRole = "matrix";
+  }
+  if (cat === "Power") {
+    base.ruHeight = 2;
+    base.defaultWatts = 25;
+  }
+  if (cat === "Server" || (cat === "Network" && m.includes("synology"))) {
+    base.ruHeight = 2;
+    base.defaultWatts = 65;
+    base.controlType = "REST";
+  }
+  if (cat === "Lighting" || m.includes("lutron")) {
+    base.controlType = "KNX";
+  }
+  if (n.includes("cp4") || m.includes("cp4")) {
+    base.controlType = "Crestron-CIP";
+    base.ruHeight = 1;
+    base.defaultWatts = 40;
+  }
+  if (m.includes("nvx")) base.controlType = "Crestron-CIP";
+
+  const status = item.status || "online";
+  const lanStatus = status === "online" ? "up" : status === "offline" ? "down" : "degraded";
+  return {
+    ruHeight: item.ruHeight ?? base.ruHeight,
+    defaultWatts: item.defaultWatts ?? base.defaultWatts,
+    controlType: item.controlType ?? base.controlType,
+    avRole: item.avRole ?? base.avRole,
+    telemetry: item.telemetry || {
+      powerW: item.defaultWatts ?? base.defaultWatts,
+      tempC: status === "warning" ? 48 : 36,
+      lanStatus,
+      lastSeen: new Date().toISOString(),
+    },
+  };
+}
+
 function generateMockEquipment(count) {
   const items = [
     { name: "SW-Bridge", model: "Cisco CBS350-24P", category: "Network", ip: "192.168.10.2", location: "Bridge Rack", serial: "FOC2241X0AB", condition: "Excellent" },
@@ -143,41 +230,123 @@ function generateMockEquipment(count) {
     { name: "Cam-Saloon-01", model: "Dahua IPC-HDW2831T", category: "Camera", ip: "192.168.20.12", location: "Saloon Ceiling", serial: "DAHUA-003", condition: "Good" },
     { name: "AP-Bridge", model: "Ubiquiti U6 Pro", category: "Network", ip: "192.168.10.50", location: "Bridge Ceiling", serial: "U6PRO-001", condition: "Excellent" },
     { name: "AP-Saloon", model: "Ubiquiti U6 Pro", category: "Network", ip: "192.168.10.51", location: "Saloon Ceiling", serial: "U6PRO-002", condition: "Good" },
-    { name: "NAS-Main", model: "Synology DS1621+", category: "Network", ip: "192.168.10.20", location: "Bridge Rack", serial: "SYNO-001", condition: "Excellent" },
-    { name: "Q-SYS-Core", model: "QSC Core 110f", category: "AV", ip: "192.168.30.2", location: "AV Rack", serial: "QSC-001", condition: "Excellent" },
-    { name: "TV-Saloon-01", model: "Samsung QLED 75\"", category: "AV", ip: "192.168.30.10", location: "Saloon Wall", serial: "SAM-001", condition: "Good" },
-    { name: "TV-Saloon-02", model: "Samsung QLED 55\"", category: "AV", ip: "192.168.30.11", location: "Saloon Wall", serial: "SAM-002", condition: "Good" },
-    { name: "Lighting-Controller", model: "Lutron QS", category: "Lighting", ip: "192.168.40.2", location: "AV Rack", serial: "LUT-001", condition: "Good" },
+    { name: "NAS-Main", model: "Synology DS1621+", category: "Server", ip: "192.168.10.20", location: "Bridge Rack", serial: "SYNO-001", condition: "Excellent" },
+    { name: "Q-SYS-Core", model: "QSC Core 110f", category: "AV", ip: "192.168.30.2", location: "AV Rack", serial: "QSC-001", condition: "Excellent", avRole: "dsp", controlType: "REST" },
+    { name: "TV-Saloon-01", model: "Samsung QLED 75\"", category: "AV", ip: "192.168.30.10", location: "Saloon Wall", serial: "SAM-001", condition: "Good", avRole: "display", ruHeight: 1 },
+    { name: "TV-Saloon-02", model: "Samsung QLED 55\"", category: "AV", ip: "192.168.30.11", location: "Saloon Wall", serial: "SAM-002", condition: "Good", avRole: "display", ruHeight: 1 },
+    { name: "Lighting-Controller", model: "Lutron QS", category: "Lighting", ip: "192.168.40.2", location: "AV Rack", serial: "LUT-001", condition: "Good", controlType: "KNX" },
     { name: "Sirius-Weather", model: "Sirius XM Weather", category: "Other", ip: "192.168.10.200", location: "Bridge Console", serial: "SIRIUS-001", condition: "Excellent" },
     { name: "Starlink", model: "Starlink Standard", category: "Network", ip: "10.0.0.2", location: "Upper Deck", serial: "SLINK-001", condition: "Good" },
     { name: "SW-AV-Rack", model: "Cisco CBS350-8P", category: "Network", ip: "192.168.30.1", location: "AV Rack", serial: "FOC2241X0AD", condition: "Excellent" },
+    { name: "CP4-Bridge", model: "Crestron CP4", category: "AV", ip: "192.168.30.5", location: "Bridge Rack", serial: "CRE-CP4-001", condition: "Excellent", controlType: "Crestron-CIP", ruHeight: 1, defaultWatts: 40, avRole: "none" },
+    { name: "NVX-Encoder-Saloon", model: "Crestron NVX-350", category: "AV", ip: "192.168.30.22", location: "Saloon AV", serial: "CRE7462183", condition: "Excellent", avRole: "encoder", controlType: "Crestron-CIP" },
+    { name: "NVX-Decoder-Saloon", model: "Crestron NVX-350", category: "AV", ip: "192.168.30.23", location: "Saloon AV", serial: "CRE7462184", condition: "Excellent", avRole: "decoder", controlType: "Crestron-CIP" },
+    { name: "SW-Saloon", model: "Cisco CBS350-16T", category: "Network", ip: "192.168.10.4", location: "Saloon Cabinet", serial: "FOC2241X0AE", condition: "Good" },
+    { name: "UPS-AV", model: "APC Smart-UPS 750VA", category: "Power", ip: "192.168.10.91", location: "Saloon AV", serial: "AS1820140112", condition: "Good" },
   ];
-  return items.map((item, i) => ({
-    id: `dev-${i + 1}`,
-    ...item,
-    notes: "",
-    created_date: new Date(Date.now() - Math.random() * 90 * 86400000).toISOString(),
-    updated_date: new Date().toISOString(),
-  }));
+  return items.slice(0, count).map((item, i) => {
+    const meta = enrichEquipmentMeta(item);
+    return {
+      id: `dev-${i + 1}`,
+      ...item,
+      ...meta,
+      notes: "",
+      created_date: new Date(Date.now() - Math.random() * 90 * 86400000).toISOString(),
+      updated_date: new Date().toISOString(),
+    };
+  });
 }
 
+function generateSignalLinks() {
+  return [
+    { id: "sig-ctrl-1", kind: "control", protocol: "Crestron-CIP", sourceEquipmentId: "dev-18", targetEquipmentId: "dev-11", label: "CP4 → Q-SYS", status: "active" },
+    { id: "sig-ctrl-2", kind: "control", protocol: "Crestron-CIP", sourceEquipmentId: "dev-18", targetEquipmentId: "dev-19", label: "CP4 → NVX Encoder", status: "active" },
+    { id: "sig-ctrl-3", kind: "control", protocol: "Crestron-CIP", sourceEquipmentId: "dev-18", targetEquipmentId: "dev-20", label: "CP4 → NVX Decoder", status: "active" },
+    { id: "sig-ctrl-4", kind: "control", protocol: "KNX", sourceEquipmentId: "dev-18", targetEquipmentId: "dev-14", label: "CP4 → Lighting", status: "active" },
+    { id: "sig-ctrl-5", kind: "control", protocol: "REST", sourceEquipmentId: "dev-18", targetEquipmentId: "dev-10", label: "CP4 → NAS", status: "active" },
+    { id: "sig-av-1", kind: "av", protocol: "Dante", sourceEquipmentId: "dev-11", targetEquipmentId: "dev-19", label: "Salon program audio", multicast: "239.69.12.1:5004", status: "active" },
+    { id: "sig-av-2", kind: "av", protocol: "NVX", sourceEquipmentId: "dev-19", targetEquipmentId: "dev-20", label: "Salon HDMI matrix", multicast: "239.69.12.2:5004", status: "active" },
+    { id: "sig-av-3", kind: "av", protocol: "NVX", sourceEquipmentId: "dev-20", targetEquipmentId: "dev-12", label: "Salon main display", multicast: "239.69.12.3:5004", status: "active" },
+    { id: "sig-av-4", kind: "av", protocol: "HDMI", sourceEquipmentId: "dev-20", targetEquipmentId: "dev-13", label: "Secondary display", status: "active" },
+  ];
+}
+
+function generateDefaultRackLayout() {
+  return {
+    id: "rack-layout-default",
+    name: "Default vessel layout",
+    is_default: true,
+    racks: [
+      {
+        id: "rack-bridge",
+        name: "Bridge Rack",
+        deckId: "deck-bridge",
+        roomId: "room-bridge-rack",
+        location: "Bridge · Bridge Rack",
+        units: 12,
+      },
+      {
+        id: "rack-saloon",
+        name: "Saloon AV Rack",
+        deckId: "deck-saloon",
+        roomId: "room-saloon-av",
+        location: "Saloon · Saloon AV Rack",
+        units: 9,
+      },
+      {
+        id: "rack-engine",
+        name: "Engine Room Rack",
+        deckId: "deck-engine",
+        roomId: "room-engine-main",
+        location: "Engine Room · Engine Room",
+        units: 8,
+      },
+    ],
+    placements: [
+      { rackId: "rack-bridge", equipmentId: "dev-3", ruStart: 1, ruHeight: 1 },
+      { rackId: "rack-bridge", equipmentId: "dev-1", ruStart: 2, ruHeight: 1 },
+      { rackId: "rack-bridge", equipmentId: "dev-18", ruStart: 3, ruHeight: 1 },
+      { rackId: "rack-bridge", equipmentId: "dev-11", ruStart: 4, ruHeight: 2 },
+      { rackId: "rack-saloon", equipmentId: "dev-21", ruStart: 1, ruHeight: 1 },
+      { rackId: "rack-saloon", equipmentId: "dev-19", ruStart: 2, ruHeight: 2 },
+      { rackId: "rack-saloon", equipmentId: "dev-20", ruStart: 4, ruHeight: 2 },
+      { rackId: "rack-saloon", equipmentId: "dev-22", ruStart: 7, ruHeight: 2 },
+      { rackId: "rack-engine", equipmentId: "dev-10", ruStart: 1, ruHeight: 2 },
+      { rackId: "rack-engine", equipmentId: "dev-4", ruStart: 5, ruHeight: 3 },
+    ],
+    created_date: new Date().toISOString(),
+  };
+}
+
+const DEVICE_STATUS_POOL = ["online", "online", "online", "online", "warning", "offline"];
+
 function getMockDevices() {
-  const devices = db.equipment.map(e => ({
-    id: e.id,
-    name: e.name,
-    ip: e.ip,
-    mac: `00:1A:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}`,
-    hostname: e.name.toLowerCase(),
-    vendor: e.model.split(" ")[0],
-    model: e.model,
-    category: e.category,
-    status: ["online", "online", "online", "online", "warning", "offline"][Math.floor(Math.random() * 6)],
-    location: e.location,
-    subnet: e.ip.substring(0, e.ip.lastIndexOf(".")) + ".0/24",
-    openPorts: [22, 80, 443, 161, ...(e.category === "Camera" ? [554, 37777] : []), ...(e.category === "AV" ? [1702] : [])],
-    responseTimeMs: Math.floor(Math.random() * 80 + 1),
-    firstSeen: new Date(Date.now() - Math.random() * 90 * 86400000).toISOString(),
-  }));
+  const devices = db.equipment.map((e, idx) => {
+    const status = e.status || DEVICE_STATUS_POOL[idx % DEVICE_STATUS_POOL.length];
+    const meta = enrichEquipmentMeta({ ...e, status });
+    return {
+      id: e.id,
+      name: e.name,
+      ip: e.ip,
+      mac: e.mac || `00:1A:${String((idx * 17) % 255).padStart(2, "0")}:${String((idx * 31) % 255).padStart(2, "0")}:${String((idx * 47) % 255).padStart(2, "0")}:${String((idx * 61) % 255).padStart(2, "0")}`,
+      hostname: e.name.toLowerCase().replace(/\s+/g, "-"),
+      vendor: e.model.split(" ")[0],
+      model: e.model,
+      category: e.category,
+      status,
+      location: e.location,
+      serial: e.serial,
+      subnet: e.ip?.includes(".") ? e.ip.substring(0, e.ip.lastIndexOf(".")) + ".0/24" : "",
+      openPorts: [22, 80, 443, 161, ...(e.category === "Camera" ? [554, 37777] : []), ...(e.category === "AV" ? [1702] : [])],
+      responseTimeMs: Math.floor(Math.random() * 80 + 1),
+      firstSeen: new Date(Date.now() - Math.random() * 90 * 86400000).toISOString(),
+      ruHeight: meta.ruHeight,
+      defaultWatts: meta.defaultWatts,
+      controlType: meta.controlType,
+      avRole: meta.avRole,
+      telemetry: meta.telemetry,
+    };
+  });
   return devices;
 }
 
@@ -429,6 +598,54 @@ app.post("/api/apps/:appId/functions/saveTopologyLayout", (req, res) => {
   });
 });
 
+app.get("/api/apps/:appId/rack-layout", (req, res) => {
+  let layout = db.rackLayouts.find((l) => l.is_default);
+  if (!layout && db.rackLayouts.length > 0) layout = db.rackLayouts[0];
+  res.json({ layout: layout || null });
+});
+
+app.put("/api/apps/:appId/rack-layout", (req, res) => {
+  const layoutData = req.body;
+  if (!layoutData) {
+    return res.status(400).json({ message: "Layout body required" });
+  }
+
+  if (layoutData.is_default) {
+    db.rackLayouts.forEach((l) => { l.is_default = false; });
+  }
+
+  let saved;
+  const existingId = layoutData.id;
+  if (existingId) {
+    const idx = db.rackLayouts.findIndex((l) => l.id === existingId);
+    if (idx >= 0) {
+      db.rackLayouts[idx] = {
+        ...db.rackLayouts[idx],
+        ...layoutData,
+        updated_date: new Date().toISOString(),
+      };
+      saved = db.rackLayouts[idx];
+    }
+  }
+
+  if (!saved) {
+    saved = {
+      id: existingId || "rack-layout-" + Date.now(),
+      ...layoutData,
+      is_default: layoutData.is_default !== false,
+      created_date: new Date().toISOString(),
+    };
+    db.rackLayouts.push(saved);
+  }
+
+  res.json({ layout: saved, success: true });
+});
+
+app.delete("/api/apps/:appId/rack-layout/:id", (req, res) => {
+  db.rackLayouts = db.rackLayouts.filter((l) => l.id !== req.params.id);
+  res.json({ success: true });
+});
+
 app.post("/api/apps/:appId/functions/importDevices", (req, res) => {
   const imported = Math.floor(Math.random() * 6 + 3);
   res.json({ success: true, count: imported, imported, errors: [] });
@@ -665,6 +882,53 @@ const entityHandlers = {
     create: (data) => { const e = { id: "layout-" + Date.now(), ...data, created_date: new Date().toISOString() }; db.layoutTopology.push(e); return e; },
     update: (id, data) => { const e = db.layoutTopology.find(l => l.id === id); if (e) Object.assign(e, data); return e; },
     delete: (id) => { db.layoutTopology = db.layoutTopology.filter(l => l.id !== id); return { success: true }; },
+  },
+  Equipment: {
+    list: () => db.equipment,
+    get: (id) => db.equipment.find(e => e.id === id),
+    update: (id, data) => {
+      const e = db.equipment.find(x => x.id === id);
+      if (e) Object.assign(e, data, enrichEquipmentMeta({ ...e, ...data }));
+      return e;
+    },
+  },
+  RackLayout: {
+    list: () => db.rackLayouts,
+    get: (id) => db.rackLayouts.find(l => l.id === id),
+    create: (data) => {
+      if (data.is_default) db.rackLayouts.forEach(l => { l.is_default = false; });
+      const e = { id: "rack-layout-" + Date.now(), ...data, created_date: new Date().toISOString() };
+      db.rackLayouts.push(e);
+      return e;
+    },
+    update: (id, data) => {
+      if (data.is_default) db.rackLayouts.forEach(l => { l.is_default = false; });
+      const e = db.rackLayouts.find(l => l.id === id);
+      if (e) Object.assign(e, data, { updated_date: new Date().toISOString() });
+      return e;
+    },
+    delete: (id) => {
+      db.rackLayouts = db.rackLayouts.filter(l => l.id !== id);
+      return { success: true };
+    },
+  },
+  SignalLink: {
+    list: () => db.signalLinks,
+    filter: (q) => {
+      let rows = db.signalLinks;
+      if (q?.kind) rows = rows.filter(s => s.kind === q.kind);
+      return rows;
+    },
+    get: (id) => db.signalLinks.find(s => s.id === id),
+    create: (data) => {
+      const e = { id: "sig-" + Date.now(), ...data };
+      db.signalLinks.push(e);
+      return e;
+    },
+    delete: (id) => {
+      db.signalLinks = db.signalLinks.filter(s => s.id !== id);
+      return { success: true };
+    },
   },
 };
 
