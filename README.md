@@ -54,7 +54,7 @@ Starts the mock API/scanner (port **3002**) and Vite (port **5173**) together:
 npm run dev:all
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Login with `admin@waveguard.test` / `password123`.
+Open [http://localhost:5173](http://localhost:5173). Login with mock admin `WaveAdmin` / `Wave-avi23!` or user `tech@waveguard.test` / `password123`.
 
 Or run in two terminals:
 
