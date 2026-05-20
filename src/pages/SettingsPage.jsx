@@ -4,7 +4,7 @@ import {
   Settings, Mail, Brain, Database, Bell,
   ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Upload, ImageIcon,
   Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi, MapPin,
-  Moon, Sun, Save
+  Moon, Sun, Save, RotateCcw,
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -21,6 +21,7 @@ import {
 } from "@/pages/settings/SettingsPanels";
 import DecksRoomsPanel from "@/pages/settings/DecksRoomsPanel";
 import DiscoverySettingsPanel from "@/pages/settings/DiscoverySettingsPanel";
+import PlatformResetPanel from "@/pages/settings/PlatformResetPanel";
 import { base44 } from "@/api/base44Client";
 import { uploadLogoFile } from "@/lib/uploadLogo";
 import { toast } from "sonner";
@@ -40,6 +41,7 @@ const SECTIONS = [
   { key: "users",              label: "Users & roles",       icon: Users,         desc: "Invite and manage operator accounts" },
   { key: "backup",             label: "Backup & restore",    icon: HardDrive,     desc: "Export and restore platform configuration" },
   { key: "retention",          label: "Data Retention",      icon: Database,      desc: "Auto-purge old records" },
+  { key: "platform-reset",     label: "Factory reset",       icon: RotateCcw,     desc: "Clear all data for a new deployment" },
 ];
 
 // ─── Shared UI ─────────────────────────────────────────────────────────────────
@@ -439,6 +441,7 @@ const PANEL_COMPONENTS = {
   users:         UsersPanel,
   backup:        BackupPanel,
   retention:     RetentionPanel,
+  "platform-reset": PlatformResetPanel,
 };
 
 // ─── Page ────────────────────────────────────────────────────────────────────────

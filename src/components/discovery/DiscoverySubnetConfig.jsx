@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Plus, X, Network, Cpu, Radar, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { normalizeSubnetList } from "@/lib/discoverySettings";
 
 const COMMON_SUBNETS = [
   "192.168.1.0/24", "192.168.0.0/24", "192.168.10.0/24",
@@ -22,6 +23,7 @@ export default function DiscoverySubnetConfig({
 }) {
   const [newSubnet, setNewSubnet] = useState("");
   const [detecting, setDetecting] = useState(false);
+  const safeSubnets = useMemo(() => normalizeSubnetList(subnets), [subnets]);
 
   const detectLocal = async () => {
     if (!onDetectSubnets) return;
@@ -39,12 +41,12 @@ export default function DiscoverySubnetConfig({
 
   const addSubnet = (s) => {
     const val = (s || newSubnet).trim();
-    if (!val || subnets.includes(val)) return;
-    onSubnetsChange([...subnets, val]);
+    if (!val || safeSubnets.includes(val)) return;
+    onSubnetsChange([...safeSubnets, val]);
     setNewSubnet("");
   };
 
-  const removeSubnet = (s) => onSubnetsChange(subnets.filter(x => x !== s));
+  const removeSubnet = (s) => onSubnetsChange(safeSubnets.filter((x) => x !== s));
 
   return (
     <div className="px-5 py-4 grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -53,7 +55,7 @@ export default function DiscoverySubnetConfig({
         <p className="text-xs font-bold text-white mb-3 flex items-center gap-2"><Network size={13} className="text-cyan-400" /> Target Subnets</p>
 
         <div className="flex flex-wrap gap-2 mb-3">
-          {subnets.map(s => (
+          {safeSubnets.map(s => (
             <span key={s} className="flex items-center gap-1.5 text-xs bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-lg font-mono">
               {s}
               <button onClick={() => removeSubnet(s)} className="text-cyan-400/60 hover:text-red-400 transition-colors">
@@ -90,7 +92,7 @@ export default function DiscoverySubnetConfig({
 
         <p className="text-[10px] text-slate-600 mb-2">Quick add:</p>
         <div className="flex flex-wrap gap-1.5">
-          {COMMON_SUBNETS.filter(s => !subnets.includes(s)).map(s => (
+          {COMMON_SUBNETS.filter(s => !safeSubnets.includes(s)).map(s => (
             <button key={s} onClick={() => addSubnet(s)}
               className="text-[10px] font-mono px-2 py-1 rounded-md border border-white/8 text-slate-500 hover:text-cyan-400 hover:border-cyan-500/30 transition-colors">
               {s}

@@ -2,6 +2,12 @@ import { useState, useMemo } from "react";
 import LocationPicker from "@/components/location/LocationPicker";
 import { useSiteLocations } from "@/contexts/SiteLocationsContext";
 import { findLocationIds } from "@/lib/siteLocations";
+import { getEquipmentMake } from "@/lib/inventory/inventoryFilters";
+import {
+  DEVICE_CATEGORIES,
+  DEVICE_CONTROL_TYPES,
+  DEVICE_STATUSES,
+} from "@/lib/equipment/deviceFormConstants";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,10 +15,21 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
-const CATEGORIES = ["Network", "Camera", "AV", "Server", "Power", "Other"];
-const STATUSES = ["online", "offline", "warning", "unknown"];
-const CONTROL_TYPES = ["none", "Crestron-CIP", "REST", "KNX", "GPIO", "RS-232"];
-const AV_ROLES = ["none", "encoder", "decoder", "dsp", "display", "matrix"];
+function categoryOptions(deviceCategory) {
+  const set = new Set(DEVICE_CATEGORIES);
+  if (deviceCategory && !set.has(deviceCategory)) {
+    set.add(deviceCategory);
+  }
+  return [...set];
+}
+
+function controlTypeOptions(deviceControlType) {
+  const set = new Set(DEVICE_CONTROL_TYPES);
+  if (deviceControlType && !set.has(deviceControlType)) {
+    set.add(deviceControlType);
+  }
+  return [...set];
+}
 
 export function DeviceEditModal({ device, onSubmit, onClose }) {
   const { decks } = useSiteLocations();
@@ -25,6 +42,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
     name: device.name || "",
     ip: device.ip || "",
     mac: device.mac || "",
+    make: device.make || getEquipmentMake(device) || "",
     model: device.model || "",
     firmware: device.firmware || "",
     location: device.location || "",
@@ -34,9 +52,11 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
     category: device.category || "Other",
     status: device.status || "unknown",
     controlType: device.controlType || "none",
-    avRole: device.avRole || "none",
     notes: device.notes || "",
   });
+
+  const categories = useMemo(() => categoryOptions(formData.category), [formData.category]);
+  const controlTypes = useMemo(() => controlTypeOptions(formData.controlType), [formData.controlType]);
 
   const handleSubmit = () => {
     if (!formData.name.trim()) {
@@ -44,13 +64,11 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
       return;
     }
 
-    // Validate IP format (basic validation)
     if (formData.ip && !/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(formData.ip)) {
       toast.error("Invalid IP address format");
       return;
     }
 
-    // Validate MAC format (basic validation)
     if (formData.mac && !/^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$/.test(formData.mac)) {
       toast.error("Invalid MAC address format. Use XX:XX:XX:XX:XX:XX");
       return;
@@ -85,8 +103,8 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
                 <SelectTrigger className="bg-white/5 border-white/10 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0a0f1c] border border-white/10">
-                  {CATEGORIES.map(cat => (
+                <SelectContent className="bg-[#0a0f1c] border border-white/10 max-h-60">
+                  {categories.map((cat) => (
                     <SelectItem key={cat} value={cat} className="text-white">
                       {cat}
                     </SelectItem>
@@ -119,14 +137,26 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
+              <Label className="text-slate-300">Make</Label>
+              <Input
+                value={formData.make}
+                onChange={(e) => setFormData({ ...formData, make: e.target.value })}
+                className="bg-white/5 border-white/10 text-white"
+                placeholder="e.g., Cisco, Crestron, Axis"
+              />
+            </div>
+            <div>
               <Label className="text-slate-300">Model</Label>
               <Input
                 value={formData.model}
                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
                 className="bg-white/5 border-white/10 text-white"
-                placeholder="e.g., Cisco CBS350"
+                placeholder="e.g., CBS350-24P"
               />
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label className="text-slate-300">Firmware Version</Label>
               <Input
@@ -134,19 +164,6 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
                 onChange={(e) => setFormData({ ...formData, firmware: e.target.value })}
                 className="bg-white/5 border-white/10 text-white"
                 placeholder="e.g., 1.0.5.3"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <Label className="text-slate-300 mb-2 block">Location (deck & room)</Label>
-              <LocationPicker
-                deckId={formData.deckId}
-                roomId={formData.roomId}
-                onChange={({ deckId, roomId, location }) =>
-                  setFormData((f) => ({ ...f, deckId, roomId, location }))
-                }
               />
             </div>
             <div>
@@ -161,25 +178,35 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
           </div>
 
           <div>
-            <Label className="text-slate-300">Status</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(value) => setFormData({ ...formData, status: value })}
-            >
-              <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-[#0a0f1c] border border-white/10">
-                {STATUSES.map(status => (
-                  <SelectItem key={status} value={status} className="text-white capitalize">
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <Label className="text-slate-300 mb-2 block">Location (deck & room)</Label>
+            <LocationPicker
+              deckId={formData.deckId}
+              roomId={formData.roomId}
+              onChange={({ deckId, roomId, location }) =>
+                setFormData((f) => ({ ...f, deckId, roomId, location }))
+              }
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label className="text-slate-300">Status</Label>
+              <Select
+                value={formData.status}
+                onValueChange={(value) => setFormData({ ...formData, status: value })}
+              >
+                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0a0f1c] border border-white/10">
+                  {DEVICE_STATUSES.map((status) => (
+                    <SelectItem key={status} value={status} className="text-white capitalize">
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div>
               <Label className="text-slate-300">Control type</Label>
               <Select
@@ -189,28 +216,10 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
                 <SelectTrigger className="bg-white/5 border-white/10 text-white">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0a0f1c] border border-white/10">
-                  {CONTROL_TYPES.map((t) => (
+                <SelectContent className="bg-[#0a0f1c] border border-white/10 max-h-60">
+                  {controlTypes.map((t) => (
                     <SelectItem key={t} value={t} className="text-white">
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label className="text-slate-300">AV role</Label>
-              <Select
-                value={formData.avRole}
-                onValueChange={(value) => setFormData({ ...formData, avRole: value })}
-              >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#0a0f1c] border border-white/10">
-                  {AV_ROLES.map((r) => (
-                    <SelectItem key={r} value={r} className="text-white">
-                      {r}
+                      {t === "none" ? "None" : t}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -223,7 +232,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full min-h-[80px] bg-white/5 border border-white/10 rounded-md px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+              className="w-full min-h-[80px] bg-white/5 border border-border rounded-md px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
               placeholder="Additional notes about this device..."
             />
           </div>

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, X, Radar } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
-import { DEFAULT_DISCOVERY_SETTINGS } from "@/lib/discoverySettings";
+import { DEFAULT_DISCOVERY_SETTINGS, normalizeSubnetList } from "@/lib/discoverySettings";
 import { discoverSubnets } from "@/lib/discoveryApi";
 import { toast } from "sonner";
 
@@ -38,11 +38,12 @@ export default function DiscoverySettingsPanel() {
   );
   const [newSubnet, setNewSubnet] = useState("");
   const [detecting, setDetecting] = useState(false);
+  const subnets = normalizeSubnetList(cfg.subnets);
 
   const addSubnet = (s) => {
     const val = (s || newSubnet).trim();
-    if (!val || cfg.subnets.includes(val)) return;
-    setCfg((c) => ({ ...c, subnets: [...c.subnets, val] }));
+    if (!val || subnets.includes(val)) return;
+    setCfg((c) => ({ ...c, subnets: [...normalizeSubnetList(c.subnets), val] }));
     setNewSubnet("");
   };
 
@@ -52,7 +53,10 @@ export default function DiscoverySettingsPanel() {
       const data = await discoverSubnets(cfg.agentUrl);
       const list = data?.subnets || [];
       if (list.length) {
-        setCfg((c) => ({ ...c, subnets: [...new Set([...c.subnets, ...list])] }));
+        setCfg((c) => ({
+          ...c,
+          subnets: [...new Set([...normalizeSubnetList(c.subnets), ...normalizeSubnetList(list)])],
+        }));
         toast.success(`Found ${list.length} local subnet(s)`);
       } else {
         toast.info("No local subnets detected");
@@ -72,13 +76,18 @@ export default function DiscoverySettingsPanel() {
 
       <Field label="Default subnets (CIDR)">
         <div className="flex flex-wrap gap-2 mb-2">
-          {cfg.subnets.map((s) => (
+          {subnets.map((s) => (
             <span
               key={s}
               className="flex items-center gap-1 text-xs font-mono bg-primary/10 border border-primary/20 text-primary px-2 py-1 rounded-lg"
             >
               {s}
-              <button type="button" onClick={() => setCfg((c) => ({ ...c, subnets: c.subnets.filter((x) => x !== s) }))}>
+              <button
+                type="button"
+                onClick={() =>
+                  setCfg((c) => ({ ...c, subnets: normalizeSubnetList(c.subnets).filter((x) => x !== s) }))
+                }
+              >
                 <X size={10} />
               </button>
             </span>

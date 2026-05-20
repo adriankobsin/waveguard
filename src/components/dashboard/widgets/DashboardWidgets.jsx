@@ -1,47 +1,29 @@
 import {
   Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
   WifiOff, Activity, Globe, BarChart3, Server, Clock, Bot,
-  Sliders, Lightbulb, Radio
+  Sliders, Lightbulb, Radio, Loader2
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
 import StatusPulse from "../../StatusPulse";
+import { useSystemData } from "@/contexts/SystemDataContext";
 
-const TRAFFIC = Array.from({ length: 48 }, (_, i) => ({
-  time: `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}`,
-  inMbps: Math.round((Math.random() * 45 + 8) * 10) / 10,
-  outMbps: Math.round((Math.random() * 30 + 5) * 10) / 10,
-}));
+function WidgetLoading() {
+  return (
+    <div className="flex items-center justify-center h-full min-h-[80px] text-muted-foreground text-xs gap-2">
+      <Loader2 size={14} className="animate-spin" />
+      Loading…
+    </div>
+  );
+}
 
-const CRITICAL_ALARMS = [
-  { id: "c1", title: "Cam-Bridge-01 offline", time: "14m ago" },
-  { id: "c2", title: "Core switch unreachable", time: "22m ago" },
-];
-
-const WARNING_ALARMS = [
-  { id: "w1", title: "SW-Deck-Lower CPU >80%", time: "3h ago" },
-  { id: "w2", title: "WAN speed degraded (12 Mbps)", time: "6h ago" },
-  { id: "w3", title: "UPS battery at 42%", time: "1d ago" },
-];
-
-const RECENT_EVENTS = [
-  { id: "e1", text: "User Tech logged in", time: "2m ago" },
-  { id: "e2", text: "SNMP poll completed", time: "15m ago" },
-  { id: "e3", text: "Backup scheduled", time: "1h ago" },
-];
-
-const AI_RECOMMENDATIONS = [
-  { id: "r1", text: "Replace UPS battery — below 45% for 6h", priority: "high" },
-  { id: "r2", text: "Update Crestron firmware on CP4-Deck", priority: "medium" },
-];
-
-const OFFLINE_DEVICES = [
-  { name: "Cam-Bridge-01", ip: "192.168.10.41" },
-  { name: "AP-Guest-03", ip: "192.168.10.88" },
-  { name: "DMX-Node-02", ip: "192.168.10.202" },
-];
+function WidgetEmpty({ message = "No data" }) {
+  return (
+    <p className="text-xs text-muted-foreground text-center py-4">{message}</p>
+  );
+}
 
 function WidgetShell({ title, icon: Icon, iconClass = "text-cyan-400", badge, children }) {
   return (
@@ -194,6 +176,7 @@ export const WIDGET_TYPES = {
 };
 
 function CategoryWidget({ label, online, total, icon: Icon, color }) {
+  const pct = total > 0 ? (online / total) * 100 : 0;
   return (
     <div className="flex items-center gap-3">
       <Icon size={15} className={color} />
@@ -205,7 +188,7 @@ function CategoryWidget({ label, online, total, icon: Icon, color }) {
         <div className="h-1 bg-muted rounded-full overflow-hidden">
           <div
             className="h-full rounded-full bg-primary"
-            style={{ width: `${(online / total) * 100}%` }}
+            style={{ width: `${pct}%` }}
           />
         </div>
       </div>
@@ -214,10 +197,13 @@ function CategoryWidget({ label, online, total, icon: Icon, color }) {
 }
 
 export function NetworkTrafficWidget() {
+  const { snapshot, loading } = useSystemData();
+  const traffic = snapshot?.traffic || [];
+  if (loading && !snapshot) return <WidgetShell title="Network traffic" icon={BarChart3}><WidgetLoading /></WidgetShell>;
   return (
     <WidgetShell title="Network traffic" icon={BarChart3}>
       <ResponsiveContainer width="100%" height="100%" minHeight={160}>
-        <AreaChart data={TRAFFIC} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+        <AreaChart data={traffic} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
           <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
           <XAxis dataKey="time" tick={{ fontSize: 9 }} interval={7} />
           <YAxis tick={{ fontSize: 9 }} unit="M" />
@@ -230,11 +216,12 @@ export function NetworkTrafficWidget() {
   );
 }
 
-function AlarmListWidget({ title, alarms, severity }) {
+function AlarmListWidget({ title, alarms, severity, emptyMessage }) {
   const iconClass = severity === "critical" ? "text-red-400" : "text-amber-400";
   return (
-    <WidgetShell title={title} icon={AlertTriangle} iconClass={iconClass} badge={alarms.length}>
+    <WidgetShell title={title} icon={AlertTriangle} iconClass={iconClass} badge={alarms.length || undefined}>
       <div className="space-y-3">
+        {alarms.length === 0 && <WidgetEmpty message={emptyMessage} />}
         {alarms.map((a) => (
           <div key={a.id} className="flex items-start gap-2">
             <span className={`w-1.5 h-1.5 rounded-full mt-1.5 ${severity === "critical" ? "bg-red-400" : "bg-amber-400"}`} />
@@ -252,86 +239,108 @@ function AlarmListWidget({ title, alarms, severity }) {
 }
 
 export function CriticalAlarmsWidget() {
-  return <AlarmListWidget title="Critical alarms" alarms={CRITICAL_ALARMS} severity="critical" />;
+  const { snapshot, loading } = useSystemData();
+  if (loading && !snapshot) return <WidgetShell title="Critical alarms" icon={AlertTriangle} iconClass="text-red-400"><WidgetLoading /></WidgetShell>;
+  return (
+    <AlarmListWidget
+      title="Critical alarms"
+      alarms={snapshot?.criticalAlarms || []}
+      severity="critical"
+      emptyMessage="No critical alarms"
+    />
+  );
 }
 
 export function WarningAlarmsWidget() {
-  return <AlarmListWidget title="Warning alarms" alarms={WARNING_ALARMS} severity="warning" />;
+  const { snapshot, loading } = useSystemData();
+  if (loading && !snapshot) return <WidgetShell title="Warning alarms" icon={AlertTriangle} iconClass="text-amber-400"><WidgetLoading /></WidgetShell>;
+  return (
+    <AlarmListWidget
+      title="Warning alarms"
+      alarms={snapshot?.warningAlarms || []}
+      severity="warning"
+      emptyMessage="No warnings"
+    />
+  );
+}
+
+function CategoryStatusWidget({ title, icon, categoryKey, iconColor }) {
+  const { snapshot, loading } = useSystemData();
+  const cat = snapshot?.categories?.[categoryKey];
+  if (loading && !snapshot) return <WidgetShell title={title} icon={icon}><WidgetLoading /></WidgetShell>;
+  if (!cat?.total) return <WidgetShell title={title} icon={icon}><WidgetEmpty message="No devices in this category" /></WidgetShell>;
+  return (
+    <WidgetShell title={title} icon={icon}>
+      <CategoryWidget label={cat.label} online={cat.online} total={cat.total} icon={icon} color={iconColor} />
+    </WidgetShell>
+  );
 }
 
 export function NetworkWidget() {
-  return (
-    <WidgetShell title="Network" icon={Wifi}>
-      <CategoryWidget label="Switches & routers" online={16} total={18} icon={Wifi} color="text-cyan-400" />
-    </WidgetShell>
-  );
+  return <CategoryStatusWidget title="Network" icon={Wifi} categoryKey="network" iconColor="text-cyan-400" />;
 }
 
 export function AvWidget() {
-  return (
-    <WidgetShell title="AV" icon={Monitor}>
-      <CategoryWidget label="AV Systems" online={8} total={9} icon={Monitor} color="text-blue-400" />
-    </WidgetShell>
-  );
+  return <CategoryStatusWidget title="AV" icon={Monitor} categoryKey="av" iconColor="text-blue-400" />;
 }
 
 export function ControlWidget() {
-  return (
-    <WidgetShell title="Control" icon={Sliders}>
-      <CategoryWidget label="Control processors" online={4} total={4} icon={Sliders} color="text-purple-400" />
-    </WidgetShell>
-  );
+  return <CategoryStatusWidget title="Control" icon={Sliders} categoryKey="control" iconColor="text-purple-400" />;
 }
 
 export function LightingWidget() {
-  return (
-    <WidgetShell title="Lighting" icon={Lightbulb}>
-      <CategoryWidget label="Lighting zones" online={12} total={12} icon={Lightbulb} color="text-amber-400" />
-    </WidgetShell>
-  );
+  return <CategoryStatusWidget title="Lighting" icon={Lightbulb} categoryKey="lighting" iconColor="text-amber-400" />;
 }
 
 export function CctvWidget() {
-  return (
-    <WidgetShell title="CCTV" icon={Camera}>
-      <CategoryWidget label="Cameras" online={13} total={14} icon={Camera} color="text-purple-400" />
-    </WidgetShell>
-  );
+  return <CategoryStatusWidget title="CCTV" icon={Camera} categoryKey="cctv" iconColor="text-purple-400" />;
 }
 
 export function UpsPowerWidget() {
+  const { snapshot, loading } = useSystemData();
+  const ups = snapshot?.ups;
+  if (loading && !snapshot) return <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400"><WidgetLoading /></WidgetShell>;
+  if (!ups) return <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400"><WidgetEmpty message="No UPS equipment in inventory" /></WidgetShell>;
   return (
     <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400">
       <div className="space-y-2 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">Main UPS</span><span className="text-emerald-400 font-medium">Online</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Battery</span><span className="text-amber-400 font-medium">42%</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Load</span><span className="text-foreground font-medium">38%</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">{ups.name}</span><span className="text-emerald-400 font-medium">{ups.status}</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Battery</span><span className={ups.battery < 50 ? "text-amber-400" : "text-foreground"} font-medium>{ups.battery}%</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">Load</span><span className="text-foreground font-medium">{ups.load}%</span></div>
       </div>
     </WidgetShell>
   );
 }
 
 export function WanInternetWidget() {
+  const { snapshot, loading } = useSystemData();
+  const wan = snapshot?.wan;
+  if (loading && !snapshot) return <WidgetShell title="WAN / internet" icon={Globe}><WidgetLoading /></WidgetShell>;
+  const pulseStatus = wan?.status === "online" ? "online" : wan?.status === "offline" ? "offline" : "warning";
   return (
     <WidgetShell title="WAN / internet" icon={Globe}>
       <div className="space-y-2 text-xs mb-3">
         <div className="flex justify-between items-center">
-          <span className="text-muted-foreground">Status</span>
-          <StatusPulse status="online" />
+          <span className="text-muted-foreground">{wan?.name || "WAN"}</span>
+          <StatusPulse status={pulseStatus} />
         </div>
-        <div className="flex justify-between"><span className="text-muted-foreground">↓ Down</span><span className="text-primary font-bold">47.2 Mbps</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">↑ Up</span><span className="text-emerald-500 font-bold">18.6 Mbps</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">↓ Down</span><span className="text-primary font-bold">{wan?.downloadMbps ?? 0} Mbps</span></div>
+        <div className="flex justify-between"><span className="text-muted-foreground">↑ Up</span><span className="text-emerald-500 font-bold">{wan?.uploadMbps ?? 0} Mbps</span></div>
       </div>
     </WidgetShell>
   );
 }
 
 export function OfflineDevicesWidget() {
+  const { snapshot, loading } = useSystemData();
+  const offline = snapshot?.offlineDevices || [];
+  if (loading && !snapshot) return <WidgetShell title="Offline devices" icon={WifiOff} iconClass="text-red-400"><WidgetLoading /></WidgetShell>;
   return (
-    <WidgetShell title="Offline devices" icon={WifiOff} iconClass="text-red-400" badge={OFFLINE_DEVICES.length}>
+    <WidgetShell title="Offline devices" icon={WifiOff} iconClass="text-red-400" badge={offline.length || undefined}>
       <div className="space-y-2">
-        {OFFLINE_DEVICES.map((d) => (
-          <div key={d.ip} className="flex justify-between text-xs py-1 border-b border-border/50 last:border-0">
+        {offline.length === 0 && <WidgetEmpty message="All monitored devices online" />}
+        {offline.map((d) => (
+          <div key={d.id || d.ip} className="flex justify-between text-xs py-1 border-b border-border/50 last:border-0">
             <span className="text-foreground">{d.name}</span>
             <span className="text-muted-foreground font-mono">{d.ip}</span>
           </div>
@@ -342,10 +351,14 @@ export function OfflineDevicesWidget() {
 }
 
 export function RecentEventsWidget() {
+  const { snapshot, loading } = useSystemData();
+  const events = snapshot?.recentEvents || [];
+  if (loading && !snapshot) return <WidgetShell title="Recent events" icon={Clock}><WidgetLoading /></WidgetShell>;
   return (
     <WidgetShell title="Recent events" icon={Clock}>
       <div className="space-y-2">
-        {RECENT_EVENTS.map((e) => (
+        {events.length === 0 && <WidgetEmpty message="No recent events" />}
+        {events.map((e) => (
           <div key={e.id} className="text-xs">
             <p className="text-foreground">{e.text}</p>
             <p className="text-muted-foreground text-[10px]">{e.time}</p>
@@ -357,10 +370,14 @@ export function RecentEventsWidget() {
 }
 
 export function AiRecommendationsWidget() {
+  const { snapshot, loading } = useSystemData();
+  const recs = snapshot?.recommendations || [];
+  if (loading && !snapshot) return <WidgetShell title="AI recommendations" icon={Bot} iconClass="text-primary"><WidgetLoading /></WidgetShell>;
   return (
     <WidgetShell title="AI recommendations" icon={Bot} iconClass="text-primary">
       <div className="space-y-2">
-        {AI_RECOMMENDATIONS.map((r) => (
+        {recs.length === 0 && <WidgetEmpty message="No recommendations — system healthy" />}
+        {recs.map((r) => (
           <div key={r.id} className="p-2 rounded-lg bg-secondary border border-border text-xs">
             <span className={`text-[10px] uppercase font-semibold ${r.priority === "high" ? "text-red-400" : "text-amber-400"}`}>{r.priority}</span>
             <p className="text-foreground mt-1">{r.text}</p>

@@ -12,6 +12,7 @@ import {
   buildTopologyConnections,
   mapDevicesToTopology,
 } from "../scanner/index.js";
+import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Set WAVEGUARD_USE_MOCK_SCAN=true only for demos without LAN access. */
@@ -345,6 +346,17 @@ function generateDefaultRackLayout() {
 }
 
 const DEVICE_STATUS_POOL = ["online", "online", "online", "online", "warning", "offline"];
+
+function normalizeEquipmentRow(e, idx = 0) {
+  const status = e.status || DEVICE_STATUS_POOL[idx % DEVICE_STATUS_POOL.length];
+  const meta = enrichEquipmentMeta({ ...e, status });
+  return {
+    ...e,
+    status,
+    ...meta,
+    telemetry: e.telemetry || meta.telemetry,
+  };
+}
 
 function getMockDevices() {
   const devices = db.equipment.map((e, idx) => {
@@ -1132,14 +1144,17 @@ const entityHandlers = {
     delete: (id) => { db.layoutTopology = db.layoutTopology.filter(l => l.id !== id); return { success: true }; },
   },
   Equipment: {
-    list: () => db.equipment,
+    list: () => db.equipment.map((e, idx) => normalizeEquipmentRow(e, idx)),
     filter: (q) => {
-      let rows = db.equipment;
+      let rows = db.equipment.map((e, idx) => normalizeEquipmentRow(e, idx));
       if (q?.ip) rows = rows.filter((e) => e.ip === q.ip);
       if (q?.id) rows = rows.filter((e) => e.id === q.id);
       return rows;
     },
-    get: (id) => db.equipment.find(e => e.id === id),
+    get: (id) => {
+      const e = db.equipment.find((x) => x.id === id);
+      return e ? normalizeEquipmentRow(e, db.equipment.indexOf(e)) : null;
+    },
     create: (data) => {
       const nameKey = (data.name || "").trim().toLowerCase();
       const existing =
@@ -1319,12 +1334,19 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
         let parsed = { subnets: [] };
         if (existing?.value) {
           try {
-            parsed = JSON.parse(existing.value);
+            parsed = typeof existing.value === "string" ? JSON.parse(existing.value) : existing.value;
           } catch {
             parsed = { subnets: [] };
           }
         }
-        parsed.subnets = [...(parsed.subnets || []), ...subnets];
+        const toCidr = (entry) => {
+          if (!entry) return null;
+          if (typeof entry === "string") return entry.trim() || null;
+          if (typeof entry === "object" && entry.cidr) return String(entry.cidr).trim() || null;
+          return null;
+        };
+        const merge = (arr) => [...new Set((arr || []).map(toCidr).filter(Boolean))];
+        parsed.subnets = merge([...(parsed.subnets || []), ...(subnets || [])]);
         const value = JSON.stringify(parsed);
         if (existing) existing.value = value;
         else db.systemSettings.push({ id: `setting-${Date.now()}`, key, value });
@@ -1455,6 +1477,46 @@ function collectBackupSnapshot() {
   };
 }
 
+/** Resolve user from session token; aligns with GET /entities/User/me mock behaviour. */
+function getRequestUser(req) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+  if (token === "mock-dev-token") {
+    return db.users.find((u) => u.role === "admin") ?? db.users[0];
+  }
+  const userId = token ? db.sessions[token] : null;
+  if (userId) {
+    return db.users.find((u) => u.id === userId) ?? null;
+  }
+  return db.users.find((u) => u.role === "admin") ?? db.users[0];
+}
+
+function getAdminUserFromRequest(req) {
+  const user = getRequestUser(req);
+  return user?.role === "admin" ? user : null;
+}
+
+function handlePlatformReset(req, res) {
+  if (!getAdminUserFromRequest(req)) {
+    return res.status(403).json({ message: "Administrator access required" });
+  }
+  const confirm = String(req.body?.confirm || "").trim().toUpperCase();
+  if (confirm !== PLATFORM_RESET_CONFIRM) {
+    return res.status(400).json({
+      message: `Type ${PLATFORM_RESET_CONFIRM} to confirm platform reset`,
+    });
+  }
+  applyFactoryResetToDb(db);
+  console.log("[platform] Factory reset applied — operational data cleared");
+  res.json({
+    success: true,
+    message: "Platform reset to factory defaults",
+    clearedAt: new Date().toISOString(),
+  });
+}
+
+app.post("/api/apps/:appId/platform/reset", handlePlatformReset);
+app.post("/api/apps/:appId/functions/resetPlatform", handlePlatformReset);
+
 app.get("/api/apps/:appId/backups", (req, res) => {
   res.json({ backups: db.backups });
 });
@@ -1573,6 +1635,7 @@ app.listen(PORT, () => {
   console.log(`  - Auth: /api/apps/${APP_ID}/auth/*`);
   console.log(`  - Functions: /api/apps/${APP_ID}/functions/*`);
   console.log(`  - Entities: /api/apps/${APP_ID}/entities/*`);
+  console.log(`  - Platform reset: POST /api/apps/${APP_ID}/platform/reset`);
   console.log(`  - Integrations: /api/apps/${APP_ID}/integration-endpoints/Core/*`);
   console.log(`  - Network scanner: ${USE_MOCK_SCAN ? "MOCK (demo devices only)" : "LIVE (ping/arp/full on this host)"}`);
   console.log(`  - Scanner health: GET /api/apps/${APP_ID}/scanner/health`);

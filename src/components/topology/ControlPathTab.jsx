@@ -3,15 +3,9 @@ import { Search, RefreshCw, Loader2 } from "lucide-react";
 import SignalFlowCanvas from "./SignalFlowCanvas";
 import { listSignalLinks } from "@/api/topologyApi";
 import { normalizeEquipmentRecord, CATEGORY_COLORS } from "@/lib/topology/equipmentCatalog";
+import { CONTROL_TYPE_COLORS } from "@/lib/equipment/deviceFormConstants";
 
-const CONTROL_COLORS = {
-  "Crestron-CIP": "#a855f7",
-  REST: "#06b6d4",
-  KNX: "#f59e0b",
-  GPIO: "#94a3b8",
-  "RS-232": "#64748b",
-  none: "#475569",
-};
+const CONTROL_COLORS = CONTROL_TYPE_COLORS;
 
 function DetailRow({ label, value }) {
   return (

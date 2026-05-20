@@ -6,6 +6,8 @@ import {
   BookOpen, Bot, Cable, Package, FileText, Lightbulb, Radar, HelpCircle
 } from "lucide-react";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
+import { SystemDataProvider, useSystemDataOptional } from "@/contexts/SystemDataContext";
+import { getDiagnosisCounts } from "@/lib/systemData/generateDiagnoses";
 
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -25,16 +27,15 @@ const NAV = [
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
-export default function AppLayout() {
+function AppLayoutContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const { branding } = useBranding();
   const b = branding ?? DEFAULT_BRANDING;
-
-  // Don't show layout on setup wizard or mobile page
-  if (location.pathname === "/setup" || location.pathname === "/mobile") {
-    return <Outlet />;
-  }
+  const systemData = useSystemDataOptional();
+  const diagCounts = systemData ? getDiagnosisCounts(systemData.diagnoses) : { active: 0, critical: 0 };
+  const maintenanceOverdue = systemData?.snapshot?.maintenance?.overdue ?? 0;
+  const monitoredCount = systemData?.snapshot?.monitoredCount;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -83,7 +84,9 @@ export default function AppLayout() {
             </span>
             <p className="text-xs font-semibold text-foreground">{b.name || DEFAULT_BRANDING.name}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5 ml-4">47 devices monitored</p>
+          <p className="text-xs text-muted-foreground mt-0.5 ml-4">
+            {monitoredCount != null ? `${monitoredCount} devices monitored` : "Loading devices…"}
+          </p>
         </div>
 
         {/* Nav */}
@@ -104,11 +107,15 @@ export default function AppLayout() {
             >
               <item.icon size={15} />
               {item.label}
-              {item.to === "/diagnoses" && (
-                <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">2</span>
+              {item.to === "/diagnoses" && diagCounts.active > 0 && (
+                <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">
+                  {diagCounts.active}
+                </span>
               )}
-              {item.to === "/maintenance" && (
-                <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">2</span>
+              {item.to === "/maintenance" && maintenanceOverdue > 0 && (
+                <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
+                  {maintenanceOverdue}
+                </span>
               )}
             </NavLink>
           ))}
@@ -151,5 +158,19 @@ export default function AppLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function AppLayout() {
+  const location = useLocation();
+
+  if (location.pathname === "/setup" || location.pathname === "/mobile") {
+    return <Outlet />;
+  }
+
+  return (
+    <SystemDataProvider>
+      <AppLayoutContent />
+    </SystemDataProvider>
   );
 }
