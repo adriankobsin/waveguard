@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, X, Network, Cpu } from "lucide-react";
+import { Plus, X, Network, Cpu, Radar, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const COMMON_SUBNETS = [
   "192.168.1.0/24", "192.168.0.0/24", "192.168.10.0/24",
@@ -12,8 +13,29 @@ const SCAN_TYPES = [
   { id: "full",    label: "Full Scan",     desc: "Ping + port detection + hostname resolve" },
 ];
 
-export default function DiscoverySubnetConfig({ subnets, onSubnetsChange, scanType, onScanTypeChange }) {
+export default function DiscoverySubnetConfig({
+  subnets,
+  onSubnetsChange,
+  scanType,
+  onScanTypeChange,
+  onDetectSubnets,
+}) {
   const [newSubnet, setNewSubnet] = useState("");
+  const [detecting, setDetecting] = useState(false);
+
+  const detectLocal = async () => {
+    if (!onDetectSubnets) return;
+    setDetecting(true);
+    try {
+      const list = await onDetectSubnets();
+      if (list?.length) toast.success(`Added ${list.length} local subnet(s) from this machine`);
+      else toast.info("No local subnets detected — add a CIDR manually or start the scanner agent");
+    } catch (e) {
+      toast.error(e.message || "Detection failed");
+    } finally {
+      setDetecting(false);
+    }
+  };
 
   const addSubnet = (s) => {
     const val = (s || newSubnet).trim();
@@ -53,6 +75,18 @@ export default function DiscoverySubnetConfig({ subnets, onSubnetsChange, scanTy
             <Plus size={13} />
           </button>
         </div>
+
+        {onDetectSubnets && (
+          <button
+            type="button"
+            onClick={detectLocal}
+            disabled={detecting}
+            className="mb-3 flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/10 disabled:opacity-50"
+          >
+            {detecting ? <Loader2 size={12} className="animate-spin" /> : <Radar size={12} />}
+            Detect local subnets
+          </button>
+        )}
 
         <p className="text-[10px] text-slate-600 mb-2">Quick add:</p>
         <div className="flex flex-wrap gap-1.5">

@@ -57,7 +57,6 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
     }
 
     onSubmit(formData);
-    toast.success("Device updated successfully");
   };
 
   return (

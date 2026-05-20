@@ -8,11 +8,18 @@ export const isMockServer =
 
 export const MOCK_SERVER_URL = "http://localhost:3002";
 
+function resolveLocalServerUrl() {
+  const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_SCANNER_URL;
+  if (envUrl) return String(envUrl).replace(/\/$/, "");
+  if (import.meta.env.DEV) return "";
+  return MOCK_SERVER_URL;
+}
+
 export const base44 = createClient({
   appId: isMockServer ? "mock-app" : appId,
   token: isMockServer ? "mock-dev-token" : token,
   functionsVersion,
-  serverUrl: isMockServer ? MOCK_SERVER_URL : "",
+  serverUrl: isMockServer ? resolveLocalServerUrl() : "",
   requiresAuth: false,
-  appBaseUrl: isMockServer ? MOCK_SERVER_URL : appBaseUrl,
+  appBaseUrl: isMockServer ? (resolveLocalServerUrl() || MOCK_SERVER_URL) : appBaseUrl,
 });

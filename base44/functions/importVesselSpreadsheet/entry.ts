@@ -1,0 +1,121 @@
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+
+Deno.serve(async (req) => {
+  try {
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+
+    if (user?.role !== 'admin') {
+      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
+    }
+
+    const { payload, options = {} } = await req.json();
+
+    if (!payload?.equipment && !payload?.cables) {
+      return Response.json({ error: 'payload with equipment or cables required' }, { status: 400 });
+    }
+
+    const result = {
+      equipmentCreated: 0,
+      equipmentUpdated: 0,
+      cablesCreated: 0,
+      cablesSkipped: 0,
+      errors: [] as string[],
+    };
+
+    if (options.replace) {
+      const existingEq = await base44.entities.Equipment.list();
+      for (const e of existingEq) {
+        if (e.id) await base44.entities.Equipment.delete(e.id);
+      }
+      const existingCables = await base44.entities.Cable.list();
+      for (const c of existingCables) {
+        if (c.id) await base44.entities.Cable.delete(c.id);
+      }
+    }
+
+    const allEq = await base44.entities.Equipment.list();
+    const byName = new Map(
+      allEq.map((e: { name?: string }) => [(e.name || '').trim().toLowerCase(), e])
+    );
+    const byIp = new Map(
+      allEq.filter((e: { ip?: string }) => e.ip).map((e: { ip: string }) => [e.ip, e])
+    );
+
+    for (const record of payload.equipment || []) {
+      try {
+        const nameKey = (record.name || '').trim().toLowerCase();
+        const existing = byName.get(nameKey) || (record.ip ? byIp.get(record.ip) : null);
+        if (existing?.id) {
+          await base44.entities.Equipment.update(existing.id, { ...existing, ...record });
+          result.equipmentUpdated++;
+        } else {
+          const created = await base44.entities.Equipment.create(record);
+          result.equipmentCreated++;
+          if (created?.name) byName.set(nameKey, created);
+          if (created?.ip) byIp.set(created.ip, created);
+        }
+      } catch (err) {
+        result.errors.push(`Equipment ${record.name}: ${(err as Error).message}`);
+      }
+    }
+
+    const existingCables = await base44.entities.Cable.list();
+    const cableLabels = new Set(existingCables.map((c: { label?: string }) => c.label));
+
+    for (const cable of payload.cables || []) {
+      if (!cable.label) continue;
+      if (cableLabels.has(cable.label) && !options.replace) {
+        result.cablesSkipped++;
+        continue;
+      }
+      try {
+        await base44.entities.Cable.create(cable);
+        result.cablesCreated++;
+        cableLabels.add(cable.label);
+      } catch (err) {
+        result.errors.push(`Cable ${cable.label}: ${(err as Error).message}`);
+      }
+    }
+
+    if (payload.siteLocations?.decks?.length) {
+      const key = 'site-locations';
+      const records = await base44.entities.SystemSettings.filter({ key });
+      const value = JSON.stringify(payload.siteLocations);
+      if (records[0]?.id) {
+        await base44.entities.SystemSettings.update(records[0].id, { key, value });
+      } else {
+        await base44.entities.SystemSettings.create({ key, value });
+      }
+    }
+
+    if (payload.discoverySubnets?.length) {
+      const key = 'discovery';
+      const records = await base44.entities.SystemSettings.filter({ key });
+      let current = { subnets: [] as unknown[] };
+      if (records[0]?.value) {
+        try {
+          current = JSON.parse(records[0].value);
+        } catch {
+          current = { subnets: [] };
+        }
+      }
+      current.subnets = [...(current.subnets || []), ...payload.discoverySubnets];
+      const value = JSON.stringify(current);
+      if (records[0]?.id) {
+        await base44.entities.SystemSettings.update(records[0].id, { key, value });
+      } else {
+        await base44.entities.SystemSettings.create({ key, value });
+      }
+    }
+
+    if (payload.rackLayout) {
+      await base44.entities.RackLayout.create(payload.rackLayout);
+    }
+
+    return Response.json({ success: true, ...result });
+  } catch (error) {
+    console.error('importVesselSpreadsheet failed:', error);
+    return Response.json({ error: (error as Error).message }, { status: 500 });
+  }
+});

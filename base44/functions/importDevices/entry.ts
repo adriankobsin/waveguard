@@ -54,22 +54,32 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'No devices found in CSV' }, { status: 400 });
     }
 
-    // Map CSV data to Device entity format
     const deviceRecords = devices.map(d => ({
       name: d.name,
-      ip_address: d.ip_address || '',
-      mac_address: d.mac_address || '',
+      ip: d.ip_address || '',
+      mac: d.mac_address || '',
       category: d.category || 'Other',
       location: d.location || '',
       model: d.model || '',
-      serial_number: d.serial_number || '',
+      serial: d.serial_number || '',
       firmware: d.firmware || '',
       notes: d.notes || '',
-      status: 'unknown'
+      status: 'unknown',
+      inventoryOnly: true,
+      waveguardClassification: 'inventory',
     }));
 
-    // Bulk create devices
-    const created = await base44.entities.Device.bulkCreate(deviceRecords);
+    const created = [];
+    for (const record of deviceRecords) {
+      const existing = record.ip
+        ? (await base44.entities.Equipment.filter({ ip: record.ip }))[0]
+        : null;
+      if (existing?.id) {
+        created.push(await base44.entities.Equipment.update(existing.id, { ...existing, ...record }));
+      } else {
+        created.push(await base44.entities.Equipment.create(record));
+      }
+    }
 
     return Response.json({
       success: true,

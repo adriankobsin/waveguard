@@ -1,10 +1,33 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+
 import { Layers, Map, Monitor, Cpu, Server, Loader2 } from "lucide-react";
+
 import { base44 } from "@/api/base44Client";
+
+import { listEquipment } from "@/api/equipmentApi";
+
+import { loadDiscoverySettingsLocal, DEFAULT_DISCOVERY_SETTINGS } from "@/lib/discoverySettings";
+
+import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
+
+import {
+  mergeEquipmentIntoTopology,
+  patchDeviceInTopology,
+} from "@/lib/topology/syncTopologyFromEquipment";
+
+import {
+  getTopologySessionCache,
+  setTopologySessionCache,
+} from "@/lib/topology/topologySessionCache";
+
 import DeckMapTab from "../components/topology/DeckMapTab";
+
 import RackElevationTab from "../components/topology/RackElevationTab";
+
 import NetworkMapTab from "../components/topology/NetworkMapTab";
+
 import ControlPathTab from "../components/topology/ControlPathTab";
+
 import AvSignalFlowTab from "../components/topology/AvSignalFlowTab";
 
 const TOPOLOGY_TABS = [
@@ -15,48 +38,142 @@ const TOPOLOGY_TABS = [
   { key: "rack", label: "Rack layout", icon: Server },
 ];
 
-function PlaceholderTab({ icon: Icon, title, body, color = "text-cyan-400" }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-8">
-      <div className="w-16 h-16 rounded-2xl bg-white/4 border border-white/8 flex items-center justify-center">
-        <Icon size={28} className={color} />
-      </div>
-      <div>
-        <p className="text-base font-semibold text-white mb-1">{title}</p>
-        <p className="text-sm text-slate-500 max-w-md leading-relaxed">{body}</p>
-      </div>
-    </div>
-  );
+function readCachedState() {
+  const { topologyData, lastScan } = getTopologySessionCache();
+  return {
+    topologyData,
+    lastScan: lastScan ? new Date(lastScan) : null,
+  };
 }
 
 export default function TopologyPage() {
+  const cached = readCachedState();
   const [activeTab, setActiveTab] = useState("network");
-  const [topologyData, setTopologyData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [lastScan, setLastScan] = useState(null);
+  const [topologyData, setTopologyData] = useState(cached.topologyData);
+  const [initialLoading, setInitialLoading] = useState(!cached.topologyData);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastScan, setLastScan] = useState(cached.lastScan);
 
+  const topologyRef = useRef(null);
+  const fetchGenerationRef = useRef(0);
+
+  topologyRef.current = topologyData;
+
+  useEffect(() => {
+    if (topologyData) {
+      setTopologySessionCache(topologyData, lastScan);
+    }
+  }, [topologyData, lastScan]);
+
+  const invalidateInFlightFetch = useCallback(() => {
+    fetchGenerationRef.current += 1;
+  }, []);
+
+  /** Full SNMP topology scan — only for explicit Refresh. */
   const fetchTopology = useCallback(async () => {
-    setLoading(true);
+    const fetchId = ++fetchGenerationRef.current;
+    setRefreshing(true);
+
     try {
-      const response = await base44.functions.invoke('snmpTopologyScan', {});
-      if (response.data.success) {
-        setTopologyData(response.data);
-        setLastScan(new Date(response.data.scanned_at));
+      const discovery = loadDiscoverySettingsLocal() || DEFAULT_DISCOVERY_SETTINGS;
+
+      const response = await base44.functions.invoke("snmpTopologyScan", {
+        subnets: discovery.subnets,
+        scanType: discovery.scanType,
+        snmpEnabled: discovery.snmpEnabled,
+        snmpCommunity: discovery.snmpCommunity,
+        snmpVersion: discovery.snmpVersion,
+        maxConcurrent: discovery.maxConcurrent,
+        timeoutMs: discovery.timeoutMs,
+      });
+
+      if (fetchId !== fetchGenerationRef.current) return;
+
+      if (response.data?.success) {
+        const equipment = await listEquipment();
+        if (fetchId !== fetchGenerationRef.current) return;
+        const merged = mergeEquipmentIntoTopology(response.data, equipment);
+        setTopologyData(merged);
+        const scannedAt = new Date(response.data.scanned_at);
+        setLastScan(scannedAt);
+        setTopologySessionCache(merged, scannedAt);
       }
     } catch (error) {
-      console.error('Failed to fetch topology:', error);
+      console.error("Failed to fetch topology:", error);
     } finally {
-      setLoading(false);
+      if (fetchId === fetchGenerationRef.current) {
+        setRefreshing(false);
+      }
     }
   }, []);
 
+  const syncTopologyFromEquipment = useCallback(async () => {
+    invalidateInFlightFetch();
+    try {
+      const equipment = await listEquipment();
+      setTopologyData((prev) => {
+        const merged = mergeEquipmentIntoTopology(prev, equipment);
+        setTopologySessionCache(merged, lastScan);
+        return merged;
+      });
+    } catch (error) {
+      console.error("Failed to sync topology from equipment:", error);
+    }
+  }, [invalidateInFlightFetch, lastScan]);
+
+  const patchTopologyDevice = useCallback((deviceId, patch) => {
+    invalidateInFlightFetch();
+    setTopologyData((prev) => {
+      const next = patchDeviceInTopology(prev, deviceId, patch);
+      setTopologySessionCache(next, lastScan);
+      return next;
+    });
+  }, [invalidateInFlightFetch, lastScan]);
+
+  /** Load device list from inventory only — no SNMP scan. */
   useEffect(() => {
+    let cancelled = false;
+
+    async function loadFromInventory() {
+      if (!topologyRef.current) {
+        setInitialLoading(true);
+      }
+
+      try {
+        const equipment = await listEquipment();
+        if (cancelled) return;
+
+        setTopologyData((prev) => {
+          const merged = mergeEquipmentIntoTopology(prev, equipment);
+          setTopologySessionCache(merged, lastScan);
+          return merged;
+        });
+      } catch (error) {
+        console.error("Failed to load topology from equipment:", error);
+      } finally {
+        if (!cancelled) setInitialLoading(false);
+      }
+    }
+
+    loadFromInventory();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per mount; cache supplies initial state
+  }, []);
+
+  useEffect(() => {
+    const onEquipmentChange = () => syncTopologyFromEquipment();
+    window.addEventListener(EQUIPMENT_CHANGED_EVENT, onEquipmentChange);
+    return () => window.removeEventListener(EQUIPMENT_CHANGED_EVENT, onEquipmentChange);
+  }, [syncTopologyFromEquipment]);
+
+  const handleFullRefresh = useCallback(() => {
     fetchTopology();
   }, [fetchTopology]);
 
   return (
     <div className="h-full flex flex-col bg-background">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-card/80 backdrop-blur-xl flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center ring-1 ring-primary/30">
@@ -67,6 +184,7 @@ export default function TopologyPage() {
             <p className="text-xs text-muted-foreground mt-0.5">Signal flow, patching, VLAN overlays, rack elevation, weight, thermal, power, uplinks.</p>
           </div>
         </div>
+
         <div className="flex items-center gap-4">
           {topologyData?.stats && (
             <div className="hidden sm:flex items-center gap-3">
@@ -90,6 +208,7 @@ export default function TopologyPage() {
               <span className="text-xs text-muted-foreground">{topologyData.stats.active_connections} active connections</span>
             </div>
           )}
+
           {lastScan && (
             <p className="text-[10px] text-muted-foreground">
               Last scan: {lastScan.toLocaleTimeString()}
@@ -98,7 +217,6 @@ export default function TopologyPage() {
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="flex items-center gap-1 px-5 py-2 border-b border-border bg-card/60 flex-shrink-0 overflow-x-auto">
         {TOPOLOGY_TABS.map(tab => (
           <button
@@ -116,13 +234,12 @@ export default function TopologyPage() {
         ))}
       </div>
 
-      {/* Graph canvas */}
       <div className="flex-1 relative overflow-hidden bg-background">
-        {loading && activeTab === "network" ? (
+        {initialLoading && activeTab === "network" ? (
           <div className="flex items-center justify-center h-full">
             <div className="flex items-center gap-3 text-muted-foreground">
               <Loader2 size={20} className="animate-spin" />
-              <p className="text-sm">Scanning network topology via SNMP...</p>
+              <p className="text-sm">Loading network equipment…</p>
             </div>
           </div>
         ) : (
@@ -130,17 +247,19 @@ export default function TopologyPage() {
             {activeTab === "network" && (
               <NetworkMapTab
                 topologyData={topologyData}
-                loading={loading}
-                onRefresh={fetchTopology}
+                refreshing={refreshing}
+                onFullRefresh={handleFullRefresh}
+                onPatchDevice={patchTopologyDevice}
+                onSyncFromEquipment={syncTopologyFromEquipment}
               />
             )}
             {activeTab === "av" && (
-              <AvSignalFlowTab topologyData={topologyData} loading={loading} onRefresh={fetchTopology} />
+              <AvSignalFlowTab topologyData={topologyData} loading={false} onRefresh={handleFullRefresh} />
             )}
             {activeTab === "control" && (
-              <ControlPathTab topologyData={topologyData} loading={loading} onRefresh={fetchTopology} />
+              <ControlPathTab topologyData={topologyData} loading={false} onRefresh={handleFullRefresh} />
             )}
-            {activeTab === "rack" && <RackElevationTab topologyData={topologyData} onRefresh={fetchTopology} />}
+            {activeTab === "rack" && <RackElevationTab topologyData={topologyData} onRefresh={handleFullRefresh} />}
             {activeTab === "deckmap" && <DeckMapTab topologyData={topologyData} />}
           </>
         )}

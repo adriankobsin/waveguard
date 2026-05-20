@@ -27,7 +27,8 @@ function PortBadge({ port }) {
   );
 }
 
-function DeviceRow({ device, onClassify, index }) {
+function DeviceRow({ device, onClassify, index, registeringId }) {
+  const isRegistering = registeringId === device.id || registeringId === "bulk";
   const [expanded, setExpanded] = useState(false);
   const catMeta = CATEGORY_ICONS[device.category] || CATEGORY_ICONS.Unknown;
   const Icon = catMeta.icon;
@@ -115,9 +116,10 @@ function DeviceRow({ device, onClassify, index }) {
               <Eye size={12} />
             </button>
             <button
+              disabled={isRegistering}
               onClick={() => onClassify(device.id, "inventory")}
               title="Add to Inventory"
-              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border ${
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border disabled:opacity-40 ${
                 device.classification === "inventory"
                   ? "bg-blue-500/25 border-blue-500/40 text-blue-400"
                   : "border-white/8 text-slate-500 hover:text-blue-400 hover:border-blue-500/30"
@@ -126,9 +128,10 @@ function DeviceRow({ device, onClassify, index }) {
               <Package size={12} />
             </button>
             <button
+              disabled={isRegistering}
               onClick={() => onClassify(device.id, "ignored")}
               title="Ignore"
-              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border ${
+              className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border disabled:opacity-40 ${
                 device.classification === "ignored"
                   ? "bg-slate-500/25 border-slate-500/40 text-slate-300"
                   : "border-white/8 text-slate-500 hover:text-slate-300 hover:border-slate-500/30"
@@ -176,7 +179,7 @@ function DeviceRow({ device, onClassify, index }) {
   );
 }
 
-export default function DiscoveryResultsTable({ devices, onClassify }) {
+export default function DiscoveryResultsTable({ devices, onClassify, registeringId }) {
   if (devices.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-slate-600 gap-2">
@@ -203,7 +206,7 @@ export default function DiscoveryResultsTable({ devices, onClassify }) {
       </thead>
       <tbody>
         {devices.map((device, i) => (
-          <DeviceRow key={device.id} device={device} onClassify={onClassify} index={i} />
+          <DeviceRow key={device.id} device={device} onClassify={onClassify} index={i} registeringId={registeringId} />
         ))}
       </tbody>
     </table>

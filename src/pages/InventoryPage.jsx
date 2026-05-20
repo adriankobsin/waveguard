@@ -1,11 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package, Plus, Search, X, Filter, Pencil, Trash2,
   Wifi, Camera, Monitor, Zap, Server, HardDrive, Check,
-  LayoutGrid, List, Download
+  LayoutGrid, List, Download, FileSpreadsheet
 } from "lucide-react";
 import InventoryExportModal from "../components/inventory/InventoryExportModal";
+import VesselSpreadsheetImportModal from "../components/inventory/VesselSpreadsheetImportModal";
+import { listEquipment, upsertEquipment, updateEquipment, deleteEquipment } from "@/api/equipmentApi";
+import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
+import { toast } from "sonner";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
+import BulkActionBar from "@/components/shared/BulkActionBar";
+import BulkEditModal from "@/components/shared/BulkEditModal";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CATEGORIES = ["All", "Network", "Camera", "AV", "Power", "Control", "Other"];
 const CONDITIONS = ["Excellent", "Good", "Fair", "Poor", "Decommissioned"];
@@ -19,27 +28,11 @@ const TYPE_ICONS = {
   Other: { icon: HardDrive, color: "text-muted-foreground", bg: "bg-secondary" },
 };
 
-const INITIAL_EQUIPMENT = [
-  { id: "router-wan", name: "Router-WAN",       model: "MikroTik CCR2004-1G",  category: "Network", ip: "192.168.1.1",   condition: "Excellent", location: "Bridge Rack",    serial: "MT220B0041",  notes: "BGP + failover configured" },
-  { id: "sw-bridge",  name: "SW-Bridge",         model: "Cisco CBS350-24T",     category: "Network", ip: "192.168.10.1",  condition: "Good",      location: "Bridge Rack",    serial: "FOC2241X0AB", notes: "Primary distribution switch" },
-  { id: "sw-saloon",  name: "SW-Saloon",         model: "Cisco CBS350-16T",     category: "Network", ip: "192.168.10.2",  condition: "Good",      location: "Saloon Cabinet", serial: "FOC2241X0CD", notes: "" },
-  { id: "sw-deck",    name: "SW-Deck-Lower",     model: "Cisco SG250-18",       category: "Network", ip: "192.168.10.5",  condition: "Fair",      location: "Deck Cabinet",   serial: "FOC2131X0EF", notes: "CPU spikes noted" },
-  { id: "sw-engine",  name: "SW-Engine",         model: "Cisco SG250-18",       category: "Network", ip: "192.168.10.6",  condition: "Good",      location: "Engine Room",    serial: "FOC2131X0GH", notes: "" },
-  { id: "ap-bridge",  name: "AP-Bridge",         model: "Ubiquiti UAP-AC-Pro",  category: "Network", ip: "192.168.10.20", condition: "Good",      location: "Bridge Mast",    serial: "UBQ2022A001", notes: "" },
-  { id: "ap-deck",    name: "AP-Deck-Aft",       model: "Ubiquiti UAP-AC-Pro",  category: "Network", ip: "192.168.10.21", condition: "Good",      location: "Aft Deck",       serial: "UBQ2022A002", notes: "" },
-  { id: "cam-bridge", name: "Cam-Bridge-01",     model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.51", condition: "Fair",      location: "Bridge Ext.",    serial: "DH2023051201",notes: "PoE — requires port bounce" },
-  { id: "cam-saloon", name: "Cam-Saloon-01",     model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.52", condition: "Good",      location: "Saloon",         serial: "DH2023051202",notes: "" },
-  { id: "cam-deck1",  name: "Cam-Deck-01",       model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.53", condition: "Good",      location: "Fore Deck",      serial: "DH2023051203",notes: "" },
-  { id: "cam-deck2",  name: "Cam-Deck-02",       model: "Dahua IPC-HDW3849H",   category: "Camera",  ip: "192.168.10.54", condition: "Good",      location: "Aft Deck",       serial: "DH2023051204",notes: "" },
-  { id: "av-proc",    name: "AV-Proc-Saloon",    model: "Crestron NVX-350",     category: "AV",      ip: "192.168.10.22", condition: "Good",      location: "Saloon AV Rack", serial: "CRE7462183",  notes: "4K HDR matrix" },
-  { id: "av-matrix",  name: "AV-Matrix-Saloon",  model: "Kramer VS-88H",        category: "AV",      ip: "192.168.10.23", condition: "Good",      location: "Saloon AV Rack", serial: "KRM1980041",  notes: "" },
-  { id: "qsys-core",  name: "Q-SYS Core",        model: "Q-SYS Core 110f",      category: "AV",      ip: "192.168.10.30", condition: "Good",      location: "Bridge Rack",    serial: "QSC2021001",  notes: "Audio DSP main" },
-  { id: "nas",        name: "NAS-Synology",       model: "Synology DS1522+",     category: "Control", ip: "192.168.10.80", condition: "Good",      location: "Engine Room",    serial: "SYN2022001",  notes: "" },
-  { id: "ups-main",   name: "UPS-Main",           model: "APC Smart-UPS 3000VA", category: "Power",   ip: "192.168.10.90", condition: "Good",      location: "Engine Room",    serial: "AS1720140893",notes: "Battery at 42%" },
-  { id: "ups-av",     name: "UPS-AV",             model: "APC Smart-UPS 750VA",  category: "Power",   ip: "192.168.10.91", condition: "Good",      location: "Saloon AV Rack", serial: "AS1820140112",notes: "" },
-];
-
 const EMPTY = { name: "", model: "", category: "Network", ip: "", condition: "Good", location: "", serial: "", notes: "" };
+
+function isInventoryItem(e) {
+  return e.waveguardClassification === "inventory" || e.inventoryOnly === true;
+}
 
 function EquipmentIcon({ category }) {
   const cfg = TYPE_ICONS[category] || TYPE_ICONS.Other;
@@ -59,13 +52,33 @@ const CONDITION_COLORS = {
 };
 
 export default function InventoryPage() {
-  const [equipment, setEquipment] = useState(INITIAL_EQUIPMENT);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [viewMode, setViewMode] = useState("grid");
   const [showExport, setShowExport] = useState(false);
+  const [showImport, setShowImport] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const bulk = useBulkSelection();
+
+  const { data: allEquipment = [], isLoading } = useQuery({
+    queryKey: ["equipment"],
+    queryFn: listEquipment,
+  });
+
+  const equipment = useMemo(
+    () => allEquipment.filter(isInventoryItem),
+    [allEquipment]
+  );
+
+  useEffect(() => {
+    const refresh = () => queryClient.invalidateQueries({ queryKey: ["equipment"] });
+    window.addEventListener(EQUIPMENT_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(EQUIPMENT_CHANGED_EVENT, refresh);
+  }, [queryClient]);
 
   const filtered = equipment.filter(e => {
     const matchCat = category === "All" || e.category === category;
@@ -79,17 +92,73 @@ export default function InventoryPage() {
   const openEdit = (e) => { setForm({ ...e }); setEditing(e.id); };
   const cancel = () => { setEditing(null); };
 
-  const save = () => {
+  const save = async () => {
     if (!form.name || !form.model) return;
-    if (editing === "new") {
-      setEquipment(prev => [...prev, { ...form, id: Date.now().toString() }]);
-    } else {
-      setEquipment(prev => prev.map(e => e.id === editing ? { ...form, id: editing } : e));
+    try {
+      const payload = {
+        ...form,
+        waveguardClassification: "inventory",
+        inventoryOnly: true,
+        monitoringEnabled: false,
+      };
+      if (editing === "new") {
+        await upsertEquipment({ ...payload, id: `eq-manual-${Date.now()}` });
+        toast.success("Equipment added to inventory");
+      } else {
+        await upsertEquipment({ ...payload, id: editing });
+        toast.success("Equipment updated");
+      }
+      queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      queryClient.invalidateQueries({ queryKey: ["deviceGroups"] });
+      cancel();
+    } catch (e) {
+      toast.error(e.message || "Save failed");
     }
-    cancel();
   };
 
-  const remove = (id) => setEquipment(prev => prev.filter(e => e.id !== id));
+  const remove = async (id) => {
+    try {
+      await deleteEquipment(id);
+      queryClient.invalidateQueries({ queryKey: ["equipment"] });
+      queryClient.invalidateQueries({ queryKey: ["deviceGroups"] });
+      toast.success("Removed from inventory");
+    } catch (e) {
+      toast.error(e.message || "Delete failed");
+    }
+  };
+
+  const filteredIds = filtered.map((e) => e.id);
+
+  const handleBulkEdit = async (patch) => {
+    const items = equipment.filter((e) => bulk.selectedIds.has(e.id));
+    let ok = 0;
+    for (const item of items) {
+      await updateEquipment(item.id, { ...item, ...patch });
+      ok++;
+    }
+    queryClient.invalidateQueries({ queryKey: ["equipment"] });
+    bulk.clear();
+    toast.success(`Updated ${ok} item${ok !== 1 ? "s" : ""}`);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...bulk.selectedIds];
+    for (const id of ids) {
+      await deleteEquipment(id);
+    }
+    queryClient.invalidateQueries({ queryKey: ["equipment"] });
+    queryClient.invalidateQueries({ queryKey: ["deviceGroups"] });
+    bulk.clear();
+    setBulkDeleteOpen(false);
+    toast.success(`Deleted ${ids.length} item${ids.length !== 1 ? "s" : ""}`);
+  };
+
+  const INVENTORY_BULK_FIELDS = [
+    { key: "category", label: "Category", type: "select", options: CATEGORIES.filter((c) => c !== "All") },
+    { key: "condition", label: "Condition", type: "select", options: CONDITIONS },
+    { key: "location", label: "Location", type: "text", placeholder: "e.g. Main Deck · Room 344" },
+    { key: "notes", label: "Notes", type: "text" },
+  ];
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 space-y-6 animate-fade-in">
@@ -100,9 +169,17 @@ export default function InventoryPage() {
             <Package size={22} className="text-cyan-400" />
             Inventory
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Equipment CRUD, condition tracking, and spare-parts reference</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {isLoading ? "Loading…" : `${equipment.length} items from discovery and manual entry`}
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border text-foreground rounded-lg text-sm font-medium hover:bg-accent transition-colors"
+          >
+            <FileSpreadsheet size={14} /> Import spreadsheet
+          </button>
           <button
             onClick={() => setShowExport(true)}
             className="flex items-center gap-2 px-4 py-2 bg-secondary border border-border text-foreground rounded-lg text-sm font-medium hover:bg-accent transition-colors"
@@ -154,9 +231,42 @@ export default function InventoryPage() {
         </div>
       </div>
 
+      <BulkActionBar
+        count={bulk.count}
+        onEdit={() => setBulkEditOpen(true)}
+        onDelete={() => setBulkDeleteOpen(true)}
+        onClear={bulk.clear}
+      />
+
+      <BulkEditModal
+        open={bulkEditOpen}
+        onClose={() => setBulkEditOpen(false)}
+        count={bulk.count}
+        fields={INVENTORY_BULK_FIELDS}
+        onApply={handleBulkEdit}
+        title="Bulk edit equipment"
+      />
+
+      {bulkDeleteOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setBulkDeleteOpen(false)}>
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-foreground mb-1">Delete {bulk.count} items?</p>
+            <p className="text-xs text-muted-foreground mb-4">This cannot be undone.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setBulkDeleteOpen(false)} className="flex-1 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground">
+                Cancel
+              </button>
+              <button onClick={handleBulkDelete} className="flex-1 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Inline form */}
       <AnimatePresence>
-        {editing && (
+        {editing && !bulk.count && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
             animate={{ opacity: 1, y: 0 }}
@@ -218,9 +328,15 @@ export default function InventoryPage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
                 transition={{ delay: i * 0.03 }}
-                className="glass rounded-xl p-4 flex gap-3"
+                className={`glass rounded-xl p-4 flex gap-3 ${bulk.isSelected(eq.id) ? "ring-2 ring-primary/50" : ""}`}
               >
-                <EquipmentIcon category={eq.category} />
+                <div className="flex flex-col items-start gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={bulk.isSelected(eq.id)}
+                    onCheckedChange={() => bulk.toggle(eq.id)}
+                  />
+                  <EquipmentIcon category={eq.category} />
+                </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -254,7 +370,12 @@ export default function InventoryPage() {
       {/* List view */}
       {viewMode === "list" && (
         <div className="glass rounded-xl overflow-hidden">
-          <div className="grid grid-cols-[auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2 border-b border-border/50 text-[10px] text-muted-foreground uppercase tracking-widest">
+          <div className="grid grid-cols-[auto_auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2 border-b border-border/50 text-[10px] text-muted-foreground uppercase tracking-widest">
+            <Checkbox
+              checked={bulk.allSelected(filteredIds)}
+              onCheckedChange={() => bulk.toggleAll(filteredIds)}
+              aria-label="Select all"
+            />
             <div className="w-7" />
             <div>Device</div>
             <div className="hidden sm:block">IP / Location</div>
@@ -270,8 +391,12 @@ export default function InventoryPage() {
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ delay: i * 0.02 }}
-                className="grid grid-cols-[auto_1fr_1fr_auto_auto] sm:grid-cols-[auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2.5 border-b border-border/30 last:border-0 hover:bg-white/[0.02] transition-colors"
+                className={`grid grid-cols-[auto_auto_1fr_1fr_auto_auto] sm:grid-cols-[auto_auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2.5 border-b border-border/30 last:border-0 hover:bg-white/[0.02] transition-colors ${bulk.isSelected(eq.id) ? "bg-primary/5" : ""}`}
               >
+                <Checkbox
+                  checked={bulk.isSelected(eq.id)}
+                  onCheckedChange={() => bulk.toggle(eq.id)}
+                />
                 <EquipmentIcon category={eq.category} />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground truncate">{eq.name}</p>
@@ -310,6 +435,16 @@ export default function InventoryPage() {
 
       {showExport && (
         <InventoryExportModal equipment={equipment} onClose={() => setShowExport(false)} />
+      )}
+      {showImport && (
+        <VesselSpreadsheetImportModal
+          isOpen={showImport}
+          onClose={() => setShowImport(false)}
+          onComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ["equipment"] });
+            setShowImport(false);
+          }}
+        />
       )}
     </div>
   );

@@ -1,0 +1,215 @@
+import { expandCidr, detectLocalSubnets, getScanInterfaceLabel, isValidCidr, normalizeCidr } from "./subnets.js";
+import { pingHost } from "./ping.js";
+import { probePorts, reverseHostname } from "./ports.js";
+import { readArpTable } from "./arp.js";
+import { snmpProbe } from "./snmp.js";
+import { lookupVendor, guessCategory } from "./enrich.js";
+import { buildTopologyConnections, mapDevicesToTopology } from "./topology.js";
+
+export { detectLocalSubnets, getScanInterfaceLabel, buildTopologyConnections, mapDevicesToTopology };
+export { lookupVendor, guessCategory };
+
+const DEFAULT_OPTIONS = {
+  subnets: ["192.168.10.0/24"],
+  scanType: "ping",
+  target: null,
+  maxConcurrent: 64,
+  timeoutMs: 1500,
+  snmpEnabled: false,
+  snmpCommunity: "public",
+  snmpVersion: "2c",
+};
+
+async function runPool(items, concurrency, fn) {
+  const results = [];
+  let idx = 0;
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+async function probeHost(ip, subnet, scanType, opts, arpMap) {
+  const timeoutMs = opts.timeoutMs;
+  let alive = false;
+  let responseTimeMs = null;
+  let openPorts = [];
+  let hostname = "";
+  let mac = arpMap?.get(ip) || "";
+  let vendor = lookupVendor(mac);
+  let model = "";
+
+  if (scanType === "full") {
+    const ping = await pingHost(ip, timeoutMs);
+    if (ping.alive) {
+      alive = true;
+      responseTimeMs = ping.ms;
+    }
+    openPorts = await probePorts(ip, undefined, Math.min(timeoutMs, 800));
+    if (!alive && openPorts.length > 0) alive = true;
+    if (alive) {
+      hostname = await reverseHostname(ip);
+      if (!mac) {
+        const arp = await readArpTable();
+        mac = arp.get(ip) || mac;
+        vendor = lookupVendor(mac);
+      }
+    }
+  } else if (scanType === "arp") {
+    const ping = await pingHost(ip, timeoutMs);
+    alive = ping.alive;
+    responseTimeMs = ping.ms;
+    if (!mac && arpMap) mac = arpMap.get(ip) || "";
+    vendor = lookupVendor(mac);
+    if (alive) hostname = await reverseHostname(ip);
+  } else {
+    const ping = await pingHost(ip, timeoutMs);
+    alive = ping.alive;
+    responseTimeMs = ping.ms;
+    if (alive) hostname = await reverseHostname(ip);
+  }
+
+  if (!alive) return null;
+
+  if (opts.snmpEnabled && (openPorts.includes(161) || scanType !== "full")) {
+    const snmp = await snmpProbe(ip, {
+      community: opts.snmpCommunity,
+      version: opts.snmpVersion,
+      timeoutMs: opts.timeoutMs,
+    });
+    if (snmp) {
+      if (snmp.sysName) hostname = snmp.sysName;
+      if (snmp.vendor && snmp.vendor !== "Unknown") vendor = snmp.vendor;
+      if (snmp.model) model = snmp.model;
+      if (!openPorts.includes(161)) openPorts = [...openPorts, 161].sort((a, b) => a - b);
+    }
+  }
+
+  const category = guessCategory(hostname, vendor, openPorts);
+  return {
+    id: `disc-${subnet.replace(/\//g, "-")}-${ip.replace(/\./g, "-")}`,
+    ip,
+    hostname: hostname || ip,
+    mac: mac || "",
+    vendor,
+    model,
+    category,
+    openPorts,
+    responseTimeMs: responseTimeMs ?? 0,
+    status: "discovered",
+    classification: "unclassified",
+    firstSeen: new Date().toISOString(),
+    subnet,
+  };
+}
+
+/**
+ * Run network discovery scan.
+ */
+export async function scan(userOptions = {}) {
+  const opts = { ...DEFAULT_OPTIONS, ...userOptions };
+  const start = Date.now();
+  const scanSubnets = [...new Set((opts.subnets || []).map(normalizeCidr).filter(Boolean))];
+  if (scanSubnets.length === 0) {
+    throw new Error("No valid subnets configured (use CIDR e.g. 192.168.1.0/24)");
+  }
+
+  if (opts.target) {
+    const subnet = scanSubnets[0];
+    const arpMap = opts.scanType === "arp" ? await readArpTable() : new Map();
+    const device = await probeHost(opts.target, subnet, opts.scanType || "ping", opts, arpMap);
+    const devices = device ? [device] : [];
+    return {
+      success: true,
+      scanInterface: getScanInterfaceLabel(),
+      subnets: scanSubnets,
+      scanType: opts.scanType,
+      target: opts.target,
+      totalFound: devices.length,
+      durationMs: Date.now() - start,
+      devices,
+      scannedAt: new Date().toISOString(),
+    };
+  }
+
+  let arpMap = new Map();
+  if (opts.scanType === "arp") {
+    for (const subnet of scanSubnets) {
+      const ips = expandCidr(subnet, 254);
+      await runPool(ips, opts.maxConcurrent, (ip) => pingHost(ip, Math.min(opts.timeoutMs, 500)));
+    }
+    arpMap = await readArpTable();
+  }
+
+  const tasks = [];
+  for (const subnet of scanSubnets) {
+    for (const ip of expandCidr(subnet, 512)) {
+      tasks.push({ ip, subnet });
+    }
+  }
+
+  const found = await runPool(tasks, opts.maxConcurrent, ({ ip, subnet }) =>
+    probeHost(ip, subnet, opts.scanType, opts, arpMap)
+  );
+
+  const seen = new Set();
+  const devices = found.filter((d) => {
+    if (!d || seen.has(d.ip)) return false;
+    seen.add(d.ip);
+    return true;
+  });
+
+  return {
+    success: true,
+    scanInterface: getScanInterfaceLabel(),
+    subnets: scanSubnets,
+    scanType: opts.scanType,
+    totalFound: devices.length,
+    durationMs: Date.now() - start,
+    devices,
+    scannedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Topology scan: discovery + connection graph.
+ */
+export async function scanTopology(userOptions = {}) {
+  const discovery = await scan(userOptions);
+  const topologyDevices = mapDevicesToTopology(discovery.devices);
+  const connections = buildTopologyConnections(topologyDevices);
+  const online = topologyDevices.filter((d) => d.status === "online").length;
+  const offline = topologyDevices.filter((d) => d.status === "offline").length;
+  const warning = topologyDevices.filter((d) => d.status === "warning").length;
+
+  return {
+    success: true,
+    scanned_at: discovery.scannedAt,
+    scanInterface: discovery.scanInterface,
+    subnets: discovery.subnets,
+    devices: topologyDevices,
+    connections,
+    stats: {
+      online,
+      offline,
+      warning,
+      active_connections: connections.length,
+    },
+    durationMs: discovery.durationMs,
+  };
+}
+
+export function getHealth() {
+  return {
+    ok: true,
+    version: "1.0.0",
+    platform: process.platform,
+    scanInterface: getScanInterfaceLabel(),
+    localSubnets: detectLocalSubnets(),
+  };
+}

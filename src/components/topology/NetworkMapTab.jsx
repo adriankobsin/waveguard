@@ -1,17 +1,22 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
-import RadialNetworkGraph from "./RadialNetworkGraph";
 import { GroupManager } from "./GroupManager";
 import { DeviceEditModal } from "./DeviceEditModal";
-import LayoutSelector from "./LayoutSelector";
 import DeviceImportModal from "./DeviceImportModal";
+import NetworkEquipmentList from "./NetworkEquipmentList";
+import SnmpPortMapPanel from "../snmp/SnmpPortMapPanel";
+import { networkScanDeviceToPatch } from "@/lib/topology/syncTopologyFromEquipment";
+import {
+  persistTopologyDeviceEdit,
+  persistTopologyDeviceScan,
+} from "@/lib/topology/persistTopologyDevice";
 import { toast } from "sonner";
 import {
   Search, RefreshCw, GitBranch, ArrowRight,
-  CheckCircle2, Loader2, X, MapPin, Hash, Tag, FileText, Cable,
-  Cpu, Activity, ScanLine, Upload, Wrench, Users,
+  Loader2, X, MapPin, Hash, Tag, FileText, Cable,
+  Cpu, Activity, ScanLine, Upload, Wrench, Users, Network, Pencil,
 } from "lucide-react";
 import { useTopologyAdmin } from "@/hooks/useTopologyAdmin";
 
@@ -38,17 +43,8 @@ const STATUS_CONFIG = {
   unknown: { label: "Unknown", color: "text-slate-400", bg: "bg-slate-500/15 border-slate-500/30", dot: "bg-slate-400" },
 };
 
-const CONDITION_COLORS = {
-  Excellent: "text-emerald-400",
-  Good: "text-cyan-400",
-  Fair: "text-amber-400",
-  Poor: "text-red-400",
-  Decommissioned: "text-slate-400",
-};
-
-// BFS shortest path algorithm
 function findPath(sourceId, targetId, connections) {
-  if (sourceId === targetId) return { nodeIds: new Set([sourceId]), edgeIds: new Set() };
+  if (sourceId === targetId) return { nodeIds: new Set([sourceId]), edgeIds: new Set(), orderedNodes: [sourceId], orderedEdges: [] };
 
   const adj = {};
   connections.forEach(c => {
@@ -94,86 +90,77 @@ function DetailPanel({ node, onClose, onScan, onEdit }) {
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: 24 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 24 }}
-      className="absolute top-4 right-4 w-80 z-20 pointer-events-auto"
-    >
-      <div className="rounded-2xl border border-white/10 bg-[#0a0f1c]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
-          <div className="flex items-center gap-2.5">
-            <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-            <p className="text-sm font-semibold text-white leading-tight">{node.name}</p>
-          </div>
-          <div className="flex items-center gap-1">
-            {onEdit && (
-              <button 
-                onClick={onEdit} 
-                className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white"
-              >
-                <Edit2 size={12} />
-              </button>
-            )}
-            <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-400 hover:text-white">
-              <X size={12} />
+    <div className="w-80 flex-shrink-0 border-l border-white/10 bg-[#0a0f1c] flex flex-col overflow-y-auto">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+          <p className="text-sm font-semibold text-white leading-tight truncate">{node.name}</p>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white"
+            >
+              <Pencil size={12} />
             </button>
-          </div>
-        </div>
-        <div className="px-4 pt-3 pb-1 flex items-center gap-2 flex-wrap">
-          <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-            {cfg.label}
-          </span>
-          <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border border-white/10 text-slate-400">
-            {node.category}
-          </span>
-        </div>
-        <div className="px-4 py-3 space-y-2.5">
-          {node.model && <Row icon={Tag} label="Model" value={node.model} />}
-          {node.ip && <Row icon={Hash} label="IP Address" value={node.ip} mono />}
-          {node.mac && <Row icon={Hash} label="MAC Address" value={node.mac} mono />}
-          {node.firmware && <Row icon={Cpu} label="Firmware" value={node.firmware} mono />}
-          {node.location && <Row icon={MapPin} label="Location" value={node.location} />}
-          {node.serial && <Row icon={Hash} label="Serial" value={node.serial} mono />}
-          {node.uptime && <Row icon={Activity} label="Uptime" value={node.uptime} />}
-          {node.notes && (
-            <div className="pt-1 border-t border-white/6">
-              <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><FileText size={10} /> Notes</p>
-              <p className="text-xs text-slate-300 leading-relaxed">{node.notes}</p>
-            </div>
           )}
+          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white">
+            <X size={12} />
+          </button>
         </div>
+      </div>
+      <div className="px-4 pt-3 pb-1 flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+          {cfg.label}
+        </span>
+        <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border border-white/10 text-slate-400">
+          {node.category}
+        </span>
+      </div>
+      <div className="px-4 py-3 space-y-2.5 flex-1">
+        {node.model && <Row icon={Tag} label="Model" value={node.model} />}
+        {node.ip && <Row icon={Hash} label="IP Address" value={node.ip} mono />}
+        {node.mac && <Row icon={Hash} label="MAC Address" value={node.mac} mono />}
+        {node.firmware && <Row icon={Cpu} label="Firmware" value={node.firmware} mono />}
+        {node.location && <Row icon={MapPin} label="Location" value={node.location} />}
+        {node.serial && <Row icon={Hash} label="Serial" value={node.serial} mono />}
+        {node.uptime && <Row icon={Activity} label="Uptime" value={node.uptime} />}
+        {node.notes && (
+          <div className="pt-1 border-t border-white/6">
+            <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><FileText size={10} /> Notes</p>
+            <p className="text-xs text-slate-300 leading-relaxed">{node.notes}</p>
+          </div>
+        )}
         {connections.length > 0 && (
-          <div className="px-4 pb-4 border-t border-white/6 pt-3">
+          <div className="pt-2 border-t border-white/6">
             <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide flex items-center gap-1.5">
               <Cable size={10} /> Connections ({connections.length})
             </p>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-40 overflow-y-auto">
               {connections.map((conn, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-cyan-400" />
-                    <span className="text-slate-300 truncate">{conn.target}</span>
-                  </div>
-                  <span className="text-cyan-400/70 font-mono text-[10px] flex-shrink-0 ml-1">Port {conn.port}</span>
+                  <span className="text-slate-300 truncate">{conn.targetName || conn.target}</span>
+                  {conn.port && <span className="text-cyan-400/70 font-mono text-[10px]">Port {conn.port}</span>}
                 </div>
               ))}
             </div>
           </div>
         )}
-        <div className="px-4 pb-4 border-t border-white/6 pt-3">
-          <button
-            onClick={handleScan}
-            disabled={scanning}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-xs font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {scanning ? <Loader2 size={12} className="animate-spin" /> : <ScanLine size={12} />}
-            {scanning ? "Scanning..." : "Scan Device"}
-          </button>
-        </div>
       </div>
-    </motion.div>
+      <div className="px-4 pb-4 border-t border-white/6 pt-3">
+        <button
+          type="button"
+          onClick={handleScan}
+          disabled={scanning || !node.ip}
+          className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/25 text-xs font-medium transition-all disabled:opacity-50"
+        >
+          {scanning ? <Loader2 size={12} className="animate-spin" /> : <ScanLine size={12} />}
+          {scanning ? "Scanning..." : "Scan Device"}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -186,149 +173,97 @@ function Row({ icon: Icon, label, value, mono }) {
   );
 }
 
-function PathPanel({ path, onClose }) {
+function PathPanel({ path, deviceMap, onClose }) {
   if (!path) return null;
   const hops = path.orderedNodes || [];
-  const edges = path.orderedEdges || [];
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: 16 }}
-      className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto w-[600px] max-w-[92vw]"
-    >
-      <div className="rounded-2xl border border-orange-500/30 bg-[#0a0f1c]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/8">
-          <div className="flex items-center gap-2">
-            <GitBranch size={13} className="text-orange-400" />
-            <p className="text-xs font-semibold text-white">Signal Path</p>
-            <span className="text-xs text-slate-500">·</span>
-            <span className="text-xs text-slate-400">{hops.length - 1} hop{hops.length !== 2 ? "s" : ""}</span>
-          </div>
-          <button onClick={onClose} className="w-5 h-5 rounded-lg hover:bg-white/10 flex items-center justify-center transition-colors text-slate-500 hover:text-white">
-            <X size={11} />
-          </button>
+    <div className="border-t border-orange-500/20 bg-orange-500/5 px-4 py-3 flex-shrink-0">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <GitBranch size={13} className="text-orange-400" />
+          <p className="text-xs font-semibold text-white">Signal Path</p>
+          <span className="text-xs text-slate-500">{hops.length - 1} hop{hops.length !== 2 ? "s" : ""}</span>
         </div>
-        <div className="px-4 py-3 flex items-center gap-1 flex-wrap">
-          {hops.map((nodeId, i) => {
-            const cable = i < edges.length ? edges[i] : null;
-            const isEndpoint = i === 0 || i === hops.length - 1;
-            return (
-              <div key={nodeId} className="flex items-center gap-1">
-                <div className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border text-xs font-medium ${
-                  isEndpoint
-                    ? "border-orange-500/40 bg-orange-500/15 text-orange-300"
-                    : "border-white/10 bg-white/4 text-slate-300"
-                }`}>
-                  {isEndpoint && <CheckCircle2 size={10} className="text-orange-400" />}
-                  {nodeId}
-                </div>
-                {cable && (
-                  <div className="flex items-center gap-1 text-slate-600">
-                    <ArrowRight size={10} />
-                    <ArrowRight size={10} />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-function Legend({ filter, onFilter, statusFilter, onStatusFilter, groups, onGroupFilter, groupFilter }) {
-  const GROUP_COLORS = {
-    cyan: "#06b6d4",
-    blue: "#3b82f6",
-    purple: "#a855f7",
-    green: "#22c55e",
-    yellow: "#eab308",
-    orange: "#f97316",
-    red: "#ef4444",
-    pink: "#ec4899",
-  };
-
-  return (
-    <div className="absolute bottom-4 left-4 z-10 rounded-xl border border-white/10 bg-[#0a0f1c]/90 backdrop-blur-md p-3 space-y-1.5 max-h-[80vh] overflow-y-auto">
-      <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-2">Category</p>
-      {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
-        <button
-          key={cat}
-          onClick={() => onFilter(f => f === cat ? null : cat)}
-          className={`flex items-center gap-2 text-xs w-full transition-opacity ${filter && filter !== cat ? "opacity-30" : "opacity-100"}`}
-        >
-          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-          <span className="text-slate-400">{cat}</span>
+        <button onClick={onClose} className="w-5 h-5 rounded hover:bg-white/10 text-slate-500 hover:text-white">
+          <X size={11} />
         </button>
-      ))}
-      
-      {groups && groups.length > 0 && (
-        <div className="border-t border-white/6 mt-2 pt-2 space-y-1.5">
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest">Groups</p>
-          {groups.map(group => {
-            const groupColor = GROUP_COLORS[group.color] || "#94a3b8";
-            const deviceCount = group.device_ids?.length || 0;
-            return (
-              <button
-                key={group.id}
-                onClick={() => onGroupFilter?.(g => g === group.id ? null : group.id)}
-                className={`flex items-center justify-between gap-2 text-xs w-full transition-opacity ${
-                  groupFilter && groupFilter !== group.id ? "opacity-30" : "opacity-100"
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: groupColor }} />
-                  <span className="text-slate-400">{group.name}</span>
-                </div>
-                <span className="text-[10px] text-slate-600">{deviceCount}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="border-t border-white/6 mt-2 pt-2 space-y-1.5">
-        <p className="text-[10px] text-slate-500 uppercase tracking-widest">Status</p>
-        {Object.entries(STATUS_COLORS).map(([s, color]) => (
-          <button
-            key={s}
-            onClick={() => onStatusFilter(f => f === s ? null : s)}
-            className={`flex items-center gap-2 text-xs w-full transition-opacity ${statusFilter && statusFilter !== s ? "opacity-30" : "opacity-100"}`}
-          >
-            <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: color }} />
-            <span className="text-slate-400 capitalize">{s}</span>
-          </button>
+      </div>
+      <div className="flex items-center gap-1 flex-wrap">
+        {hops.map((nodeId, i) => (
+          <div key={nodeId} className="flex items-center gap-1">
+            <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium ${
+              i === 0 || i === hops.length - 1
+                ? "border-orange-500/40 bg-orange-500/15 text-orange-300"
+                : "border-white/10 bg-white/4 text-slate-300"
+            }`}>
+              {deviceMap[nodeId]?.name || nodeId}
+            </div>
+            {i < hops.length - 1 && <ArrowRight size={10} className="text-slate-600" />}
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
-export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
+function FilterChip({ label, active, color, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+        active ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300" : "border-white/10 text-slate-400 hover:text-white"
+      }`}
+    >
+      {color && <span className="w-2 h-2 rounded-full" style={{ background: color }} />}
+      {label}
+    </button>
+  );
+}
+
+export default function NetworkMapTab({
+  topologyData,
+  refreshing = false,
+  onFullRefresh,
+  onPatchDevice,
+  onSyncFromEquipment,
+}) {
   const { canEdit } = useTopologyAdmin();
-  const containerRef = useRef();
   const location = useLocation();
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
   const [selectedNode, setSelectedNode] = useState(null);
   const [categoryFilter, setCategoryFilter] = useState(null);
   const [statusFilter, setStatusFilter] = useState(null);
   const [groupFilter, setGroupFilter] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [zoom, setZoom] = useState(1);
   const [pathMode, setPathMode] = useState(false);
   const [editingDevice, setEditingDevice] = useState(null);
   const [groups, setGroups] = useState([]);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
-  const [customPositions, setCustomPositions] = useState({});
-  const [currentLayout, setCurrentLayout] = useState(null);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [cableBanner, setCableBanner] = useState(null); // { label, from, to }
+  const [showSnmpPanel, setShowSnmpPanel] = useState(false);
+  const [cableBanner, setCableBanner] = useState(null);
+  const [pathSource, setPathSource] = useState(null);
+  const [pathTarget, setPathTarget] = useState(null);
+  const [activePath, setActivePath] = useState(null);
 
-  // Auto-highlight cable path from URL params (e.g. coming from Cable Register)
+  const deviceMap = useMemo(() => {
+    const map = {};
+    for (const d of topologyData?.devices || []) {
+      map[d.id] = d;
+    }
+    return map;
+  }, [topologyData?.devices]);
+
+  useEffect(() => {
+    if (!selectedNode?.id || !topologyData?.devices) return;
+    const updated = topologyData.devices.find((d) => d.id === selectedNode.id);
+    if (updated) {
+      setSelectedNode((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev));
+    }
+  }, [topologyData?.devices, selectedNode?.id]);
+
   useEffect(() => {
     if (!topologyData?.devices || !topologyData?.connections) return;
     const params = new URLSearchParams(location.search);
@@ -339,7 +274,6 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
 
     setCableBanner({ label: cableLabel, from: fromName, to: toName });
 
-    // Find devices by name (case-insensitive fuzzy match)
     const normalize = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     const fromDevice = topologyData.devices.find(d => normalize(d.name).includes(normalize(fromName)) || normalize(fromName).includes(normalize(d.name)));
     const toDevice = topologyData.devices.find(d => normalize(d.name).includes(normalize(toName)) || normalize(toName).includes(normalize(d.name)));
@@ -349,160 +283,82 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
       setPathSource(fromDevice);
       setPathTarget(toDevice);
       setActivePath(result);
+      setSelectedNode(fromDevice);
     }
   }, [topologyData, location.search]);
 
-  // Load groups
   useEffect(() => {
     const loadGroups = async () => {
       try {
         const response = await base44.entities.DeviceGroup.list();
         setGroups(response);
       } catch (error) {
-        console.error('Failed to load groups:', error);
+        console.error("Failed to load groups:", error);
       }
     };
     loadGroups();
   }, []);
 
-  // Load saved layout
-  useEffect(() => {
-    const loadLayout = async () => {
-      try {
-        const response = await base44.functions.invoke('loadTopologyLayout', {});
-        if (response.data.layout) {
-          setCurrentLayout(response.data.layout);
-          setCustomPositions(response.data.layout.node_positions || {});
-        }
-      } catch (error) {
-        console.error('Failed to load layout:', error);
-      }
-    };
-    loadLayout();
-  }, []);
+  const visibleConnections = useMemo(() => {
+    if (!topologyData?.connections) return [];
+    return topologyData.connections;
+  }, [topologyData?.connections]);
 
-  // Mouse wheel zoom
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    const handleWheel = (e) => {
-      e.preventDefault();
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      setZoom(z => Math.max(0.5, Math.min(2, z + delta)));
-    };
-
-    container.addEventListener("wheel", handleWheel, { passive: false });
-    return () => container.removeEventListener("wheel", handleWheel);
-  }, []);
-  const [pathSource, setPathSource] = useState(null);
-  const [pathTarget, setPathTarget] = useState(null);
-  const [activePath, setActivePath] = useState(null);
-  const dashOffsetRef = useRef(0);
-
-  const pathRef = useRef(activePath);
-  pathRef.current = activePath;
-  const pathSourceRef = useRef(pathSource);
-  pathSourceRef.current = pathSource;
-  const selectedNodeRef = useRef(selectedNode);
-  selectedNodeRef.current = selectedNode;
-
-  useEffect(() => {
-    const update = () => {
-      if (containerRef.current) {
-        setDimensions({ width: containerRef.current.offsetWidth, height: containerRef.current.offsetHeight });
-      }
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    if (containerRef.current) ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
-
-  useEffect(() => {
-    let rafId;
-    const animate = () => {
-      dashOffsetRef.current = (dashOffsetRef.current - 0.4) % 20;
-      rafId = requestAnimationFrame(animate);
-    };
-    rafId = requestAnimationFrame(animate);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
-
-  const visibleDevices = useMemo(() => {
+  const listDevices = useMemo(() => {
     if (!topologyData?.devices) return [];
     let devices = topologyData.devices;
-    if (categoryFilter) {
-      devices = devices.filter(d => d.category === categoryFilter);
-    }
-    if (statusFilter) {
-      devices = devices.filter(d => d.status === statusFilter);
-    }
+    if (categoryFilter) devices = devices.filter(d => d.category === categoryFilter);
+    if (statusFilter) devices = devices.filter(d => d.status === statusFilter);
     if (groupFilter) {
       const group = groups.find(g => g.id === groupFilter);
       if (group) {
-        const groupDeviceIds = new Set(group.device_ids || []);
-        devices = devices.filter(d => groupDeviceIds.has(d.id));
+        const ids = new Set(group.device_ids || []);
+        devices = devices.filter(d => ids.has(d.id));
       }
     }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       devices = devices.filter(d =>
-        d.name.toLowerCase().includes(q) ||
+        d.name?.toLowerCase().includes(q) ||
         d.ip?.toLowerCase().includes(q) ||
         d.model?.toLowerCase().includes(q) ||
         d.location?.toLowerCase().includes(q)
       );
     }
-    return devices;
-  }, [topologyData, categoryFilter, statusFilter, groupFilter, groups, searchQuery]);
-
-  const visibleIds = new Set(visibleDevices.map(d => d.id));
-  const visibleConnections = useMemo(() => {
-    if (!topologyData?.connections) return [];
-    return topologyData.connections.filter(c => visibleIds.has(c.source) && visibleIds.has(c.target));
-  }, [topologyData, visibleIds]);
-
-  const graphData = useMemo(() => ({
-    nodes: visibleDevices.map(d => ({
-      id: d.id,
-      name: d.name,
-      category: d.category,
-      status: d.status || "unknown",
+    return devices.map(d => ({
       ...d,
-      connections: visibleConnections.filter(c => c.source === d.id || c.target === d.id)
-        .map(c => ({ target: c.source === d.id ? c.target : c.source, port: c.source_port })),
-    })),
-    links: visibleConnections.map((c, idx) => ({ 
-      id: c.id || `link-${idx}`,
-      source: c.source, 
-      target: c.target,
-      ...c 
-    })),
-  }), [visibleDevices, visibleConnections]);
+      connections: visibleConnections
+        .filter(c => c.source === d.id || c.target === d.id)
+        .map(c => {
+          const otherId = c.source === d.id ? c.target : c.source;
+          return {
+            target: otherId,
+            targetName: deviceMap[otherId]?.name || otherId,
+            port: c.source_port,
+          };
+        }),
+    }));
+  }, [topologyData, categoryFilter, statusFilter, groupFilter, groups, searchQuery, visibleConnections, deviceMap]);
 
-
-
-  const handleNodeClick = useCallback((node) => {
+  const handleRowClick = useCallback((node) => {
     if (!pathMode) {
-      setSelectedNode(prev => prev?.id === node.id ? null : node);
+      setSelectedNode(prev => (prev?.id === node.id ? null : { ...node }));
       return;
     }
-
-    if (!pathSourceRef.current) {
+    if (!pathSource) {
       setPathSource(node);
+      setSelectedNode(node);
       return;
     }
-
-    if (pathSourceRef.current.id === node.id) {
+    if (pathSource.id === node.id) {
       setPathSource(null);
       return;
     }
-
-    const result = findPath(pathSourceRef.current.id, node.id, topologyData?.connections || []);
+    const result = findPath(pathSource.id, node.id, topologyData?.connections || []);
     setPathTarget(node);
     setActivePath(result);
-  }, [pathMode, topologyData]);
+    setSelectedNode(node);
+  }, [pathMode, pathSource, topologyData]);
 
   const clearPath = useCallback(() => {
     setPathSource(null);
@@ -514,235 +370,239 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
     setPathMode(m => {
       if (m) {
         clearPath();
-        setSelectedNode(null);
       }
       return !m;
     });
   }, [clearPath]);
 
   const handleScanDevice = useCallback(async (node) => {
-    try {
-      const response = await base44.functions.invoke('networkScan', { target: node.ip });
-      if (response.data.success) {
-        onRefresh?.();
-      }
-    } catch (error) {
-      console.error('Failed to scan device:', error);
-    }
-  }, [onRefresh]);
-
-  const handleUpdateDevice = useCallback(async (deviceData) => {
-    try {
-      const response = await base44.functions.invoke('updateDevice', {
-        deviceId: editingDevice.id,
-        deviceData,
-      });
-      if (response.data.success) {
-        toast.success("Device updated successfully");
-        onRefresh?.();
-        setEditingDevice(null);
-      }
-    } catch (error) {
-      console.error('Failed to update device:', error);
-      toast.error("Failed to update device");
-    }
-  }, [editingDevice, onRefresh]);
-
-  const handleNodeDrag = useCallback((nodeId, x, y) => {
-    setCustomPositions(prev => ({
-      ...prev,
-      [nodeId]: { x, y }
-    }));
-  }, []);
-
-  const handleConnectionCreate = useCallback(async (sourceNode, targetNode) => {
-    try {
-      toast.success(`Connection created: ${sourceNode.name} → ${targetNode.name}`);
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to create connection:', error);
-      toast.error("Failed to create connection");
-    }
-  }, [onRefresh]);
-
-  const handleSaveLayout = useCallback(async () => {
-    if (!canEdit) {
-      toast.error("Admin access required to save layouts");
+    if (!node.ip) {
+      toast.error("No IP address to scan");
       return;
     }
     try {
-      const layoutName = prompt("Enter layout name:", currentLayout?.name || "My Layout");
-      if (!layoutName) return;
-
-      const layoutData = {
-        id: currentLayout?.id,
-        name: layoutName,
-        node_positions: customPositions,
-        is_default: confirm("Set as default layout?"),
-      };
-
-      const response = await base44.functions.invoke("saveTopologyLayout", { layoutData });
-      if (response.data.success) {
-        toast.success("Layout saved successfully");
-        setCurrentLayout(response.data.layout);
+      const response = await base44.functions.invoke("networkScan", { target: node.ip });
+      if (response.data?.success) {
+        const scanned = response.data.devices?.[0];
+        if (scanned) {
+          const savedNode = await persistTopologyDeviceScan(node.id, scanned, node);
+          if (onPatchDevice) {
+            onPatchDevice(node.id, networkScanDeviceToPatch(scanned, { ...node, ...savedNode }));
+          }
+        }
+        toast.success(`Scan complete for ${node.name}`);
       }
     } catch (error) {
-      console.error("Failed to save layout:", error);
-      toast.error("Failed to save layout");
+      console.error("Failed to scan device:", error);
+      toast.error("Scan failed");
     }
-  }, [customPositions, currentLayout, canEdit]);
+  }, [onPatchDevice]);
 
-  const handleLoadLayout = useCallback(async (layout) => {
+  const handleUpdateDevice = useCallback(async (deviceData) => {
+    if (!editingDevice?.id) return;
     try {
-      setCurrentLayout(layout);
-      setCustomPositions(layout.node_positions || {});
-      toast.success(`Layout "${layout.name}" loaded`);
+      const savedNode = await persistTopologyDeviceEdit(
+        editingDevice.id,
+        deviceData,
+        editingDevice
+      );
+      if (onPatchDevice) {
+        onPatchDevice(editingDevice.id, savedNode);
+      }
+      toast.success("Device updated");
+      setEditingDevice(null);
     } catch (error) {
-      console.error('Failed to load layout:', error);
-      toast.error("Failed to load layout");
+      console.error("Failed to update device:", error);
+      toast.error(error.message || "Failed to update device");
     }
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex items-center gap-3 text-slate-400">
-          <Loader2 size={20} className="animate-spin" />
-          <p className="text-sm">Scanning network topology via SNMP...</p>
-        </div>
-      </div>
-    );
-  }
+  }, [editingDevice, onPatchDevice]);
 
   return (
-    <div ref={containerRef} className="w-full h-full relative bg-[#060912] overflow-hidden">
+    <div className="h-full flex flex-col bg-[#060912]">
       {/* Toolbar */}
-      <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-        <div className="flex items-center gap-2 bg-[#0a0f1c]/90 backdrop-blur-md border border-white/10 rounded-xl px-3 py-2">
-          <Search size={14} className="text-slate-500" />
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search devices..."
-            className="bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none w-48"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={onRefresh}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium"
-        >
-          <RefreshCw size={12} />
-          Refresh
-        </button>
-        <LayoutSelector
-          currentLayout={currentLayout}
-          onLoadLayout={handleLoadLayout}
-          onSaveLayout={canEdit ? handleSaveLayout : undefined}
-          canSave={canEdit}
-        />
-        <div className="relative">
+      <div className="flex-shrink-0 px-4 py-3 border-b border-white/10 space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 bg-[#0a0f1c] border border-white/10 rounded-xl px-3 py-2 flex-1 min-w-[200px] max-w-md">
+            <Search size={14} className="text-slate-500" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search devices..."
+              className="bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none flex-1"
+            />
+          </div>
           <button
             type="button"
-            onClick={() => setToolsOpen((o) => !o)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-slate-400 hover:text-white text-xs font-medium"
+            onClick={onFullRefresh}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c] text-slate-400 hover:text-white text-xs font-medium disabled:opacity-50"
           >
-            <Wrench size={12} />
-            Tools
+            <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
+            {refreshing ? "Scanning…" : "Refresh"}
           </button>
-          {toolsOpen && (
-            <div className="absolute top-full left-0 mt-1 min-w-[180px] rounded-xl border border-white/10 bg-[#0a0f1c] shadow-xl py-1 z-30">
-              <button
-                type="button"
-                onClick={() => { togglePathMode(); setToolsOpen(false); }}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2 ${pathMode ? "text-orange-400" : "text-slate-300"}`}
-              >
-                <GitBranch size={12} />
-                {pathMode ? "Cancel path trace" : "Trace path"}
-              </button>
-              {canEdit && (
+          <button
+            type="button"
+            onClick={() => setShowSnmpPanel(true)}
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c] text-slate-400 hover:text-white text-xs font-medium"
+          >
+            <Network size={12} />
+            SNMP Map
+          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setToolsOpen((o) => !o)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium ${
+                pathMode ? "border-orange-500/40 bg-orange-500/15 text-orange-300" : "border-white/10 bg-[#0a0f1c] text-slate-400 hover:text-white"
+              }`}
+            >
+              <Wrench size={12} />
+              Tools
+            </button>
+            {toolsOpen && (
+              <div className="absolute top-full right-0 mt-1 min-w-[200px] rounded-xl border border-white/10 bg-[#0a0f1c] shadow-xl py-1 z-30">
                 <button
                   type="button"
-                  onClick={() => { setShowImportModal(true); setToolsOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
+                  onClick={() => { togglePathMode(); setToolsOpen(false); }}
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2 text-slate-300"
                 >
-                  <Upload size={12} />
-                  Import CSV
+                  <GitBranch size={12} />
+                  {pathMode ? "Cancel path trace" : "Trace path"}
                 </button>
-              )}
-              {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => { setShowGroupManager(true); setToolsOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
-                >
-                  <Users size={12} />
-                  Manage groups
-                </button>
-              )}
-            </div>
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowImportModal(true); setToolsOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
+                  >
+                    <Upload size={12} />
+                    Import CSV
+                  </button>
+                )}
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => { setShowGroupManager(true); setToolsOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
+                  >
+                    <Users size={12} />
+                    Manage groups
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+          <span className="text-xs text-slate-500 ml-auto">
+            {listDevices.length} device{listDevices.length !== 1 ? "s" : ""}
+          </span>
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider mr-1">Category</span>
+          {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
+            <FilterChip
+              key={cat}
+              label={cat}
+              color={color}
+              active={categoryFilter === cat}
+              onClick={() => setCategoryFilter(f => (f === cat ? null : cat))}
+            />
+          ))}
+          <span className="text-[10px] text-slate-500 uppercase tracking-wider mx-2">Status</span>
+          {Object.entries(STATUS_COLORS).map(([s, color]) => (
+            <FilterChip
+              key={s}
+              label={s}
+              color={color}
+              active={statusFilter === s}
+              onClick={() => setStatusFilter(f => (f === s ? null : s))}
+            />
+          ))}
+          {groups.length > 0 && (
+            <select
+              value={groupFilter || ""}
+              onChange={(e) => setGroupFilter(e.target.value || null)}
+              className="ml-2 px-2 py-1 rounded-lg border border-white/10 bg-[#0a0f1c] text-xs text-slate-300"
+            >
+              <option value="">All groups</option>
+              {groups.map(g => (
+                <option key={g.id} value={g.id}>{g.name}</option>
+              ))}
+            </select>
           )}
         </div>
-      </div>
 
-      {/* Graph */}
-      <RadialNetworkGraph
-        graphData={graphData}
-        selectedNode={selectedNode}
-        onNodeClick={handleNodeClick}
-        onNodeDrag={handleNodeDrag}
-        pathSource={pathSource}
-        activePath={activePath}
-        dimensions={dimensions}
-        zoom={zoom}
-        customPositions={customPositions}
-      />
-
-      {showGroupManager && (
-        <GroupManager devices={topologyData?.devices || []} onGroupChange={() => {}} />
-      )}
-
-      {/* Overlays */}
-      <Legend
-        filter={categoryFilter}
-        onFilter={setCategoryFilter}
-        statusFilter={statusFilter}
-        onStatusFilter={setStatusFilter}
-      />
-      <DetailPanel 
-        node={selectedNode} 
-        onClose={() => setSelectedNode(null)} 
-        onScan={handleScanDevice}
-        onEdit={() => setEditingDevice(selectedNode)}
-      />
-      {/* Cable path banner — shown when navigated from Cable Register */}
-      {cableBanner && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
-          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-[#0a0f1c]/95 border border-cyan-500/30 backdrop-blur-xl shadow-2xl">
-            <Cable size={13} className="text-cyan-400 flex-shrink-0" />
-            <div className="text-xs">
-              <span className="text-slate-400">Showing cable path for </span>
-              <span className="text-cyan-300 font-mono font-semibold">{cableBanner.label || "cable"}</span>
+        {cableBanner && (
+          <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
+            <Cable size={13} className="text-cyan-400" />
+            <div className="text-xs flex-1 min-w-0">
+              <span className="text-slate-400">Cable path: </span>
+              <span className="text-cyan-300 font-mono">{cableBanner.label || "cable"}</span>
               {cableBanner.from && cableBanner.to && (
-                <span className="text-slate-400"> · {cableBanner.from} <span className="text-cyan-400">→</span> {cableBanner.to}</span>
+                <span className="text-slate-400"> · {cableBanner.from} → {cableBanner.to}</span>
               )}
             </div>
-            <button
-              onClick={() => {
-                setCableBanner(null);
-                clearPath();
-              }}
-              className="w-5 h-5 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-500 hover:text-white transition-colors"
-            >
-              <X size={11} />
+            <button onClick={() => { setCableBanner(null); clearPath(); }} className="text-slate-500 hover:text-white">
+              <X size={12} />
             </button>
           </div>
+        )}
+
+        {pathMode && (
+          <p className="text-xs text-orange-300 px-2">
+            {!pathSource ? "Path trace: click a device as source" : !pathTarget ? `Source: ${pathSource.name} — click target device` : `Path: ${pathSource.name} → ${pathTarget.name}`}
+          </p>
+        )}
+
+        {refreshing && (
+          <p className="text-xs text-cyan-400/80 px-2 flex items-center gap-2">
+            <Loader2 size={12} className="animate-spin" />
+            Refreshing topology scan…
+          </p>
+        )}
+      </div>
+
+      {/* Main: list + detail */}
+      <div className="flex flex-1 min-h-0">
+        <div className="flex-1 flex flex-col min-w-0">
+          <NetworkEquipmentList
+            devices={listDevices}
+            selectedNode={selectedNode}
+            pathSource={pathSource}
+            pathTarget={pathTarget}
+            pathMode={pathMode}
+            onRowClick={handleRowClick}
+            onScan={handleScanDevice}
+            onEdit={(d) => setEditingDevice(d)}
+          />
+          <PathPanel path={activePath} deviceMap={deviceMap} onClose={() => { clearPath(); setCableBanner(null); }} />
         </div>
+        {selectedNode && (
+          <DetailPanel
+            node={selectedNode}
+            onClose={() => setSelectedNode(null)}
+            onScan={handleScanDevice}
+            onEdit={() => setEditingDevice(selectedNode)}
+          />
+        )}
+      </div>
+
+      {showGroupManager && (
+        <GroupManager
+          devices={topologyData?.devices || []}
+          onGroupChange={async () => {
+            try {
+              const response = await base44.entities.DeviceGroup.list();
+              setGroups(response);
+            } catch {
+              /* ignore */
+            }
+            onSyncFromEquipment?.();
+          }}
+        />
       )}
 
-      <PathPanel path={activePath} onClose={() => { clearPath(); setCableBanner(null); }} />
-
-      {/* Device Edit Modal */}
       {editingDevice && (
         <DeviceEditModal
           device={editingDevice}
@@ -751,31 +611,49 @@ export default function NetworkMapTab({ topologyData, loading, onRefresh }) {
         />
       )}
 
-      {/* Device Import Modal */}
       <DeviceImportModal
         isOpen={showImportModal}
         onClose={() => setShowImportModal(false)}
         onImportComplete={() => {
           setShowImportModal(false);
-          onRefresh?.();
+          onSyncFromEquipment?.();
         }}
       />
 
-      {/* Path mode hint */}
-      {pathMode && !pathSource && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10">
-          <div className="px-4 py-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-300 text-xs font-medium">
-            Select the source device
+      {/* SNMP slide-over */}
+      <AnimatePresence>
+        {showSnmpPanel && (
+          <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setShowSnmpPanel(false)}>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/50"
+            />
+            <motion.div
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              className="relative w-full max-w-lg h-full bg-[#0a0f1c] border-l border-white/10 shadow-2xl flex flex-col"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                  <Network size={14} className="text-cyan-400" />
+                  SNMP Port Map
+                </h3>
+                <button onClick={() => setShowSnmpPanel(false)} className="text-slate-500 hover:text-white">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-4">
+                <SnmpPortMapPanel />
+              </div>
+            </motion.div>
           </div>
-        </div>
-      )}
-      {pathMode && pathSource && !pathTarget && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-10">
-          <div className="px-4 py-2 rounded-xl bg-orange-500/15 border border-orange-500/30 text-orange-300 text-xs font-medium">
-            Select the target device
-          </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
     </div>
   );
 }

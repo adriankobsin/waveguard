@@ -9,6 +9,12 @@ import {
   SITE_LOCATIONS_SETTINGS_KEY,
   normalizeSiteLocations,
 } from "@/lib/siteLocations";
+import {
+  loadDiscoverySettingsLocal,
+  saveDiscoverySettingsLocal,
+  DISCOVERY_SETTINGS_KEY,
+  normalizeDiscoverySettings,
+} from "@/lib/discoverySettings";
 
 export function useSettings(key, defaults, options = {}) {
   const { onSaved } = options;
@@ -23,6 +29,10 @@ export function useSettings(key, defaults, options = {}) {
     if (key === SITE_LOCATIONS_SETTINGS_KEY) {
       const local = loadSiteLocationsLocal();
       if (local) return normalizeSiteLocations({ ...defaults, ...local });
+    }
+    if (key === DISCOVERY_SETTINGS_KEY) {
+      const local = loadDiscoverySettingsLocal();
+      if (local) return normalizeDiscoverySettings({ ...defaults, ...local });
     }
     return defaults;
   });
@@ -41,15 +51,20 @@ export function useSettings(key, defaults, options = {}) {
         ? loadGeneralSettingsLocal()
         : key === SITE_LOCATIONS_SETTINGS_KEY
           ? loadSiteLocationsLocal()
-          : null;
+          : key === DISCOVERY_SETTINGS_KEY
+            ? loadDiscoverySettingsLocal()
+            : null;
 
     try {
       const records = await base44.entities.SystemSettings.filter({ key });
       if (records.length > 0 && records[0].value != null) {
         const parsed = parseSettingsValue(records[0].value);
-        merged = key === SITE_LOCATIONS_SETTINGS_KEY
-          ? normalizeSiteLocations({ ...merged, ...parsed })
-          : { ...merged, ...parsed };
+        merged =
+          key === SITE_LOCATIONS_SETTINGS_KEY
+            ? normalizeSiteLocations({ ...merged, ...parsed })
+            : key === DISCOVERY_SETTINGS_KEY
+              ? normalizeDiscoverySettings({ ...merged, ...parsed })
+              : { ...merged, ...parsed };
       }
     } catch (err) {
       console.warn(`[useSettings] API load failed for "${key}", using local defaults:`, err);
@@ -59,7 +74,9 @@ export function useSettings(key, defaults, options = {}) {
       merged =
         key === SITE_LOCATIONS_SETTINGS_KEY
           ? normalizeSiteLocations({ ...merged, ...local })
-          : { ...merged, ...local };
+          : key === DISCOVERY_SETTINGS_KEY
+            ? normalizeDiscoverySettings({ ...merged, ...local })
+            : { ...merged, ...local };
     }
 
     setValue(merged);
@@ -98,6 +115,11 @@ export function useSettings(key, defaults, options = {}) {
           saveSiteLocationsLocal(normalized);
           setValue(normalized);
         }
+        if (key === DISCOVERY_SETTINGS_KEY) {
+          const normalized = normalizeDiscoverySettings(toSave);
+          saveDiscoverySettingsLocal(normalized);
+          setValue(normalized);
+        }
 
         let apiOk = false;
         try {
@@ -110,13 +132,21 @@ export function useSettings(key, defaults, options = {}) {
           apiOk = true;
         } catch (err) {
           console.warn(`[useSettings] API save failed for "${key}":`, err);
-          if (key !== "general" && key !== SITE_LOCATIONS_SETTINGS_KEY) {
+          if (
+            key !== "general" &&
+            key !== SITE_LOCATIONS_SETTINGS_KEY &&
+            key !== DISCOVERY_SETTINGS_KEY
+          ) {
             toast.error("Could not save settings. Please try again.");
             return;
           }
         }
 
-        if (key !== "general" && key !== SITE_LOCATIONS_SETTINGS_KEY) {
+        if (
+          key !== "general" &&
+          key !== SITE_LOCATIONS_SETTINGS_KEY &&
+          key !== DISCOVERY_SETTINGS_KEY
+        ) {
           setValue(toSave);
         }
 

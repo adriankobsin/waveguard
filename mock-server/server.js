@@ -4,8 +4,18 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import {
+  scan,
+  scanTopology,
+  detectLocalSubnets,
+  getHealth,
+  buildTopologyConnections,
+  mapDevicesToTopology,
+} from "../scanner/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+/** Set WAVEGUARD_USE_MOCK_SCAN=true only for demos without LAN access. */
+const USE_MOCK_SCAN = process.env.WAVEGUARD_USE_MOCK_SCAN === "true";
 const uploadsDir = path.join(__dirname, "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
@@ -71,6 +81,22 @@ const db = {
   systemSettings: [
     { id: "setting-1", key: "snmp_community", value: "public", category: "snmp" },
     { id: "setting-2", key: "scan_interval_minutes", value: "60", category: "discovery" },
+    {
+      id: "setting-discovery",
+      key: "discovery",
+      category: "discovery",
+      value: {
+        subnets: [],
+        scanType: "ping",
+        autoDetectLocalSubnets: true,
+        snmpEnabled: true,
+        snmpCommunity: "public",
+        snmpVersion: "2c",
+        maxConcurrent: 64,
+        timeoutMs: 1500,
+        agentUrl: "",
+      },
+    },
     {
       id: "setting-site-locations",
       key: "site-locations",
@@ -336,6 +362,8 @@ function getMockDevices() {
       status,
       location: e.location,
       serial: e.serial,
+      firmware: e.firmware || "",
+      notes: e.notes || "",
       subnet: e.ip?.includes(".") ? e.ip.substring(0, e.ip.lastIndexOf(".")) + ".0/24" : "",
       openPorts: [22, 80, 443, 161, ...(e.category === "Camera" ? [554, 37777] : []), ...(e.category === "AV" ? [1702] : [])],
       responseTimeMs: Math.floor(Math.random() * 80 + 1),
@@ -348,6 +376,55 @@ function getMockDevices() {
     };
   });
   return devices;
+}
+
+function equipmentToTopologyNode(e) {
+  return {
+    id: e.id,
+    name: e.name,
+    category: e.category || "Unknown",
+    model: e.model || e.vendor || "Unknown",
+    ip: e.ip,
+    mac: e.mac || "",
+    status: e.status || "online",
+    location: e.location || "",
+    serial: e.serial || "",
+    firmware: e.firmware || "",
+    notes: e.notes || "",
+    hostname: e.name,
+    vendor: e.vendor || "",
+    openPorts: e.openPorts || [],
+  };
+}
+
+/** Merge registered monitored/inventory equipment into a topology scan result. */
+function mergeRegisteredEquipmentIntoTopology(scanResult) {
+  const registered = db.equipment.filter(
+    (e) =>
+      e.ip &&
+      (e.waveguardClassification === "monitored" || e.waveguardClassification === "inventory")
+  );
+  const byIp = new Map((scanResult.devices || []).map((d) => [d.ip, d]));
+  for (const eq of registered) {
+    const node = equipmentToTopologyNode(eq);
+    if (byIp.has(eq.ip)) {
+      byIp.set(eq.ip, { ...byIp.get(eq.ip), ...node, id: eq.id });
+    } else {
+      byIp.set(eq.ip, node);
+    }
+  }
+  const devices = [...byIp.values()];
+  return {
+    ...scanResult,
+    devices,
+    connections: buildTopologyConnections(devices),
+    stats: {
+      online: devices.filter((d) => d.status === "online").length,
+      warning: devices.filter((d) => d.status === "warning").length,
+      offline: devices.filter((d) => d.status === "offline").length,
+      active_connections: buildTopologyConnections(devices).length,
+    },
+  };
 }
 
 function getTopologyScanResult() {
@@ -475,46 +552,199 @@ app.post("/api/apps/:appId/users/invite-user", (req, res) => {
 // ============================================================
 // FUNCTIONS
 // ============================================================
-app.post("/api/apps/:appId/functions/networkScan", (req, res) => {
-  const { subnets, scanType, target } = req.body;
-  const devices = getMockDevices();
-  const scanSubnets = subnets || ["192.168.10.0/24"];
+function getDiscoverySettings() {
+  const row = db.systemSettings.find((s) => s.key === "discovery");
+  const v = row?.value && typeof row.value === "object" ? row.value : {};
+  return {
+    subnets: v.subnets || ["192.168.10.0/24"],
+    scanType: v.scanType || "ping",
+    autoDetectLocalSubnets: v.autoDetectLocalSubnets !== false,
+    snmpEnabled: v.snmpEnabled !== false,
+    snmpCommunity: v.snmpCommunity || db.systemSettings.find((s) => s.key === "snmp_community")?.value || "public",
+    snmpVersion: v.snmpVersion || "2c",
+    maxConcurrent: v.maxConcurrent || 64,
+    timeoutMs: v.timeoutMs || 1500,
+    agentUrl: v.agentUrl || "",
+  };
+}
 
-  if (target) {
-    const device = devices.find(d => d.ip === target) || {
-      id: "scan-" + Date.now(),
-      name: target,
-      ip: target,
-      status: "online",
-      category: "Network",
-      responseTimeMs: Math.floor(Math.random() * 40 + 5),
-    };
+function mergeScanOptions(body = {}) {
+  const saved = getDiscoverySettings();
+  let subnets = body.subnets?.length ? body.subnets : saved.subnets;
+  const autoDetect = body.autoDetectLocalSubnets ?? saved.autoDetectLocalSubnets;
+  if (autoDetect) {
+    const local = detectLocalSubnets();
+    if (local.length) subnets = [...new Set([...(subnets || []), ...local])];
+  }
+  if (!subnets?.length) {
+    const local = detectLocalSubnets();
+    if (local.length) subnets = local;
+  }
+  return {
+    subnets,
+    scanType: body.scanType || saved.scanType,
+    target: body.target,
+    maxConcurrent: body.maxConcurrent ?? saved.maxConcurrent,
+    timeoutMs: body.timeoutMs ?? saved.timeoutMs,
+    snmpEnabled: body.snmpEnabled ?? saved.snmpEnabled,
+    snmpCommunity: body.snmpCommunity || saved.snmpCommunity,
+    snmpVersion: body.snmpVersion || saved.snmpVersion,
+  };
+}
+
+app.get("/api/apps/:appId/scanner/health", (_req, res) => {
+  res.json(getHealth());
+});
+
+app.post("/api/apps/:appId/functions/discoverSubnets", (_req, res) => {
+  const subnets = detectLocalSubnets();
+  res.json({ success: true, subnets, scanInterface: getHealth().scanInterface });
+});
+
+app.post("/api/apps/:appId/functions/networkScan", async (req, res) => {
+  if (USE_MOCK_SCAN) {
+    const { subnets, scanType, target } = req.body;
+    const devices = getMockDevices();
+    const scanSubnets = subnets || ["192.168.10.0/24"];
+    if (target) {
+      const device = devices.find((d) => d.ip === target) || {
+        id: "scan-" + Date.now(),
+        name: target,
+        ip: target,
+        status: "online",
+        category: "Network",
+        responseTimeMs: Math.floor(Math.random() * 40 + 5),
+      };
+      return res.json({
+        success: true,
+        devices: [device],
+        target,
+        totalFound: 1,
+        scanInterface: "eth0",
+        durationMs: 200,
+        subnets: scanSubnets,
+        scanType: scanType || "ping",
+      });
+    }
     return res.json({
       success: true,
-      devices: [device],
-      target,
-      totalFound: 1,
+      devices,
+      totalFound: devices.length,
       scanInterface: "eth0",
-      durationMs: Math.floor(Math.random() * 800 + 200),
+      durationMs: 1500,
       subnets: scanSubnets,
       scanType: scanType || "ping",
     });
   }
 
-  res.json({
-    success: true,
-    devices,
-    totalFound: devices.length,
-    scanInterface: "eth0",
-    durationMs: Math.floor(Math.random() * 3000 + 1500),
-    subnets: scanSubnets,
-    scanType: scanType || "ping",
-  });
+  try {
+    const result = await scan(mergeScanOptions(req.body));
+    res.json(result);
+  } catch (err) {
+    console.error("[networkScan]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-app.post("/api/apps/:appId/functions/snmpTopologyScan", (req, res) => {
-  const result = getTopologyScanResult();
-  setTimeout(() => res.json(result), 800);
+app.post("/api/apps/:appId/functions/snmpTopologyScan", async (req, res) => {
+  if (USE_MOCK_SCAN) {
+    const result = mergeRegisteredEquipmentIntoTopology(getTopologyScanResult());
+    return setTimeout(() => res.json(result), 800);
+  }
+
+  try {
+    const result = mergeRegisteredEquipmentIntoTopology(
+      await scanTopology(mergeScanOptions(req.body))
+    );
+    res.json(result);
+  } catch (err) {
+    console.error("[snmpTopologyScan]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/registerDiscoveredDevice", (req, res) => {
+  try {
+    const { device, classification } = req.body || {};
+    if (!device?.ip) {
+      return res.status(400).json({ success: false, error: "device.ip is required" });
+    }
+    if (!classification || classification === "unclassified") {
+      return res.json({ success: true, skipped: true });
+    }
+
+    const stableId = `eq-${String(device.ip).replace(/\./g, "-")}`;
+    const name =
+      device.hostname && device.hostname !== device.ip
+        ? device.hostname
+        : `${device.vendor || "Device"} ${device.ip}`;
+
+    let record = db.equipment.find((e) => e.ip === device.ip || e.id === stableId);
+    const payload = {
+      id: stableId,
+      name,
+      model: device.model || device.vendor || "Unknown",
+      category: device.category || "Unknown",
+      ip: device.ip,
+      mac: device.mac || "",
+      location: device.location || "",
+      serial: "",
+      condition: "Good",
+      waveguardClassification: classification,
+      monitoringEnabled: classification === "monitored",
+      inventoryOnly: classification === "inventory",
+      vendor: device.vendor || "",
+      openPorts: device.openPorts || [],
+      status: "online",
+      ...enrichEquipmentMeta({
+        name,
+        model: device.model || device.vendor,
+        category: device.category || "Unknown",
+        status: "online",
+      }),
+    };
+
+    if (record) {
+      Object.assign(record, payload, { updated_date: new Date().toISOString() });
+    } else {
+      record = {
+        ...payload,
+        notes: `Discovered on ${device.subnet || "network scan"}`,
+        created_date: new Date().toISOString(),
+        updated_date: new Date().toISOString(),
+      };
+      db.equipment.push(record);
+    }
+
+    const groupsUpdated = [];
+    if (classification === "monitored" || classification === "inventory") {
+      const cat = (record.category || "").toLowerCase();
+      const loc = (record.location || "").toLowerCase();
+      for (const group of db.deviceGroups) {
+        const hay = `${group.name} ${group.description || ""} ${group.icon || ""}`.toLowerCase();
+        let hit = false;
+        if (cat === "camera" && (hay.includes("cctv") || hay.includes("camera"))) hit = true;
+        if (cat === "network" && hay.includes("network")) hit = true;
+        if (cat === "av" && hay.includes("av")) hit = true;
+        if (loc && hay.split(" ").some((w) => loc.includes(w) && w.length > 3)) hit = true;
+        if (hit) {
+          if (!group.device_ids.includes(record.id)) {
+            group.device_ids.push(record.id);
+            groupsUpdated.push(group.id);
+          }
+        }
+      }
+    } else if (classification === "ignored") {
+      for (const group of db.deviceGroups) {
+        group.device_ids = (group.device_ids || []).filter((id) => id !== record.id);
+      }
+    }
+
+    res.json({ success: true, equipment: record, groupsUpdated, classification });
+  } catch (err) {
+    console.error("[registerDiscoveredDevice]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post("/api/apps/:appId/functions/snmpPortMap", (req, res) => {
@@ -809,10 +1039,24 @@ app.post("/api/apps/:appId/functions/githubCommitVelocity", (req, res) => {
 });
 
 app.post("/api/apps/:appId/functions/updateDevice", (req, res) => {
-  const { deviceId, deviceData } = req.body;
-  const eq = db.equipment.find(e => e.id === deviceId);
-  if (eq) Object.assign(eq, deviceData);
-  res.json({ success: true, device: eq || { id: deviceId } });
+  const { deviceId, deviceData } = req.body || {};
+  let eq = db.equipment.find((e) => e.id === deviceId);
+  if (!eq && deviceData?.ip) {
+    eq = db.equipment.find((e) => e.ip === deviceData.ip);
+  }
+  if (!eq && deviceId) {
+    eq = {
+      id: deviceId,
+      created_date: new Date().toISOString(),
+      waveguardClassification: "monitored",
+      monitoringEnabled: true,
+      ...deviceData,
+    };
+    db.equipment.push(eq);
+  } else if (eq) {
+    Object.assign(eq, deviceData, { updated_date: new Date().toISOString() });
+  }
+  res.json({ success: true, device: eq || { id: deviceId, ...deviceData } });
 });
 
 // ============================================================
@@ -843,7 +1087,11 @@ const entityHandlers = {
   },
   Cable: {
     list: () => db.cables,
-    create: (data) => { const e = { id: "cable-" + Date.now(), ...data }; db.cables.push(e); return e; },
+    create: (data) => {
+      const e = { id: data.id || `cable-${Date.now()}-${db.cables.length}`, ...data };
+      db.cables.push(e);
+      return e;
+    },
     get: (id) => db.cables.find(c => c.id === id),
     update: (id, data) => { const e = db.cables.find(c => c.id === id); if (e) Object.assign(e, data); return e; },
     delete: (id) => { db.cables = db.cables.filter(c => c.id !== id); return { success: true }; },
@@ -885,11 +1133,42 @@ const entityHandlers = {
   },
   Equipment: {
     list: () => db.equipment,
+    filter: (q) => {
+      let rows = db.equipment;
+      if (q?.ip) rows = rows.filter((e) => e.ip === q.ip);
+      if (q?.id) rows = rows.filter((e) => e.id === q.id);
+      return rows;
+    },
     get: (id) => db.equipment.find(e => e.id === id),
+    create: (data) => {
+      const nameKey = (data.name || "").trim().toLowerCase();
+      const existing =
+        (data.ip ? db.equipment.find((e) => e.ip === data.ip) : null) ||
+        (nameKey ? db.equipment.find((e) => (e.name || "").trim().toLowerCase() === nameKey) : null);
+      if (existing) {
+        Object.assign(existing, data, enrichEquipmentMeta({ ...existing, ...data }));
+        existing.updated_date = new Date().toISOString();
+        return existing;
+      }
+      const e = {
+        id: data.id || `dev-${Date.now()}`,
+        ...data,
+        ...enrichEquipmentMeta(data),
+        created_date: new Date().toISOString(),
+        updated_date: new Date().toISOString(),
+      };
+      db.equipment.push(e);
+      return e;
+    },
     update: (id, data) => {
       const e = db.equipment.find(x => x.id === id);
       if (e) Object.assign(e, data, enrichEquipmentMeta({ ...e, ...data }));
+      if (e) e.updated_date = new Date().toISOString();
       return e;
+    },
+    delete: (id) => {
+      db.equipment = db.equipment.filter((e) => e.id !== id);
+      return { success: true };
     },
   },
   RackLayout: {
@@ -974,6 +1253,91 @@ app.patch("/api/apps/:appId/entities/:entityName/update-many", (req, res) => {
 // Support PUT for bulk
 app.put("/api/apps/:appId/entities/:entityName/bulk", (req, res) => {
   res.json({ modifiedCount: (req.body || []).length });
+});
+
+app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) => {
+  try {
+    const { commitVesselImport } = await import("../src/lib/spreadsheet/commitImport.js");
+    const { parseAndBuildImport } = await import("../src/lib/spreadsheet/index.js");
+    const { payload: bodyPayload, options = {}, fileBase64 } = req.body || {};
+
+    let payload = bodyPayload;
+    if (!payload && fileBase64) {
+      const buffer = Buffer.from(fileBase64, "base64");
+      const { payload: built } = parseAndBuildImport(buffer, {
+        enabledGroups: options.enabledGroups,
+        floorMap: options.floorMap,
+      });
+      payload = built;
+    }
+    if (!payload) {
+      return res.status(400).json({ success: false, error: "payload or fileBase64 required" });
+    }
+
+    if (options.replace) {
+      db.equipment = [];
+      db.cables = [];
+    }
+
+    const existingByName = new Map(
+      db.equipment.map((e) => [(e.name || "").trim().toLowerCase(), e])
+    );
+    const existingByIp = new Map(db.equipment.filter((e) => e.ip).map((e) => [e.ip, e]));
+    const existingCableLabels = new Set(db.cables.map((c) => c.label).filter(Boolean));
+
+    const deps = {
+      getExistingByName: async () => existingByName,
+      getExistingByIp: async () => existingByIp,
+      getExistingCableLabels: async () => existingCableLabels,
+      createEquipment: (data) => entityHandlers.Equipment.create(data),
+      updateEquipment: (id, data) => entityHandlers.Equipment.update(id, data),
+      createCable: (data) => entityHandlers.Cable.create(data),
+      bulkCreateCables: (rows) => rows.map((r) => entityHandlers.Cable.create(r)),
+      clearEquipment: async () => {
+        const n = db.equipment.length;
+        db.equipment = [];
+        existingByName.clear();
+        existingByIp.clear();
+        return n;
+      },
+      clearCables: async () => {
+        const n = db.cables.length;
+        db.cables = [];
+        existingCableLabels.clear();
+        return n;
+      },
+      saveSiteLocations: async (siteLocations) => {
+        const key = "site-locations";
+        const existing = db.systemSettings.find((s) => s.key === key);
+        const value = JSON.stringify(siteLocations);
+        if (existing) existing.value = value;
+        else db.systemSettings.push({ id: `setting-${Date.now()}`, key, value });
+      },
+      saveDiscoverySubnets: async (subnets) => {
+        const key = "discovery";
+        const existing = db.systemSettings.find((s) => s.key === key);
+        let parsed = { subnets: [] };
+        if (existing?.value) {
+          try {
+            parsed = JSON.parse(existing.value);
+          } catch {
+            parsed = { subnets: [] };
+          }
+        }
+        parsed.subnets = [...(parsed.subnets || []), ...subnets];
+        const value = JSON.stringify(parsed);
+        if (existing) existing.value = value;
+        else db.systemSettings.push({ id: `setting-${Date.now()}`, key, value });
+      },
+      saveRackLayout: async (layout) => entityHandlers.RackLayout.create(layout),
+    };
+
+    const result = await commitVesselImport(deps, payload, options);
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error("[importVesselSpreadsheet]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // ============================================================
@@ -1210,6 +1574,8 @@ app.listen(PORT, () => {
   console.log(`  - Functions: /api/apps/${APP_ID}/functions/*`);
   console.log(`  - Entities: /api/apps/${APP_ID}/entities/*`);
   console.log(`  - Integrations: /api/apps/${APP_ID}/integration-endpoints/Core/*`);
+  console.log(`  - Network scanner: ${USE_MOCK_SCAN ? "MOCK (demo devices only)" : "LIVE (ping/arp/full on this host)"}`);
+  console.log(`  - Scanner health: GET /api/apps/${APP_ID}/scanner/health`);
   console.log(`  - Mock devices: ${db.equipment.length} equipment items`);
   console.log(`  - Mock cables: ${db.cables.length} cables`);
   console.log(`  - Mock tasks: ${db.maintenanceTasks.length} maintenance tasks`);

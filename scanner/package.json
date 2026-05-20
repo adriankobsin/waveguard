@@ -1,0 +1,6 @@
+{
+  "name": "waveguard-scanner",
+  "private": true,
+  "type": "module",
+  "main": "index.js"
+}

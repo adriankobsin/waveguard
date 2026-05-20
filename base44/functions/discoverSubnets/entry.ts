@@ -5,16 +5,11 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
+    if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-    if (!user) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await req.json().catch(() => ({}));
     const agentUrl = await resolveAgentUrl(base44);
-    return await proxyToScanner("snmpTopologyScan", body, agentUrl);
+    return await proxyToScanner("discoverSubnets", {}, agentUrl);
   } catch (error) {
-    console.error("Error:", error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });

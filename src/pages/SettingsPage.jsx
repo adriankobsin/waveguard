@@ -20,6 +20,7 @@ import {
   BackupPanel,
 } from "@/pages/settings/SettingsPanels";
 import DecksRoomsPanel from "@/pages/settings/DecksRoomsPanel";
+import DiscoverySettingsPanel from "@/pages/settings/DiscoverySettingsPanel";
 import { base44 } from "@/api/base44Client";
 import { uploadLogoFile } from "@/lib/uploadLogo";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ import { toast } from "sonner";
 const SECTIONS = [
   { key: "general",            label: "General",             icon: Anchor,        desc: "Vessel / property profile" },
   { key: "site-locations",     label: "Decks & rooms",       icon: MapPin,        desc: "Decks and rooms for equipment placement" },
+  { key: "discovery",          label: "Network discovery",   icon: Wifi,          desc: "Scan subnets, SNMP, and agent URL" },
   { key: "appearance",         label: "Appearance",          icon: Moon,          desc: "Light/dark mode theme switcher" },
   { key: "dashboard",          label: "Dashboard widgets",   icon: LayoutDashboard, desc: "Add and arrange dashboard widgets" },
   { key: "integrations",       label: "Integrations",        icon: Puzzle,        desc: "Vendor drivers and external services" },
@@ -426,6 +428,7 @@ function RetentionPanel() {
 const PANEL_COMPONENTS = {
   general:       GeneralPanel,
   "site-locations": DecksRoomsPanel,
+  discovery:     DiscoverySettingsPanel,
   appearance:    AppearancePanel,
   dashboard:     DashboardWidgetsPanel,
   integrations:  IntegrationsPanel,

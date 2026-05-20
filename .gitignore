@@ -29,3 +29,10 @@ dist-ssr
 
 .env
 .vite
+
+# Local uploads and archives
+mock-server/uploads/
+*.zip
+
+# OS
+Thumbs.db

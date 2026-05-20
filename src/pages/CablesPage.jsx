@@ -2,8 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { motion, AnimatePresence } from "framer-motion";
-import { Cable, Plus, Search, Pencil, Trash2, X, Check, Network, ChevronDown, ChevronRight, Upload, Loader2, AlertTriangle, CheckCircle2, GitBranch, Sparkles } from "lucide-react";
+import { Cable, Plus, Search, Pencil, Trash2, X, Check, Network, ChevronDown, ChevronRight, Upload, Loader2, AlertTriangle, CheckCircle2, GitBranch, Sparkles, Filter } from "lucide-react";
 import SnmpPortMapPanel from "../components/snmp/SnmpPortMapPanel";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
+import BulkActionBar from "@/components/shared/BulkActionBar";
+import BulkEditModal from "@/components/shared/BulkEditModal";
+import { Checkbox } from "@/components/ui/checkbox";
+import { toast } from "sonner";
 
 const CABLE_TYPES = ["Cat6", "Cat6A", "Cat7", "Fibre OM3", "Fibre OM4", "HDMI 2.0", "HDMI 2.1", "SDI", "DMX", "Power IEC", "Power CEE", "Coax RG6", "USB-C", "RS232"];
 const SYSTEM_CATEGORIES = ["Network", "AV", "CCTV", "Power", "Comms", "Lighting", "Other"];
@@ -380,6 +385,11 @@ export default function CablesPage() {
   const [snmpOpen, setSnmpOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [systemFilter, setSystemFilter] = useState("All");
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const bulk = useBulkSelection();
 
   const viewOnTopology = (cable) => {
     const params = new URLSearchParams({
@@ -402,10 +412,45 @@ export default function CablesPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const filtered = cables.filter(c =>
-    !search.trim() || [c.label, c.from_equipment, c.to_equipment, c.type, c.deck, c.notes, c.system_category]
-      .filter(Boolean).some(v => v.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filtered = cables.filter(c => {
+    const matchSearch = !search.trim() || [c.label, c.from_equipment, c.to_equipment, c.type, c.deck, c.notes, c.system_category]
+      .filter(Boolean).some(v => v.toLowerCase().includes(search.toLowerCase()));
+    const matchStatus = statusFilter === "All" || c.status === statusFilter;
+    const matchSystem = systemFilter === "All" || c.system_category === systemFilter;
+    return matchSearch && matchStatus && matchSystem;
+  });
+
+  const filteredIds = filtered.map((c) => c.id);
+
+  const CABLE_BULK_FIELDS = [
+    { key: "type", label: "Cable type", type: "select", options: CABLE_TYPES },
+    { key: "system_category", label: "System category", type: "select", options: SYSTEM_CATEGORIES },
+    { key: "status", label: "Status", type: "select", options: STATUS_OPTIONS },
+    { key: "deck", label: "Deck / location", type: "text" },
+    { key: "notes", label: "Notes", type: "text" },
+  ];
+
+  const handleBulkEdit = async (patch) => {
+    const items = cables.filter((c) => bulk.selectedIds.has(c.id));
+    for (const item of items) {
+      await base44.entities.Cable.update(item.id, { ...item, ...patch });
+    }
+    bulk.clear();
+    setBulkEditOpen(false);
+    load();
+    toast.success(`Updated ${items.length} cable${items.length !== 1 ? "s" : ""}`);
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = [...bulk.selectedIds];
+    for (const id of ids) {
+      await base44.entities.Cable.delete(id);
+    }
+    bulk.clear();
+    setBulkDeleteOpen(false);
+    load();
+    toast.success(`Deleted ${ids.length} cable${ids.length !== 1 ? "s" : ""}`);
+  };
 
   const openNew = () => { setForm({ ...EMPTY_FORM }); setEditing("new"); };
   const openEdit = (c) => {
@@ -438,7 +483,7 @@ export default function CablesPage() {
         {importOpen && <ImportModal onClose={() => setImportOpen(false)} onComplete={() => { setImportOpen(false); load(); }} />}
       </AnimatePresence>
 
-      {/* Confirm delete */}
+      {/* Confirm delete (single) */}
       <AnimatePresence>
         {deleteId && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setDeleteId(null)}>
@@ -453,6 +498,28 @@ export default function CablesPage() {
           </div>
         )}
       </AnimatePresence>
+
+      {bulkDeleteOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setBulkDeleteOpen(false)}>
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-semibold text-foreground mb-1">Delete {bulk.count} cables?</p>
+            <p className="text-xs text-muted-foreground mb-4">This cannot be undone.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setBulkDeleteOpen(false)} className="flex-1 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground">Cancel</button>
+              <button onClick={handleBulkDelete} className="flex-1 py-2 rounded-lg bg-destructive text-destructive-foreground text-sm font-medium hover:opacity-90">Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <BulkEditModal
+        open={bulkEditOpen}
+        onClose={() => setBulkEditOpen(false)}
+        count={bulk.count}
+        fields={CABLE_BULK_FIELDS}
+        onApply={handleBulkEdit}
+        title="Bulk edit cables"
+      />
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -473,16 +540,38 @@ export default function CablesPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5 max-w-md">
-        <Search size={14} className="text-muted-foreground flex-shrink-0" />
-        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search cables…" className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
-        {search && <button onClick={() => setSearch("")}><X size={12} className="text-muted-foreground" /></button>}
+      {/* Search + filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5 flex-1 max-w-md">
+          <Search size={14} className="text-muted-foreground flex-shrink-0" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search cables…" className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none" />
+          {search && <button onClick={() => setSearch("")}><X size={12} className="text-muted-foreground" /></button>}
+        </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          <Filter size={13} className="text-muted-foreground mr-1" />
+          <span className="text-[10px] text-muted-foreground uppercase mr-1">Status</span>
+          {["All", ...STATUS_OPTIONS].map(s => (
+            <button key={s} onClick={() => setStatusFilter(s)} className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${statusFilter === s ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>{s}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-[10px] text-muted-foreground uppercase mr-1">System</span>
+          {["All", ...SYSTEM_CATEGORIES].map(s => (
+            <button key={s} onClick={() => setSystemFilter(s)} className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${systemFilter === s ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>{s}</button>
+          ))}
+        </div>
       </div>
+
+      <BulkActionBar
+        count={bulk.count}
+        onEdit={() => setBulkEditOpen(true)}
+        onDelete={() => setBulkDeleteOpen(true)}
+        onClear={bulk.clear}
+      />
 
       {/* Form */}
       <AnimatePresence>
-        {editing && (
+        {editing && !bulk.count && (
           <CableFormPanel form={form} setForm={setForm} onSave={save} onCancel={cancel} isEditing={editing !== "new"} />
         )}
       </AnimatePresence>
@@ -492,7 +581,8 @@ export default function CablesPage() {
         {loading && <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground"><Loader2 size={14} className="animate-spin" /> Loading…</div>}
         {!loading && (
           <>
-            <div className="hidden md:grid grid-cols-[80px_1fr_1fr_90px_100px_80px_80px_80px_100px] text-xs text-muted-foreground uppercase tracking-wide px-4 py-2.5 border-b border-border/50">
+            <div className="hidden md:grid grid-cols-[32px_80px_1fr_1fr_90px_100px_80px_80px_80px_100px] text-xs text-muted-foreground uppercase tracking-wide px-4 py-2.5 border-b border-border/50 items-center">
+              <Checkbox checked={bulk.allSelected(filteredIds)} onCheckedChange={() => bulk.toggleAll(filteredIds)} aria-label="Select all" />
               <span>Label</span><span>From</span><span>To</span><span>Type</span><span>System</span><span>Length</span><span>Deck</span><span>Status</span><span />
             </div>
             <div className="divide-y divide-border/50">
@@ -503,8 +593,9 @@ export default function CablesPage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: i * 0.02 }}
-                  className="grid grid-cols-1 md:grid-cols-[80px_1fr_1fr_90px_100px_80px_80px_80px_100px] items-center gap-2 px-4 py-3 hover:bg-secondary/30 transition-colors"
+                  className={`grid grid-cols-1 md:grid-cols-[32px_80px_1fr_1fr_90px_100px_80px_80px_80px_100px] items-center gap-2 px-4 py-3 hover:bg-secondary/30 transition-colors ${bulk.isSelected(c.id) ? "bg-primary/5" : ""}`}
                 >
+                  <Checkbox checked={bulk.isSelected(c.id)} onCheckedChange={() => bulk.toggle(c.id)} />
                   <span className="font-mono text-xs text-cyan-400 font-semibold">{c.label}</span>
                   <span className="text-sm text-foreground truncate">{c.from_equipment || "—"}</span>
                   <span className="text-sm text-foreground truncate">{c.to_equipment || "—"}</span>
