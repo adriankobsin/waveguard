@@ -13,11 +13,30 @@ export const DEFAULT_DISCOVERY_SETTINGS = {
   agentUrl: "",
 };
 
+/** Coerce subnet list entries to CIDR strings (spreadsheet import may store { cidr, label }). */
+export function normalizeSubnetEntry(entry) {
+  if (entry == null) return null;
+  if (typeof entry === "string") {
+    const s = entry.trim();
+    return s || null;
+  }
+  if (typeof entry === "object" && entry.cidr) {
+    const s = String(entry.cidr).trim();
+    return s || null;
+  }
+  return null;
+}
+
+export function normalizeSubnetList(subnets) {
+  if (!Array.isArray(subnets)) return [];
+  return [...new Set(subnets.map(normalizeSubnetEntry).filter(Boolean))];
+}
+
 export function normalizeDiscoverySettings(raw) {
   const base = { ...DEFAULT_DISCOVERY_SETTINGS, ...raw };
   return {
     ...base,
-    subnets: Array.isArray(base.subnets) ? base.subnets.filter(Boolean) : DEFAULT_DISCOVERY_SETTINGS.subnets,
+    subnets: normalizeSubnetList(base.subnets),
     scanType: ["ping", "arp", "full"].includes(base.scanType) ? base.scanType : "ping",
     maxConcurrent: Math.min(128, Math.max(8, Number(base.maxConcurrent) || 64)),
     timeoutMs: Math.min(5000, Math.max(500, Number(base.timeoutMs) || 1500)),

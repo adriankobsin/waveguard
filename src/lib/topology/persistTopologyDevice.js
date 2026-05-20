@@ -19,6 +19,7 @@ function editFormToEquipmentRecord(deviceId, formData, existingNode, existingEq)
     name: formData.name,
     ip,
     mac: formData.mac,
+    make: formData.make,
     model: formData.model,
     firmware: formData.firmware,
     location: formData.location,
@@ -27,7 +28,6 @@ function editFormToEquipmentRecord(deviceId, formData, existingNode, existingEq)
     status: formData.status,
     notes: formData.notes,
     controlType: formData.controlType,
-    avRole: formData.avRole,
     waveguardClassification:
       existingEq?.waveguardClassification ||
       (existingNode?.inventoryOnly ? "inventory" : "monitored"),

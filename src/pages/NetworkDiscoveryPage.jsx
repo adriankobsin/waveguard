@@ -2,7 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Radar, Play, Settings, Loader2, AlertTriangle, Search, Download } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
-import { DEFAULT_DISCOVERY_SETTINGS, saveDiscoverySettingsLocal } from "@/lib/discoverySettings";
+import {
+  DEFAULT_DISCOVERY_SETTINGS,
+  saveDiscoverySettingsLocal,
+  normalizeSubnetList,
+} from "@/lib/discoverySettings";
 import { discoverSubnets, networkScan, checkScannerHealth } from "@/lib/discoveryApi";
 import { registerDiscoveredDevice, registerDiscoveredDevices } from "@/lib/discoveryRegistration";
 import { toast } from "sonner";
@@ -31,7 +35,7 @@ export default function NetworkDiscoveryPage() {
 
   useEffect(() => {
     if (!settingsLoading && discoveryCfg) {
-      setSubnets(discoveryCfg.subnets?.length ? discoveryCfg.subnets : []);
+      setSubnets(normalizeSubnetList(discoveryCfg.subnets));
       setScanType(discoveryCfg.scanType || "ping");
     }
   }, [settingsLoading, discoveryCfg]);
@@ -46,7 +50,7 @@ export default function NetworkDiscoveryPage() {
   }, [discoveryCfg?.agentUrl]);
 
   const runScan = async () => {
-    let scanSubnets = subnets.filter(Boolean);
+    let scanSubnets = normalizeSubnetList(subnets);
     if (scanSubnets.length === 0) {
       try {
         const detected = await discoverSubnets(discoveryCfg?.agentUrl);
@@ -110,7 +114,7 @@ export default function NetworkDiscoveryPage() {
     const data = await discoverSubnets(discoveryCfg?.agentUrl);
     const list = data?.subnets || [];
     if (list.length) {
-      setSubnets((prev) => [...new Set([...prev, ...list])]);
+      setSubnets((prev) => [...new Set([...normalizeSubnetList(prev), ...normalizeSubnetList(list)])]);
     }
     if (data?.scanInterface) {
       setScannerHealth((h) => ({ ...h, ok: true, scanInterface: data.scanInterface, localSubnets: list }));

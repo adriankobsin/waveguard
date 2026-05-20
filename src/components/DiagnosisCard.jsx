@@ -2,8 +2,10 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle, Info, ChevronDown, ChevronUp, FileText,
-  CheckCircle2, X, Play, ShieldAlert
+  CheckCircle2, X, Play, ShieldAlert, Loader2
 } from "lucide-react";
+import { base44 } from "@/api/base44Client";
+import { toast } from "sonner";
 
 const SEVERITY_CONFIG = {
   critical: { label: "CRITICAL", bg: "bg-red-500/15 border-red-500/30", badge: "bg-red-500/20 text-red-400", icon: ShieldAlert, iconColor: "text-red-400" },
@@ -35,9 +37,31 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onApprove, expande
   const handleExecute = async () => {
     setConfirmOpen(false);
     setExecuting(true);
-    await new Promise(r => setTimeout(r, 1800));
-    setExecuting(false);
-    setExecuted(true);
+    try {
+      if (diagnosis.equipmentIp) {
+        const res = await base44.functions.invoke("networkScan", {
+          target: diagnosis.equipmentIp,
+        });
+        if (res.data?.success) {
+          toast.success(`Scan completed for ${diagnosis.equipmentName}`);
+        } else {
+          toast.error("Scan did not return results");
+        }
+      } else {
+        await base44.entities.ActionLog.create({
+          action: "diagnosis_action",
+          details: `${diagnosis.suggestedAction} on ${diagnosis.equipmentName}`,
+          status: "success",
+        });
+        toast.success("Action logged");
+      }
+      setExecuted(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Action failed");
+    } finally {
+      setExecuting(false);
+    }
   };
 
   return (

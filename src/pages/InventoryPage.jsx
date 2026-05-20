@@ -1,13 +1,19 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Package, Plus, Search, X, Filter, Pencil, Trash2,
+  Package, Plus, Search, X, Pencil, Trash2,
   Wifi, Camera, Monitor, Zap, Server, HardDrive, Check,
-  LayoutGrid, List, Download, FileSpreadsheet
+  LayoutGrid, List, Download, FileSpreadsheet, Lightbulb,
 } from "lucide-react";
 import InventoryExportModal from "../components/inventory/InventoryExportModal";
 import VesselSpreadsheetImportModal from "../components/inventory/VesselSpreadsheetImportModal";
+import InventoryFilters from "../components/inventory/InventoryFilters";
+import {
+  EMPTY_INVENTORY_FILTERS,
+  buildInventoryFilterOptions,
+  applyInventoryFilters,
+} from "@/lib/inventory/inventoryFilters";
 import { listEquipment, upsertEquipment, updateEquipment, deleteEquipment } from "@/api/equipmentApi";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
 import { toast } from "sonner";
@@ -15,8 +21,9 @@ import { useBulkSelection } from "@/hooks/useBulkSelection";
 import BulkActionBar from "@/components/shared/BulkActionBar";
 import BulkEditModal from "@/components/shared/BulkEditModal";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DEVICE_CATEGORIES } from "@/lib/equipment/deviceFormConstants";
 
-const CATEGORIES = ["All", "Network", "Camera", "AV", "Power", "Control", "Other"];
+const CATEGORIES = DEVICE_CATEGORIES;
 const CONDITIONS = ["Excellent", "Good", "Fair", "Poor", "Decommissioned"];
 
 const TYPE_ICONS = {
@@ -25,10 +32,23 @@ const TYPE_ICONS = {
   AV: { icon: Monitor, color: "text-blue-400", bg: "bg-blue-500/10" },
   Power: { icon: Zap, color: "text-yellow-400", bg: "bg-yellow-500/10" },
   Control: { icon: Server, color: "text-green-400", bg: "bg-green-500/10" },
+  Server: { icon: Server, color: "text-slate-300", bg: "bg-slate-500/10" },
+  Lighting: { icon: Lightbulb, color: "text-amber-400", bg: "bg-amber-500/10" },
   Other: { icon: HardDrive, color: "text-muted-foreground", bg: "bg-secondary" },
 };
 
-const EMPTY = { name: "", model: "", category: "Network", ip: "", condition: "Good", location: "", serial: "", notes: "" };
+const EMPTY = {
+  name: "",
+  make: "",
+  model: "",
+  category: "Network",
+  ip: "",
+  mac: "",
+  condition: "Good",
+  location: "",
+  serial: "",
+  notes: "",
+};
 
 function isInventoryItem(e) {
   return e.waveguardClassification === "inventory" || e.inventoryOnly === true;
@@ -54,7 +74,11 @@ const CONDITION_COLORS = {
 export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
+  const [filters, setFilters] = useState(() => ({ ...EMPTY_INVENTORY_FILTERS }));
+
+  const applyFilterPatch = useCallback((patch) => {
+    setFilters((prev) => ({ ...EMPTY_INVENTORY_FILTERS, ...prev, ...patch }));
+  }, []);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [viewMode, setViewMode] = useState("grid");
@@ -80,13 +104,15 @@ export default function InventoryPage() {
     return () => window.removeEventListener(EQUIPMENT_CHANGED_EVENT, refresh);
   }, [queryClient]);
 
-  const filtered = equipment.filter(e => {
-    const matchCat = category === "All" || e.category === category;
-    const matchSearch = !search || [e.name, e.model, e.ip, e.location, e.serial].some(v =>
-      v?.toLowerCase().includes(search.toLowerCase())
-    );
-    return matchCat && matchSearch;
-  });
+  const filterOptions = useMemo(
+    () => buildInventoryFilterOptions(equipment),
+    [equipment]
+  );
+
+  const filtered = useMemo(
+    () => applyInventoryFilters(equipment, filters, search),
+    [equipment, filters, search]
+  );
 
   const openNew = () => { setForm(EMPTY); setEditing("new"); };
   const openEdit = (e) => { setForm({ ...e }); setEditing(e.id); };
@@ -154,7 +180,12 @@ export default function InventoryPage() {
   };
 
   const INVENTORY_BULK_FIELDS = [
-    { key: "category", label: "Category", type: "select", options: CATEGORIES.filter((c) => c !== "All") },
+    {
+      key: "category",
+      label: "Category",
+      type: "select",
+      options: [...new Set([...CATEGORIES, ...filterOptions.categories])],
+    },
     { key: "condition", label: "Condition", type: "select", options: CONDITIONS },
     { key: "location", label: "Location", type: "text", placeholder: "e.g. Main Deck · Room 344" },
     { key: "notes", label: "Notes", type: "text" },
@@ -195,40 +226,49 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5 flex-1 max-w-sm">
-          <Search size={14} className="text-muted-foreground flex-shrink-0" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search equipment…"
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-          />
-          {search && <button onClick={() => setSearch("")}><X size={12} className="text-muted-foreground" /></button>}
-        </div>
-        <div className="flex items-center gap-1 flex-wrap flex-1">
-          <Filter size={13} className="text-muted-foreground mr-1" />
-          {CATEGORIES.map(cat => (
+      {/* Search + filters */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5 flex-1 max-w-lg">
+            <Search size={14} className="text-muted-foreground flex-shrink-0" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, IP, model, location, system…"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch("")}>
+                <X size={12} className="text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 self-start">
             <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                category === cat ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"
-              }`}
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {cat}
+              <LayoutGrid size={14} />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded transition-colors ${viewMode === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <List size={14} />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
-          <button onClick={() => setViewMode("grid")} className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-            <LayoutGrid size={14} />
-          </button>
-          <button onClick={() => setViewMode("list")} className={`p-1.5 rounded transition-colors ${viewMode === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-            <List size={14} />
-          </button>
-        </div>
+
+        <InventoryFilters
+          filters={filters}
+          onChange={applyFilterPatch}
+          options={filterOptions}
+          disabled={isLoading}
+          resultCount={filtered.length}
+          totalCount={equipment.length}
+        />
       </div>
 
       <BulkActionBar
@@ -277,8 +317,10 @@ export default function InventoryPage() {
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
               {[
                 { key: "name", placeholder: "Name (e.g. SW-Bridge)" },
-                { key: "model", placeholder: "Model / Make" },
+                { key: "make", placeholder: "Make (e.g. Cisco)" },
+                { key: "model", placeholder: "Model (e.g. CBS350)" },
                 { key: "ip", placeholder: "IP Address" },
+                { key: "mac", placeholder: "MAC Address" },
                 { key: "location", placeholder: "Location" },
                 { key: "serial", placeholder: "Serial Number" },
               ].map(f => (
@@ -292,7 +334,9 @@ export default function InventoryPage() {
               ))}
               <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
                 className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
-                {CATEGORIES.filter(c => c !== "All").map(c => <option key={c}>{c}</option>)}
+                {[...new Set([...CATEGORIES, ...filterOptions.categories])].map((c) => (
+                  <option key={c}>{c}</option>
+                ))}
               </select>
               <select value={form.condition} onChange={e => setForm(p => ({ ...p, condition: e.target.value }))}
                 className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
@@ -350,6 +394,9 @@ export default function InventoryPage() {
                   <div className="mt-2 space-y-1">
                     {eq.ip && <p className="text-xs text-muted-foreground font-mono">{eq.ip}</p>}
                     {eq.location && <p className="text-xs text-muted-foreground">{eq.location}</p>}
+                    {eq.systemCategory && (
+                      <p className="text-xs text-cyan-400/80 font-mono uppercase">{eq.systemCategory}</p>
+                    )}
                     {eq.notes && <p className="text-xs text-muted-foreground/70 truncate">{eq.notes}</p>}
                   </div>
                   <div className="flex gap-1 mt-3">
@@ -405,6 +452,9 @@ export default function InventoryPage() {
                 <div className="hidden sm:block min-w-0">
                   {eq.ip && <p className="text-xs font-mono text-muted-foreground">{eq.ip}</p>}
                   {eq.location && <p className="text-xs text-muted-foreground truncate">{eq.location}</p>}
+                  {eq.systemCategory && (
+                    <p className="text-[10px] text-cyan-400/70 font-mono uppercase">{eq.systemCategory}</p>
+                  )}
                 </div>
                 <div className="hidden md:block min-w-0">
                   <p className="text-xs font-mono text-muted-foreground truncate">{eq.serial || "—"}</p>
@@ -431,7 +481,6 @@ export default function InventoryPage() {
           No equipment found.
         </div>
       )}
-      <p className="text-xs text-muted-foreground">{equipment.length} items · {filtered.length} shown</p>
 
       {showExport && (
         <InventoryExportModal equipment={equipment} onClose={() => setShowExport(false)} />
