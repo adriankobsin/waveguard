@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Key, BookOpen,
+  CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, Key, BookOpen,
   HardDrive, Download, RotateCcw, Trash2, LayoutDashboard, ExternalLink,
 } from "lucide-react";
 import { Link } from "react-router-dom";

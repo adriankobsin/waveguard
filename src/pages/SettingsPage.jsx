@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Settings, Mail, Brain, Database, Bell,
   ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Upload, ImageIcon,
-  Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi, MapPin,
+  Anchor, LayoutDashboard, Puzzle, BookOpen, Users, HardDrive, Wifi, MapPin,
   Moon, Sun, Save
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
@@ -21,7 +21,6 @@ import {
 } from "@/pages/settings/SettingsPanels";
 import DecksRoomsPanel from "@/pages/settings/DecksRoomsPanel";
 import DiscoverySettingsPanel from "@/pages/settings/DiscoverySettingsPanel";
-import { base44 } from "@/api/base44Client";
 import { uploadLogoFile } from "@/lib/uploadLogo";
 import { toast } from "sonner";
 

@@ -1,11 +1,11 @@
 import {
-  Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
-  WifiOff, Activity, Globe, BarChart3, Server, Clock, Bot,
-  Sliders, Lightbulb, Radio
+  Wifi, Camera, Monitor, Zap, AlertTriangle,
+  WifiOff, Globe, BarChart3, Clock, Bot,
+  Sliders, Lightbulb
 } from "lucide-react";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
 } from "recharts";
 import StatusPulse from "../../StatusPulse";
 
