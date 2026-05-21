@@ -122,6 +122,11 @@ export default function DiscoverySubnetConfig({
             </label>
           ))}
         </div>
+        {scanType === "full" && (
+          <p className="text-[10px] text-cyan-500/80 mt-3">
+            Full scan probes common TCP ports and resolves hostnames — slower than ping-only. Click Run Scan to start.
+          </p>
+        )}
       </div>
     </div>
   );

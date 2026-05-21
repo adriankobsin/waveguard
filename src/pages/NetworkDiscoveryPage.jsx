@@ -85,14 +85,19 @@ export default function NetworkDiscoveryPage() {
     }, 400);
 
     try {
+      const isFullScan = scanType === "full";
       const data = await networkScan({
         subnets: scanSubnets,
         scanType,
         snmpEnabled: discoveryCfg.snmpEnabled,
         snmpCommunity: discoveryCfg.snmpCommunity,
         snmpVersion: discoveryCfg.snmpVersion,
-        maxConcurrent: discoveryCfg.maxConcurrent,
-        timeoutMs: discoveryCfg.timeoutMs,
+        maxConcurrent: isFullScan
+          ? Math.min(32, discoveryCfg.maxConcurrent || 64)
+          : discoveryCfg.maxConcurrent,
+        timeoutMs: isFullScan
+          ? Math.max(2000, discoveryCfg.timeoutMs || 1500)
+          : discoveryCfg.timeoutMs,
         autoDetectLocalSubnets: discoveryCfg.autoDetectLocalSubnets,
       }, discoveryCfg?.agentUrl);
       clearInterval(progressInterval);
@@ -277,7 +282,10 @@ export default function NetworkDiscoveryPage() {
               subnets={subnets}
               onSubnetsChange={setSubnets}
               scanType={scanType}
-              onScanTypeChange={setScanType}
+              onScanTypeChange={(t) => {
+                setScanType(t);
+                setError(null);
+              }}
               onDetectSubnets={handleDetectSubnets}
             />
           </motion.div>

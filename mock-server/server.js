@@ -624,29 +624,62 @@ app.post("/api/apps/:appId/functions/discoverSubnets", (_req, res) => {
   res.json({ success: true, subnets, scanInterface: getHealth().scanInterface });
 });
 
+function mapMockDiscoveryDevices(rawDevices, scanType, scanSubnets) {
+  const subnet = scanSubnets?.[0] || "192.168.10.0/24";
+  return rawDevices.map((d, idx) => ({
+    id: d.id || `disc-${String(d.ip || idx).replace(/\./g, "-")}`,
+    ip: d.ip,
+    hostname: d.hostname || d.name || d.ip,
+    mac: d.mac || "",
+    vendor: d.vendor || (d.model ? String(d.model).split(" ")[0] : ""),
+    model: d.model || "",
+    category: d.category || "Unknown",
+    openPorts:
+      d.openPorts ||
+      (scanType === "full" ? [22, 80, 443, 161] : scanType === "arp" ? [80] : []),
+    responseTimeMs: d.responseTimeMs ?? Math.floor(Math.random() * 40 + 5),
+    status: "discovered",
+    classification: "unclassified",
+    firstSeen: d.firstSeen || new Date().toISOString(),
+    subnet: d.subnet || subnet,
+  }));
+}
+
 app.post("/api/apps/:appId/functions/networkScan", async (req, res) => {
   if (USE_MOCK_SCAN) {
     const { subnets, scanType, target } = req.body;
-    const devices = getMockDevices();
     const scanSubnets = subnets || ["192.168.10.0/24"];
+    const mode = scanType || "ping";
+    const raw = getMockDevices();
+    const devices = mapMockDiscoveryDevices(raw, mode, scanSubnets);
     if (target) {
-      const device = devices.find((d) => d.ip === target) || {
-        id: "scan-" + Date.now(),
-        name: target,
-        ip: target,
-        status: "online",
-        category: "Network",
-        responseTimeMs: Math.floor(Math.random() * 40 + 5),
-      };
+      const device =
+        devices.find((d) => d.ip === target) ||
+        mapMockDiscoveryDevices(
+          [
+            {
+              id: "scan-" + Date.now(),
+              name: target,
+              ip: target,
+              hostname: target,
+              category: "Network",
+              openPorts: mode === "full" ? [22, 80, 443] : [],
+              responseTimeMs: Math.floor(Math.random() * 40 + 5),
+            },
+          ],
+          mode,
+          scanSubnets
+        )[0];
       return res.json({
         success: true,
         devices: [device],
         target,
         totalFound: 1,
         scanInterface: "eth0",
-        durationMs: 200,
+        durationMs: mode === "full" ? 1200 : 200,
         subnets: scanSubnets,
-        scanType: scanType || "ping",
+        scanType: mode,
+        scannedAt: new Date().toISOString(),
       });
     }
     return res.json({
@@ -654,9 +687,10 @@ app.post("/api/apps/:appId/functions/networkScan", async (req, res) => {
       devices,
       totalFound: devices.length,
       scanInterface: "eth0",
-      durationMs: 1500,
+      durationMs: mode === "full" ? 2500 : 1500,
       subnets: scanSubnets,
-      scanType: scanType || "ping",
+      scanType: mode,
+      scannedAt: new Date().toISOString(),
     });
   }
 

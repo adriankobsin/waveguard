@@ -21,10 +21,11 @@ export function probeTcpPort(ip, port, timeoutMs = 800) {
   });
 }
 
-export async function probePorts(ip, ports, timeoutMs = 800) {
+export async function probePorts(ip, ports = COMMON_PORTS, timeoutMs = 800) {
+  const list = Array.isArray(ports) && ports.length ? ports : COMMON_PORTS;
   const open = [];
   await Promise.all(
-    ports.map(async (port) => {
+    list.map(async (port) => {
       if (await probeTcpPort(ip, port, timeoutMs)) open.push(port);
     })
   );

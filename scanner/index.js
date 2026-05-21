@@ -1,6 +1,6 @@
 import { expandCidr, detectLocalSubnets, getScanInterfaceLabel, isValidCidr, normalizeCidr } from "./subnets.js";
 import { pingHost } from "./ping.js";
-import { probePorts, reverseHostname } from "./ports.js";
+import { probePorts, reverseHostname, COMMON_PORTS } from "./ports.js";
 import { readArpTable } from "./arp.js";
 import { snmpProbe } from "./snmp.js";
 import { pollSwitchPorts, testSwitchInterface, buildPollAllResponse, isSnmpWalkAvailable } from "./snmpPortMap.js";
@@ -52,7 +52,7 @@ async function probeHost(ip, subnet, scanType, opts, arpMap) {
       alive = true;
       responseTimeMs = ping.ms;
     }
-    openPorts = await probePorts(ip, undefined, Math.min(timeoutMs, 800));
+    openPorts = await probePorts(ip, COMMON_PORTS, Math.min(timeoutMs, 800));
     if (!alive && openPorts.length > 0) alive = true;
     if (alive) {
       hostname = await reverseHostname(ip);
