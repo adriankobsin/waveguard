@@ -9,7 +9,6 @@ import {
   Download,
   LayoutDashboard,
   Server,
-  Cable,
   Bell,
   SlidersHorizontal,
 } from "lucide-react";
@@ -42,8 +41,8 @@ import {
   downloadCsv,
 } from "@/lib/snmp/snmpAnalytics";
 import SnmpFleetOverview from "@/components/snmp/SnmpFleetOverview";
-import SnmpSwitchWorkspace from "@/components/snmp/SnmpSwitchWorkspace";
 import SnmpPortMapPanel from "@/components/snmp/SnmpPortMapPanel";
+import SnmpSwitchWorkspace from "@/components/snmp/SnmpSwitchWorkspace";
 import SnmpAlertsPanel from "@/components/snmp/SnmpAlertsPanel";
 import SnmpPlatformSettings from "@/components/snmp/SnmpPlatformSettings";
 import SnmpAddSwitchModal from "@/components/snmp/SnmpAddSwitchModal";
@@ -71,22 +70,8 @@ export default function SnmpPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editProfile, setEditProfile] = useState(null);
   const [globalDraft, setGlobalDraft] = useState(DEFAULT_SNMP_GLOBAL);
-  const [connectionsPollMeta, setConnectionsPollMeta] = useState(null);
   const pollInFlight = useRef(false);
   const profileCountRef = useRef(0);
-
-  const syncConnectionsPollMeta = useCallback((profiles, patch = {}) => {
-    const latestPoll = (profiles || []).reduce((best, p) => {
-      if (!p.lastPollAt) return best;
-      return !best || p.lastPollAt > best ? p.lastPollAt : best;
-    }, null);
-    if (!latestPoll) return;
-    setConnectionsPollMeta((m) => {
-      const polledAt = patch.polledAt || latestPoll;
-      if (m?.polledAt && polledAt <= m.polledAt && !patch.error) return { ...m, ...patch };
-      return { polledAt, error: null, ...m, ...patch };
-    });
-  }, []);
 
   const discovery = useMemo(
     () => loadDiscoverySettingsLocal() || DEFAULT_DISCOVERY_SETTINGS,
@@ -107,13 +92,12 @@ export default function SnmpPage() {
       setPortView(swState.global?.defaultPortView || "panel");
       setEquipment(eq);
       setSelectedId((id) => id || swState.profiles?.[0]?.id || null);
-      syncConnectionsPollMeta(swState.profiles);
     } catch (err) {
       toast.error(err.message || "Failed to load switch management");
     } finally {
       if (showFullPageLoader) setLoading(false);
     }
-  }, [syncConnectionsPollMeta]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -136,6 +120,14 @@ export default function SnmpPage() {
     () => computeFleetSummary(enriched, state.global),
     [enriched, state.global]
   );
+
+  const overviewPollMeta = useMemo(() => {
+    const latestPoll = (state.profiles || []).reduce((best, p) => {
+      if (!p.lastPollAt) return best;
+      return !best || p.lastPollAt > best ? p.lastPollAt : best;
+    }, null);
+    return latestPoll ? { polledAt: latestPoll, error: null } : null;
+  }, [state.profiles]);
 
   const selected = enriched.find((s) => s.id === selectedId) || enriched[0];
   const existingIds = new Set(state.profiles.map((p) => p.equipmentId));
@@ -202,11 +194,6 @@ export default function SnmpPage() {
         } else {
           await load();
         }
-        syncConnectionsPollMeta(res.profiles || state.profiles, {
-          polledAt: res.polledAt || new Date().toISOString(),
-          snmpWalkAvailable: res.snmpWalkAvailable,
-          error: null,
-        });
         if (!silent) {
           toast.success(`Fleet poll complete — ${res.switches?.length ?? state.profiles.length} switch(es)`);
         }
@@ -221,10 +208,8 @@ export default function SnmpPage() {
         pollInFlight.current = false;
       }
     },
-    [load, state.profiles, syncConnectionsPollMeta]
+    [load, state.profiles]
   );
-
-  const runConnectionsPoll = () => runPollAll(false);
 
   useEffect(() => {
     if (!state.global?.autoPollEnabled || !state.profiles.length) return;
@@ -413,9 +398,6 @@ export default function SnmpPage() {
             <TabsTrigger value="switches" className="gap-1.5">
               <Server size={14} /> Switches
             </TabsTrigger>
-            <TabsTrigger value="connections" className="gap-1.5">
-              <Cable size={14} /> Connections
-            </TabsTrigger>
             <TabsTrigger value="alerts" className="gap-1.5 relative">
               <Bell size={14} /> Alerts
               {summary.cableFaults > 0 && (
@@ -429,11 +411,19 @@ export default function SnmpPage() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="overview" className="mt-0">
+          <TabsContent value="overview" className="mt-0 space-y-8">
             <SnmpFleetOverview
               summary={summary}
               enriched={enriched}
               onSelectSwitch={(id) => goToSwitch(id)}
+            />
+            <SnmpPortMapPanel
+              enriched={enriched}
+              onPoll={() => runPollAll(false)}
+              polling={polling}
+              pollMeta={overviewPollMeta}
+              discoverySnmpEnabled={discovery.snmpEnabled}
+              onPortClick={(switchId, port) => goToSwitch(switchId, port.port)}
             />
           </TabsContent>
 
@@ -479,6 +469,7 @@ export default function SnmpPage() {
               </aside>
               <SnmpSwitchWorkspace
                 sw={selected}
+                equipment={equipment}
                 portView={portView}
                 onPortViewChange={setPortView}
                 showInactivePorts={state.global?.showInactivePorts !== false}
@@ -491,16 +482,6 @@ export default function SnmpPage() {
                 onEditSettings={() => setEditProfile(selected)}
               />
             </div>
-          </TabsContent>
-
-          <TabsContent value="connections" className="mt-0" forceMount>
-            <SnmpPortMapPanel
-              enriched={enriched}
-              onPoll={runConnectionsPoll}
-              polling={polling}
-              pollMeta={connectionsPollMeta}
-              discoverySnmpEnabled={discovery.snmpEnabled}
-            />
           </TabsContent>
 
           <TabsContent value="alerts" className="mt-0">

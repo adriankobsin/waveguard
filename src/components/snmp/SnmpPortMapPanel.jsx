@@ -27,7 +27,7 @@ function speedLabel(speed) {
   return speed ? `${speed}M` : "—";
 }
 
-function PortBadge({ port }) {
+function PortBadge({ port, onClick }) {
   if (port.slotEmpty) {
     return (
       <div
@@ -40,17 +40,17 @@ function PortBadge({ port }) {
   }
 
   const up = port.ifOperStatus === "up";
-  return (
-    <div
-      title={`Port ${port.port}${port.ifAlias ? ` · ${port.ifAlias}` : ""}${port.connectedDevice ? ` → ${port.connectedDevice}` : ""}${port.poeWatts != null ? ` · PoE ${port.poeWatts}W` : ""}`}
-      className={`relative group w-8 h-8 rounded-md border text-[10px] font-bold flex items-center justify-center cursor-default transition-all
+  const className = `relative group w-8 h-8 rounded-md border text-[10px] font-bold flex items-center justify-center transition-all
+        ${onClick ? "cursor-pointer hover:scale-105" : "cursor-default"}
         ${up
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
           : port.connectedDevice
             ? "border-red-500/40 bg-red-500/10 text-red-600 dark:text-red-400"
             : "border-border bg-secondary/40 text-muted-foreground"
-        }`}
-    >
+        }`;
+
+  const inner = (
+    <>
       {port.port}
       <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 hidden group-hover:block w-max max-w-[220px]">
         <div className="bg-popover border border-border rounded-lg px-2.5 py-2 text-xs shadow-lg">
@@ -65,11 +65,28 @@ function PortBadge({ port }) {
           {port.poeWatts != null && <p className="text-amber-500">PoE {port.poeWatts} W</p>}
         </div>
       </div>
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} title={`Port ${port.port} — view details`} className={className}>
+        {inner}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      title={`Port ${port.port}${port.ifAlias ? ` · ${port.ifAlias}` : ""}${port.connectedDevice ? ` → ${port.connectedDevice}` : ""}${port.poeWatts != null ? ` · PoE ${port.poeWatts}W` : ""}`}
+      className={className}
+    >
+      {inner}
     </div>
   );
 }
 
-function SwitchCard({ sw }) {
+function SwitchCard({ sw, onPortClick }) {
   const [open, setOpen] = useState(true);
   const downWithDevice = sw.ports.filter(
     (p) => !p.slotEmpty && p.ifOperStatus === "down" && p.connectedDevice
@@ -167,7 +184,15 @@ function SwitchCard({ sw }) {
               {sw.ports.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {sw.ports.map((p) => (
-                    <PortBadge key={p.port} port={p} />
+                    <PortBadge
+                      key={p.port}
+                      port={p}
+                      onClick={
+                        onPortClick && !p.slotEmpty
+                          ? () => onPortClick(sw.id, p)
+                          : undefined
+                      }
+                    />
                   ))}
                 </div>
               ) : (
@@ -240,6 +265,7 @@ export default function SnmpPortMapPanel({
   polling: pollingProp = false,
   pollMeta: pollMetaProp = null,
   discoverySnmpEnabled = true,
+  onPortClick = null,
 }) {
   const isStandalone = enrichedProp === undefined;
   const [standaloneEnriched, setStandaloneEnriched] = useState([]);
@@ -380,7 +406,7 @@ export default function SnmpPortMapPanel({
       ) : (
         <div className="space-y-3">
           {fleet.switches.map((sw) => (
-            <SwitchCard key={sw.id} sw={sw} />
+            <SwitchCard key={sw.id} sw={sw} onPortClick={onPortClick} />
           ))}
         </div>
       )}

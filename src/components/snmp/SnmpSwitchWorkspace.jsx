@@ -1,53 +1,15 @@
-import { AnimatePresence, motion } from "framer-motion";
 import {
   RefreshCw,
   Settings,
   LayoutGrid,
   Table2,
-  Zap,
-  Loader2,
   AlertTriangle,
-  ExternalLink,
 } from "lucide-react";
-import { Link } from "react-router-dom";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import SwitchPortGrid from "@/components/SwitchPortGrid";
 import SnmpPortTable from "@/components/snmp/SnmpPortTable";
+import SnmpInterfaceDetailSheet from "@/components/snmp/SnmpInterfaceDetailSheet";
 import { Badge } from "@/components/ui/badge";
-import { formatUptime, formatSpeedMbps } from "@/lib/snmp/snmpAnalytics";
-
-function TrafficChart({ data }) {
-  const chartData = data?.length ? data : [{ time: "—", inMbps: 0, outMbps: 0 }];
-  return (
-    <ResponsiveContainer width="100%" height={180}>
-      <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-        <defs>
-          <linearGradient id="snmpInGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(192,100%,48%)" stopOpacity={0.3} />
-            <stop offset="100%" stopColor="hsl(192,100%,48%)" stopOpacity={0} />
-          </linearGradient>
-          <linearGradient id="snmpOutGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(145,65%,45%)" stopOpacity={0.25} />
-            <stop offset="100%" stopColor="hsl(145,65%,45%)" stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="hsl(220,15%,16%)" />
-        <XAxis dataKey="time" tick={{ fontSize: 10, fill: "hsl(210,15%,50%)" }} />
-        <YAxis tick={{ fontSize: 10, fill: "hsl(210,15%,50%)" }} unit=" Mbps" />
-        <Tooltip
-          contentStyle={{
-            background: "hsl(220,18%,9%)",
-            border: "1px solid hsl(220,15%,16%)",
-            borderRadius: 8,
-            fontSize: 12,
-          }}
-        />
-        <Area type="monotone" dataKey="inMbps" stroke="hsl(192,100%,48%)" fill="url(#snmpInGrad)" strokeWidth={2} name="Inbound" />
-        <Area type="monotone" dataKey="outMbps" stroke="hsl(145,65%,45%)" fill="url(#snmpOutGrad)" strokeWidth={2} name="Outbound" />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
-}
+import { formatUptime } from "@/lib/snmp/snmpAnalytics";
 
 const HEALTH_BADGE = {
   healthy: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
@@ -59,6 +21,7 @@ const HEALTH_BADGE = {
 
 export default function SnmpSwitchWorkspace({
   sw,
+  equipment = [],
   portView,
   onPortViewChange,
   showInactivePorts,
@@ -193,85 +156,17 @@ export default function SnmpSwitchWorkspace({
         )}
       </div>
 
-      <AnimatePresence>
-        {selectedPort && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="rounded-xl border border-border p-5 space-y-4 bg-card/30"
-          >
-            <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <h3 className="font-semibold">{selectedPort.name || `Port ${selectedPort.index}`}</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {selectedPort.ifAlias || "No alias"}
-                  {selectedPort.connectedDevice && ` → ${selectedPort.connectedDevice}`}
-                </p>
-                {selectedPort.macAddr && (
-                  <p className="text-xs font-mono text-muted-foreground">{selectedPort.macAddr}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onTestPort}
-                  disabled={testingPort}
-                  className="flex items-center gap-1.5 text-xs border border-border rounded-lg px-2.5 py-1.5"
-                >
-                  {testingPort ? <Loader2 size={12} className="animate-spin" /> : <Zap size={12} />}
-                  Test interface
-                </button>
-                <Badge variant="outline" className={HEALTH_BADGE[selectedPort.status === "up" ? "healthy" : "critical"]}>
-                  {(selectedPort.status || "unknown").toUpperCase()}
-                </Badge>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-              <div>
-                <p className="text-xs text-muted-foreground">Speed</p>
-                <p className="font-medium">{formatSpeedMbps(selectedPort.speedMbps || selectedPort.speed)}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">MTU</p>
-                <p className="font-medium">{selectedPort.mtu ?? 1500}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Inbound</p>
-                <p className="font-medium text-cyan-400">{(selectedPort.inMbps || 0).toFixed(1)} Mbps</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Outbound</p>
-                <p className="font-medium text-emerald-400">{(selectedPort.outMbps || 0).toFixed(1)} Mbps</p>
-              </div>
-              {selectedPort.poeWatts != null && (
-                <div>
-                  <p className="text-xs text-muted-foreground">PoE</p>
-                  <p className="font-medium text-amber-400">{selectedPort.poeWatts} W</p>
-                </div>
-              )}
-              {selectedPort.vlan != null && (
-                <div>
-                  <p className="text-xs text-muted-foreground">VLAN</p>
-                  <p className="font-medium">{selectedPort.vlan}</p>
-                </div>
-              )}
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground mb-2">Aggregate traffic (poll history)</p>
-              <TrafficChart data={sw.lastPoll?.trafficHistory} />
-            </div>
-            {sw.eq?.id && (
-              <Link
-                to="/equipment"
-                className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-              >
-                <ExternalLink size={12} /> View in Equipment
-              </Link>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <SnmpInterfaceDetailSheet
+        open={!!selectedPort}
+        onOpenChange={(isOpen) => {
+          if (!isOpen) onSelectPort(null);
+        }}
+        port={selectedPort}
+        sw={sw}
+        equipmentList={equipment}
+        testingPort={testingPort}
+        onTestPort={onTestPort}
+      />
     </div>
   );
 }
