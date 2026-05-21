@@ -206,10 +206,13 @@ export async function scanTopology(userOptions = {}) {
   };
 }
 
+export const SCANNER_BUILD = "2025-05-fullscan-2";
+
 export function getHealth() {
   return {
     ok: true,
     version: "1.0.0",
+    build: SCANNER_BUILD,
     platform: process.platform,
     scanInterface: getScanInterfaceLabel(),
     localSubnets: detectLocalSubnets(),

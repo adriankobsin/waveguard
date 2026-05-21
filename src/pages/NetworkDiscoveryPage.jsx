@@ -109,7 +109,12 @@ export default function NetworkDiscoveryPage() {
       setDevices(data.devices || []);
     } catch (e) {
       clearInterval(progressInterval);
-      setError(e.message || "Scan failed");
+      const msg = e.message || "Scan failed";
+      setError(
+        /reading 'map'/.test(msg)
+          ? `${msg} — restart the scanner: stop npm run mock, then run it again (npm run dev:all).`
+          : msg
+      );
     } finally {
       setScanning(false);
     }

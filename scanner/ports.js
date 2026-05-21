@@ -21,8 +21,10 @@ export function probeTcpPort(ip, port, timeoutMs = 800) {
   });
 }
 
-export async function probePorts(ip, ports = COMMON_PORTS, timeoutMs = 800) {
-  const list = Array.isArray(ports) && ports.length ? ports : COMMON_PORTS;
+export async function probePorts(ip, ports, timeoutMs = 800) {
+  // Explicit undefined must not reach .map (default params do not apply when caller passes undefined).
+  const list =
+    ports != null && Array.isArray(ports) && ports.length > 0 ? ports : COMMON_PORTS;
   const open = [];
   await Promise.all(
     list.map(async (port) => {
