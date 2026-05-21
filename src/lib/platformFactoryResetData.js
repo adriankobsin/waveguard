@@ -1,5 +1,7 @@
 import { DEFAULT_SITE_LOCATIONS } from "./siteLocations.js";
 import { DEFAULT_DISCOVERY_SETTINGS } from "./discoverySettings.js";
+import { SNMP_SWITCHES_SETTINGS_KEY } from "./snmp/snmpSwitchProfiles.js";
+import { DEFAULT_SNMP_GLOBAL } from "./snmp/snmpManagementSettings.js";
 import { DEFAULT_DASHBOARD_LAYOUT } from "./dashboardLayout.js";
 import { DEFAULT_RACK_LAYOUT } from "./defaultRackLayout.js";
 
@@ -48,6 +50,12 @@ export function buildFactorySystemSettings() {
       key: "discovery",
       category: "discovery",
       value: { ...DEFAULT_DISCOVERY_SETTINGS },
+    },
+    {
+      id: "setting-snmp-switches",
+      key: SNMP_SWITCHES_SETTINGS_KEY,
+      category: "snmp",
+      value: { global: { ...DEFAULT_SNMP_GLOBAL }, profiles: [] },
     },
     {
       id: "setting-site-locations",

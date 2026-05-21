@@ -1,0 +1,233 @@
+import { DEFAULT_SNMP_GLOBAL, normalizeSnmpGlobalSettings } from "./snmpManagementSettings.js";
+import {
+  resolveSwitchChassis,
+  deployPortsOnChassis,
+  portCountFromModel,
+} from "./switchModelCatalog.js";
+
+export { parseSwitchModel, resolveSwitchChassis, portCountFromModel } from "./switchModelCatalog.js";
+
+export const SNMP_SWITCHES_SETTINGS_KEY = "snmp-switches";
+export const SNMP_SWITCHES_CHANGED_EVENT = "waveguard-snmp-switches-changed";
+
+export const DEFAULT_SNMP_SWITCHES = {
+  global: { ...DEFAULT_SNMP_GLOBAL },
+  profiles: [],
+};
+
+function normMac(mac) {
+  if (!mac) return "";
+  return String(mac)
+    .toUpperCase()
+    .replace(/[^0-9A-F]/g, "")
+    .replace(/(.{2})(?=.)/g, "$1:")
+    .slice(0, 17);
+}
+
+export function profileIdForEquipment(equipmentId) {
+  return `snmp-sw-${equipmentId}`;
+}
+
+export function normalizeSnmpPort(port) {
+  if (!port) return null;
+  const status =
+    port.status === "up" || port.status === "down" || port.status === "disabled"
+      ? port.status
+      : port.ifOperStatus === "up"
+        ? "up"
+        : port.ifOperStatus === "down"
+          ? "down"
+          : "unknown";
+  return {
+    index: Number(port.index ?? port.port) || 0,
+    name: port.name || port.ifDescr || `Port ${port.index ?? port.port}`,
+    ifAlias: port.ifAlias || "",
+    status,
+    speed: Number(port.speed ?? port.speedMbps ?? port.ifSpeed) || 0,
+    speedMbps: Number(port.speedMbps ?? port.speed ?? port.ifSpeed) || 0,
+    mtu: port.mtu ?? 1500,
+    inMbps: Number(port.inMbps) || 0,
+    outMbps: Number(port.outMbps) || 0,
+    poeWatts: port.poeWatts != null ? Number(port.poeWatts) : null,
+    poeStatus: port.poeStatus || null,
+    vlan: port.vlan ?? null,
+    macAddr: port.macAddr || null,
+    connectedDevice: port.connectedDevice || null,
+    connectedEquipmentId: port.connectedEquipmentId || null,
+    inOctets: port.inOctets,
+    outOctets: port.outOctets,
+  };
+}
+
+export function normalizeLastPoll(raw) {
+  if (!raw) return null;
+  const ports = (raw.ports || []).map(normalizeSnmpPort).filter(Boolean);
+  return {
+    sysUptime: raw.sysUptime ?? null,
+    sysName: raw.sysName || "",
+    polledAt: raw.polledAt || null,
+    source: raw.source || null,
+    ports,
+    trafficHistory: Array.isArray(raw.trafficHistory) ? raw.trafficHistory : [],
+  };
+}
+
+export function normalizeSnmpSwitchProfile(raw) {
+  if (!raw?.equipmentId) return null;
+  const portCount = raw.portCount == null || raw.portCount === "" ? null : Number(raw.portCount);
+  return {
+    id: raw.id || profileIdForEquipment(raw.equipmentId),
+    equipmentId: raw.equipmentId,
+    enabled: raw.enabled !== false,
+    portCount: portCount > 0 ? portCount : null,
+    deckId: raw.deckId || "",
+    roomId: raw.roomId || "",
+    location: raw.location || "",
+    snmpCommunity: raw.snmpCommunity || "",
+    snmpVersion: raw.snmpVersion === "3" ? "3" : "2c",
+    notes: raw.notes || "",
+    tags: Array.isArray(raw.tags) ? raw.tags.filter(Boolean) : [],
+    pollIntervalSec: raw.pollIntervalSec > 0 ? Number(raw.pollIntervalSec) : null,
+    lastPollAt: raw.lastPollAt || null,
+    lastPollError: raw.lastPollError || null,
+    lastPoll: normalizeLastPoll(raw.lastPoll),
+    counterSnapshot: raw.counterSnapshot || null,
+  };
+}
+
+export function normalizeSnmpSwitchesState(raw) {
+  const legacyList = Array.isArray(raw) ? raw : null;
+  const profiles = (raw?.profiles || legacyList || [])
+    .filter(Boolean)
+    .map((p) => (p.equipmentId ? normalizeSnmpSwitchProfile(p) : null))
+    .filter(Boolean);
+  return {
+    global: normalizeSnmpGlobalSettings(raw?.global),
+    profiles,
+  };
+}
+
+export function loadSnmpSwitchesLocal() {
+  try {
+    const raw = localStorage.getItem(SNMP_SWITCHES_SETTINGS_KEY);
+    if (!raw) return null;
+    return normalizeSnmpSwitchesState(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+export function saveSnmpSwitchesLocal(data) {
+  const normalized = normalizeSnmpSwitchesState(data);
+  localStorage.setItem(SNMP_SWITCHES_SETTINGS_KEY, JSON.stringify(normalized));
+  window.dispatchEvent(new CustomEvent(SNMP_SWITCHES_CHANGED_EVENT, { detail: normalized }));
+  return normalized;
+}
+
+/** Resolve IP from Equipment row (supports legacy import field names). */
+export function getEquipmentIp(eq) {
+  const ip = eq?.ip ?? eq?.ip_address ?? eq?.ipAddress ?? "";
+  return String(ip).trim();
+}
+
+/** Equipment records that look like manageable switches. */
+export function isLikelySwitch(eq) {
+  if (!eq) return false;
+  const blob = `${eq.name || ""} ${eq.model || ""} ${eq.make || ""} ${eq.vendor || ""}`.toLowerCase();
+
+  // Name/model indicates a switch — allow any category (user may have picked Other/AV by mistake)
+  if (
+    /switch|managed\s+switch|\bsw[-_\s./]|cbs|sg[-_]?\d|catalyst|meraki\s*ms|nexus|\b2960|\b3850/i.test(blob) ||
+    (/\bcisco\b/i.test(blob) && /\b(sw|switch|sg|cbs|catalyst)\b/i.test(blob))
+  ) {
+    return true;
+  }
+
+  if (eq.category === "Network") {
+    // Network gear that is clearly not a switch
+    if (/router|access point|\bap[-_\s]|starlink|modem|firewall|u6\s*pro|unifi\s*ap/i.test(blob)) {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
+}
+
+export function mapPollToUiPorts(pollPorts, portCountOverride) {
+  const ports = (pollPorts || []).map((p) => {
+    const n = normalizeSnmpPort(p);
+    return {
+      ...n,
+      speed: n.speedMbps || n.speed,
+    };
+  });
+  if (portCountOverride && ports.length > portCountOverride) {
+    return ports.slice(0, portCountOverride);
+  }
+  return ports;
+}
+
+export function buildConnectionMap(switches) {
+  const connectionMap = [];
+  for (const sw of switches || []) {
+    for (const port of sw.ports || []) {
+      if (port.connectedDevice || port.macAddr) {
+        connectionMap.push({
+          switchName: sw.name,
+          switchIp: sw.ip,
+          port: port.index,
+          portAlias: port.ifAlias,
+          connectedDevice: port.connectedDevice,
+          macAddr: port.macAddr,
+          status: port.status === "up" ? "up" : "down",
+          speed: port.speedMbps || port.speed,
+          vlan: port.vlan,
+          poeWatts: port.poeWatts,
+        });
+      }
+    }
+  }
+  return connectionMap;
+}
+
+/** Append aggregate traffic sample for charts (max 24 points). */
+export function appendTrafficHistory(lastPoll, inMbps, outMbps, maxSamples = 24) {
+  const hist = [...(lastPoll?.trafficHistory || [])];
+  const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  hist.push({
+    time,
+    inMbps: Math.round(inMbps * 10) / 10,
+    outMbps: Math.round(outMbps * 10) / 10,
+  });
+  while (hist.length > maxSamples) hist.shift();
+  return hist;
+}
+
+export function mergePollIntoProfile(profile, pollResult, options = {}) {
+  const equipment = options.equipment;
+  const chassis = resolveSwitchChassis(equipment, profile);
+  const effectiveCount = portCountFromModel(equipment?.model, profile.portCount) || profile.portCount;
+  const rawPorts = mapPollToUiPorts(pollResult.ports, effectiveCount);
+  const ports = chassis ? deployPortsOnChassis(rawPorts, chassis) : rawPorts;
+  const totalIn = ports.filter((p) => !p.slotEmpty).reduce((s, p) => s + (p.inMbps || 0), 0);
+  const totalOut = ports.filter((p) => !p.slotEmpty).reduce((s, p) => s + (p.outMbps || 0), 0);
+  const maxSamples = options.trafficHistorySamples ?? 24;
+  const lastPoll = {
+    sysUptime: pollResult.sysUptime ?? profile.lastPoll?.sysUptime,
+    sysName: pollResult.sysName || pollResult.name,
+    polledAt: pollResult.polledAt,
+    source: pollResult.source,
+    ports,
+    trafficHistory: appendTrafficHistory(profile.lastPoll, totalIn, totalOut, maxSamples),
+  };
+  return {
+    ...profile,
+    lastPollAt: pollResult.polledAt,
+    lastPollError: pollResult.error || null,
+    lastPoll,
+    counterSnapshot: pollResult.counterSnapshot || profile.counterSnapshot,
+  };
+}
+
+export { normMac };

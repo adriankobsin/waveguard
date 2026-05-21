@@ -32,7 +32,7 @@ const REPORT_TYPES = [
   },
   {
     key: "inventory",
-    label: "Equipment Inventory",
+    label: "Equipment",
     description: "Complete asset register: codes, serial numbers, MAC addresses, suppliers, and locations.",
     icon: Package,
     color: "text-purple-400",
@@ -75,7 +75,7 @@ const REPORT_TYPES = [
 // Mock recent reports
 const MOCK_RECENT = [
   { id: 1, label: "Daily Health",       format: "PDF", generatedAt: "2026-05-18 09:00", size: "142 KB" },
-  { id: 2, label: "Equipment Inventory",format: "CSV", generatedAt: "2026-05-17 18:30", size: "38 KB" },
+  { id: 2, label: "Equipment", format: "CSV", generatedAt: "2026-05-17 18:30", size: "38 KB" },
   { id: 3, label: "Alarms",             format: "PDF", generatedAt: "2026-05-17 08:00", size: "96 KB" },
   { id: 4, label: "Client Summary",     format: "PDF", generatedAt: "2026-05-16 09:00", size: "78 KB" },
 ];

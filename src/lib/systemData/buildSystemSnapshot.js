@@ -1,4 +1,5 @@
 import { formatRelativeTime } from "./formatRelativeTime";
+import { buildSnmpFleetSnapshot } from "@/lib/snmp/snmpAnalytics";
 
 function countByStatus(devices) {
   const total = devices.length;
@@ -148,7 +149,13 @@ function deviceToAlarm(eq, severity) {
 /**
  * Build dashboard widget data from live Equipment, MaintenanceTask, and ActionLog records.
  */
-export function buildSystemSnapshot({ equipment = [], tasks = [], logs = [], rules = [] }) {
+export function buildSystemSnapshot({
+  equipment = [],
+  tasks = [],
+  logs = [],
+  rules = [],
+  snmpSwitches = { profiles: [], global: {} },
+}) {
   const devices = equipment.map((eq) => {
     const status = eq.status || "online";
     const meta = eq.telemetry || {};
@@ -194,6 +201,8 @@ export function buildSystemSnapshot({ equipment = [], tasks = [], logs = [], rul
     (a, b) =>
       new Date(b.created_date || b.createdAt) - new Date(a.created_date || a.createdAt)
   );
+
+  const snmpFleet = buildSnmpFleetSnapshot(snmpSwitches, equipment);
 
   return {
     monitoredCount: devices.length,
@@ -242,6 +251,7 @@ export function buildSystemSnapshot({ equipment = [], tasks = [], logs = [], rul
       }).length,
       pending: tasks.filter((t) => t.status === "pending" || t.status === "scheduled").length,
     },
+    snmpFleet,
     fetchedAt: new Date().toISOString(),
   };
 }

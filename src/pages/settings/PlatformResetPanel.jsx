@@ -11,7 +11,7 @@ import {
 import { toast } from "sonner";
 
 const CLEARED_ITEMS = [
-  "All equipment and inventory records",
+  "All equipment records",
   "Cables, signal links, and topology layouts",
   "Maintenance tasks, automation rules, and action logs",
   "Device groups and configuration backups",

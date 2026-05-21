@@ -112,7 +112,7 @@ AP-Deck,192.168.1.20,00:1A:2B:3C:4D:61,Network,Deck,UniFi 6 Pro,JKL012,7.4.156,O
           </DialogTitle>
           <DialogDescription>
             Upload a CSV file to bulk import devices into your network topology.
-            For full vessel workbooks (Device List, Patch Panels, switches), use Inventory → Import spreadsheet.
+            For full vessel workbooks (Device List, Patch Panels, switches), use Equipment → Import spreadsheet.
           </DialogDescription>
         </DialogHeader>
 

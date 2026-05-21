@@ -1,7 +1,8 @@
+import { Link } from "react-router-dom";
 import {
   Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
   WifiOff, Activity, Globe, BarChart3, Server, Clock, Bot,
-  Sliders, Lightbulb, Radio, Loader2
+  Sliders, Lightbulb, Radio, Loader2, Cable, Unplug, ArrowRight,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -86,11 +87,11 @@ export const WIDGET_TYPES = {
   network: {
     id: "network",
     name: "Network",
-    description: "Network device health summary",
+    description: "Equipment health and SNMP switch fleet status",
     icon: Wifi,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 4 },
-    defaultSize: { w: 3, h: 3 },
+    minSize: { w: 2, h: 3 },
+    maxSize: { w: 6, h: 6 },
+    defaultSize: { w: 3, h: 4 },
   },
   av: {
     id: "av",
@@ -276,8 +277,174 @@ function CategoryStatusWidget({ title, icon, categoryKey, iconColor }) {
   );
 }
 
+const HEALTH_DOT = {
+  healthy: "bg-emerald-500",
+  warning: "bg-amber-500",
+  critical: "bg-red-500",
+  unknown: "bg-muted-foreground",
+  disabled: "bg-muted-foreground/50",
+};
+
+function SnmpStat({ label, value, valueClass = "text-foreground" }) {
+  return (
+    <div className="flex justify-between gap-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`font-medium tabular-nums ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
+
 export function NetworkWidget() {
-  return <CategoryStatusWidget title="Network" icon={Wifi} categoryKey="network" iconColor="text-cyan-400" />;
+  const { snapshot, loading } = useSystemData();
+  const cat = snapshot?.categories?.network;
+  const snmp = snapshot?.snmpFleet;
+  const hasEquipment = (cat?.total || 0) > 0;
+  const hasSnmp = (snmp?.registered || 0) > 0;
+
+  if (loading && !snapshot) {
+    return (
+      <WidgetShell title="Network" icon={Wifi}>
+        <WidgetLoading />
+      </WidgetShell>
+    );
+  }
+
+  if (!hasEquipment && !hasSnmp) {
+    return (
+      <WidgetShell title="Network" icon={Wifi}>
+        <WidgetEmpty message="No network devices or SNMP switches" />
+        <Link
+          to="/snmp"
+          className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+        >
+          Switch Management <ArrowRight size={11} />
+        </Link>
+      </WidgetShell>
+    );
+  }
+
+  return (
+    <WidgetShell
+      title="Network"
+      icon={Wifi}
+      badge={hasSnmp ? `${snmp.registered} SW` : undefined}
+    >
+      <div className="space-y-3">
+        {hasEquipment && (
+          <CategoryWidget
+            label={cat.label}
+            online={cat.online}
+            total={cat.total}
+            icon={Wifi}
+            color="text-cyan-400"
+          />
+        )}
+
+        {hasSnmp ? (
+          <div className={hasEquipment ? "border-t border-border/60 pt-3" : ""}>
+            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
+              <Server size={10} className="text-primary" />
+              SNMP switch fleet
+            </p>
+            <div className="space-y-1 mb-2">
+              <SnmpStat label="Registered" value={snmp.registered} />
+              <SnmpStat
+                label="Polled"
+                value={`${snmp.polledCount}/${snmp.registered}`}
+                valueClass={snmp.polledCount < snmp.registered ? "text-amber-500" : "text-foreground"}
+              />
+              <SnmpStat
+                label="Ports up / down"
+                value={`${snmp.portsUp} / ${snmp.portsDown}`}
+                valueClass={snmp.portsDown > 0 ? "text-amber-500" : "text-emerald-500"}
+              />
+              <SnmpStat
+                label="Active links"
+                value={snmp.activeConnections}
+                valueClass="text-emerald-500"
+              />
+              <SnmpStat
+                label="Cable faults"
+                value={snmp.cableFaults}
+                valueClass={snmp.cableFaults > 0 ? "text-red-500 font-semibold" : "text-foreground"}
+              />
+              {(snmp.trafficInMbps > 0 || snmp.trafficOutMbps > 0) && (
+                <SnmpStat
+                  label="Switch traffic"
+                  value={`↓${snmp.trafficInMbps} ↑${snmp.trafficOutMbps} Mbps`}
+                />
+              )}
+              {snmp.poeWatts > 0 && (
+                <SnmpStat label="PoE load" value={`${snmp.poeWatts} W`} valueClass="text-amber-500" />
+              )}
+            </div>
+
+            {snmp.lastPollRelative && (
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1 mb-2">
+                <Clock size={9} />
+                Last SNMP poll {snmp.lastPollRelative}
+              </p>
+            )}
+
+            <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
+              {snmp.switches.map((sw) => (
+                <Link
+                  key={sw.id}
+                  to="/snmp"
+                  className="flex items-center gap-2 text-xs py-1 rounded-lg hover:bg-secondary/40 px-1 -mx-1 transition-colors group"
+                >
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${HEALTH_DOT[sw.healthStatus] || HEALTH_DOT.unknown}`}
+                    title={sw.healthLabel}
+                  />
+                  <span className="text-foreground truncate flex-1 group-hover:text-primary">
+                    {sw.name}
+                  </span>
+                  <span className="text-muted-foreground tabular-nums shrink-0">
+                    {sw.lastPollAt
+                      ? sw.portsTotal > 0
+                        ? `${sw.portsUp}/${sw.portsTotal}`
+                        : "—"
+                      : "—"}
+                  </span>
+                  {sw.cableFaults > 0 && (
+                    <Unplug size={10} className="text-red-500 shrink-0" title={`${sw.cableFaults} fault(s)`} />
+                  )}
+                </Link>
+              ))}
+            </div>
+
+            {snmp.topFaults?.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-border/60 space-y-1">
+                {snmp.topFaults.map((f, i) => (
+                  <p key={i} className="text-[10px] text-red-500/90 truncate">
+                    {f.switchName} P{f.portIndex} → {f.connectedDevice || "unknown"}
+                  </p>
+                ))}
+              </div>
+            )}
+
+            <Link
+              to="/snmp"
+              className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
+            >
+              <Cable size={10} />
+              Connections & poll
+              <ArrowRight size={10} />
+            </Link>
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Register switches in{" "}
+            <Link to="/snmp" className="text-primary hover:underline">
+              Switch Management
+            </Link>{" "}
+            for port and cable monitoring.
+          </p>
+        )}
+      </div>
+    </WidgetShell>
+  );
 }
 
 export function AvWidget() {
@@ -300,7 +467,7 @@ export function UpsPowerWidget() {
   const { snapshot, loading } = useSystemData();
   const ups = snapshot?.ups;
   if (loading && !snapshot) return <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400"><WidgetLoading /></WidgetShell>;
-  if (!ups) return <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400"><WidgetEmpty message="No UPS equipment in inventory" /></WidgetShell>;
+  if (!ups) return <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400"><WidgetEmpty message="No UPS equipment registered" /></WidgetShell>;
   return (
     <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400">
       <div className="space-y-2 text-xs">

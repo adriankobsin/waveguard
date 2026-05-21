@@ -8,11 +8,16 @@ import { getDiagnosisCounts } from "@/lib/systemData/generateDiagnoses";
 const SEVERITY_ORDER = { critical: 0, warning: 1, info: 2 };
 
 export default function DiagnosesPage() {
-  const { diagnoses, loading, refreshing, refresh, dismissDiagnosis } = useSystemData();
-  const [filter, setFilter] = useState("all");
+  const { diagnoses, loading, refreshing, refresh, dismissDiagnosis, acknowledgeDiagnosis } =
+    useSystemData();
+  const [filter, setFilter] = useState("active");
   const [approvedIds, setApprovedIds] = useState(new Set());
 
   const handleDismiss = (id) => dismissDiagnosis(id);
+  const handleAcknowledge = (id) => {
+    acknowledgeDiagnosis(id);
+    toast.success("Fault acknowledged");
+  };
 
   const handleApprove = (id) => {
     setApprovedIds((prev) => new Set([...prev, id]));
@@ -25,7 +30,8 @@ export default function DiagnosesPage() {
 
   const filtered = enriched
     .filter((d) => {
-      if (filter === "active") return !d.resolvedAt;
+      if (filter === "active") return !d.resolvedAt && !d.acknowledgedAt;
+      if (filter === "acknowledged") return !d.resolvedAt && !!d.acknowledgedAt;
       if (filter === "resolved") return !!d.resolvedAt;
       return true;
     })
@@ -52,6 +58,12 @@ export default function DiagnosesPage() {
                 ) : (
                   "no critical issues"
                 )}
+                {counts.snmp > 0 && (
+                  <>
+                    {" "}
+                    · <span className="text-cyan-400">{counts.snmp} SNMP</span>
+                  </>
+                )}
               </>
             )}
           </p>
@@ -71,6 +83,7 @@ export default function DiagnosesPage() {
         {[
           { key: "all", label: "All" },
           { key: "active", label: `Active (${counts.active})` },
+          { key: "acknowledged", label: `Acknowledged (${counts.acknowledged})` },
           { key: "resolved", label: "Resolved" },
         ].map((tab) => (
           <button
@@ -108,6 +121,7 @@ export default function DiagnosesPage() {
                 <DiagnosisCard
                   diagnosis={d}
                   onDismiss={() => handleDismiss(d.id)}
+                  onAcknowledge={() => handleAcknowledge(d.id)}
                   onApprove={() => handleApprove(d.id)}
                   expanded
                 />
@@ -120,7 +134,9 @@ export default function DiagnosesPage() {
               <CheckIcon />
               <p className="text-foreground font-medium mt-4">No diagnoses</p>
               <p className="text-sm text-muted-foreground mt-1">
-                All monitored equipment is healthy, or issues have been dismissed.
+                {filter === "acknowledged"
+                  ? "No acknowledged faults. Acknowledge items from the Active tab after review."
+                  : "All monitored equipment is healthy, or issues have been acknowledged/dismissed."}
               </p>
             </div>
           )}

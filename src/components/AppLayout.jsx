@@ -12,11 +12,11 @@ import { getDiagnosisCounts } from "@/lib/systemData/generateDiagnoses";
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/topology", icon: Share2, label: "Topology" },
-  { to: "/snmp", icon: Network, label: "SNMP" },
+  { to: "/snmp", icon: Network, label: "Switches" },
   { to: "/discovery", icon: Radar, label: "Discovery" },
   { to: "/diagnoses", icon: Activity, label: "Diagnoses" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
-  { to: "/inventory", icon: Package, label: "Inventory" },
+  { to: "/equipment", icon: Package, label: "Equipment" },
   { to: "/cables", icon: Cable, label: "Cables" },
   { to: "/documents", icon: BookOpen, label: "Documents" },
   { to: "/assistant", icon: Bot, label: "AI Assistant" },

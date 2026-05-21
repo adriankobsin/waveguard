@@ -6,7 +6,13 @@ import {
   getDismissedDiagnosisIds,
   dismissDiagnosisId,
 } from "@/lib/systemData/generateDiagnoses";
+import {
+  applyAcknowledgements,
+  acknowledgeDiagnosisId,
+} from "@/lib/systemData/diagnosisAcknowledgement";
+import { generateSnmpDiagnoses } from "@/lib/snmp/generateSnmpDiagnoses";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
+import { SNMP_SWITCHES_CHANGED_EVENT } from "@/lib/snmp/snmpSwitchProfiles";
 
 const SystemDataContext = createContext(null);
 
@@ -16,6 +22,7 @@ export function SystemDataProvider({ children }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [dismissedVersion, setDismissedVersion] = useState(0);
+  const [ackVersion, setAckVersion] = useState(0);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -40,8 +47,18 @@ export function SystemDataProvider({ children }) {
   useEffect(() => {
     const onChange = () => load({ silent: true });
     window.addEventListener(EQUIPMENT_CHANGED_EVENT, onChange);
-    return () => window.removeEventListener(EQUIPMENT_CHANGED_EVENT, onChange);
+    window.addEventListener(SNMP_SWITCHES_CHANGED_EVENT, onChange);
+    return () => {
+      window.removeEventListener(EQUIPMENT_CHANGED_EVENT, onChange);
+      window.removeEventListener(SNMP_SWITCHES_CHANGED_EVENT, onChange);
+    };
   }, [load]);
+
+  useEffect(() => {
+    const onAck = () => setAckVersion((v) => v + 1);
+    window.addEventListener("waveguard-diagnoses-ack-changed", onAck);
+    return () => window.removeEventListener("waveguard-diagnoses-ack-changed", onAck);
+  }, []);
 
   const snapshot = useMemo(
     () => (sources ? buildSystemSnapshot(sources) : null),
@@ -50,15 +67,31 @@ export function SystemDataProvider({ children }) {
 
   const diagnoses = useMemo(() => {
     if (!sources) return [];
-    return generateDiagnosesFromSystem(sources, {
+    const base = generateDiagnosesFromSystem(sources, {
       excludeIds: getDismissedDiagnosisIds(),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- dismissedVersion bumps on dismiss
-  }, [sources, dismissedVersion]);
+    const snmp = generateSnmpDiagnoses({
+      profiles: sources.snmpSwitches?.profiles || [],
+      equipment: sources.equipment || [],
+      global: sources.snmpSwitches?.global || {},
+    }).filter((d) => !getDismissedDiagnosisIds().includes(d.id));
+
+    const order = { critical: 0, warning: 1, info: 2 };
+    const merged = applyAcknowledgements([...base, ...snmp]).sort(
+      (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
+    );
+    return merged;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sources, dismissedVersion, ackVersion]);
 
   const dismissDiagnosis = useCallback((id) => {
     dismissDiagnosisId(id);
     setDismissedVersion((v) => v + 1);
+  }, []);
+
+  const acknowledgeDiagnosis = useCallback((id) => {
+    acknowledgeDiagnosisId(id);
+    setAckVersion((v) => v + 1);
   }, []);
 
   const value = useMemo(
@@ -70,9 +103,10 @@ export function SystemDataProvider({ children }) {
       error,
       refresh: () => load({ silent: true }),
       dismissDiagnosis,
+      acknowledgeDiagnosis,
       sources,
     }),
-    [snapshot, diagnoses, loading, refreshing, error, load, dismissDiagnosis, sources]
+    [snapshot, diagnoses, loading, refreshing, error, load, dismissDiagnosis, acknowledgeDiagnosis, sources]
   );
 
   return (

@@ -11,7 +11,18 @@ import {
   getHealth,
   buildTopologyConnections,
   mapDevicesToTopology,
+  pollSwitchPorts,
+  testSwitchInterface,
+  buildPollAllResponse,
+  isSnmpWalkAvailable,
 } from "../scanner/index.js";
+import {
+  SNMP_SWITCHES_SETTINGS_KEY,
+  normalizeSnmpSwitchesState,
+  mergePollIntoProfile,
+  buildConnectionMap,
+  portCountFromModel,
+} from "../src/lib/snmp/snmpSwitchProfiles.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -759,31 +770,255 @@ app.post("/api/apps/:appId/functions/registerDiscoveredDevice", (req, res) => {
   }
 });
 
-app.post("/api/apps/:appId/functions/snmpPortMap", (req, res) => {
-  const switches = db.equipment.filter(e => e.model && e.model.includes("CBS"));
-  const connectionMap = switches.map(sw => ({
-    name: sw.name,
-    ip: sw.ip,
-    portsUp: Math.floor(Math.random() * 10 + 4),
-    portsDown: Math.floor(Math.random() * 2),
-    ports: Array.from({ length: Math.floor(Math.random() * 12 + 8) }, (_, i) => ({
-      port: i + 1,
-      ifOperStatus: Math.random() > 0.15 ? "up" : "down",
-      ifAlias: `Port ${i + 1}`,
-      connectedDevice: Math.random() > 0.4 ? `device-${Math.floor(Math.random() * 20 + 1)}` : null,
-      macAddr: `00:1A:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}`,
-      ifSpeed: ["10M", "100M", "1G", "10G"][Math.floor(Math.random() * 4)],
-      vlan: Math.floor(Math.random() * 10 + 1) * 100,
-    })),
-  }));
-  res.json({
-    success: true,
-    connectionMap,
-    totalConnections: connectionMap.reduce((a, s) => a + s.ports.filter(p => p.connectedDevice).length, 0),
-    disconnectedPorts: connectionMap.reduce((a, s) => a + s.portsDown, 0),
-    switches: connectionMap,
-    polledAt: new Date().toISOString(),
+function getSnmpSwitchesState() {
+  const row = db.systemSettings.find((s) => s.key === SNMP_SWITCHES_SETTINGS_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeSnmpSwitchesState(raw || { profiles: [] });
+}
+
+function saveSnmpSwitchesState(state) {
+  const normalized = normalizeSnmpSwitchesState(state);
+  const row = db.systemSettings.find((s) => s.key === SNMP_SWITCHES_SETTINGS_KEY);
+  if (row) row.value = normalized;
+  else {
+    db.systemSettings.push({
+      id: `setting-${Date.now()}`,
+      key: SNMP_SWITCHES_SETTINGS_KEY,
+      value: normalized,
+    });
+  }
+  return normalized;
+}
+
+function syncProfileEquipmentLocation(profile) {
+  const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+  if (!eq) return;
+  if (profile.deckId != null) eq.deckId = profile.deckId;
+  if (profile.roomId != null) eq.roomId = profile.roomId;
+  if (profile.location != null) eq.location = profile.location;
+  eq.updated_date = new Date().toISOString();
+}
+
+function equipmentIp(eq) {
+  return String(eq?.ip ?? eq?.ip_address ?? eq?.ipAddress ?? "").trim();
+}
+
+function resolveProfilePollOpts(profile) {
+  const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+  const disc = getDiscoverySettings();
+  return {
+    ip: equipmentIp(eq),
+    name: eq?.name || profile.id,
+    community: profile.snmpCommunity || disc.snmpCommunity,
+    version: profile.snmpVersion || disc.snmpVersion,
+    timeoutMs: disc.timeoutMs,
+    portCount: portCountFromModel(eq?.model, profile.portCount),
+    equipmentList: db.equipment,
+    counterSnapshot: profile.counterSnapshot,
+    lastPollAt: profile.lastPollAt,
+    forceMock: !disc.snmpEnabled,
+  };
+}
+
+async function pollProfileAndSave(profile) {
+  const opts = resolveProfilePollOpts(profile);
+  if (!opts.ip) {
+    return { profile, error: "Switch has no IP address in Equipment" };
+  }
+  const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+  const poll = await pollSwitchPorts(opts.ip, opts);
+  const global = getSnmpSwitchesState().global;
+  const updated = mergePollIntoProfile(profile, poll, {
+    trafficHistorySamples: global?.trafficHistorySamples,
+    equipment: eq,
   });
+  return { profile: updated, poll, error: poll.error };
+}
+
+app.get("/api/apps/:appId/snmp/switches", (_req, res) => {
+  res.json(getSnmpSwitchesState());
+});
+
+app.put("/api/apps/:appId/snmp/switches", (req, res) => {
+  const state = saveSnmpSwitchesState(req.body);
+  for (const p of state.profiles) syncProfileEquipmentLocation(p);
+  res.json(state);
+});
+
+app.post("/api/apps/:appId/functions/snmpPollSwitch", async (req, res) => {
+  try {
+    const { equipmentId, ip } = req.body || {};
+    const state = getSnmpSwitchesState();
+    let profile = state.profiles.find((p) => p.equipmentId === equipmentId);
+    if (!profile && ip) {
+      const eq = db.equipment.find((e) => e.ip === ip);
+      if (eq) profile = state.profiles.find((p) => p.equipmentId === eq.id);
+    }
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "Managed switch profile not found" });
+    }
+    const { profile: updated, poll, error } = await pollProfileAndSave(profile);
+    const idx = state.profiles.findIndex((p) => p.id === updated.id);
+    if (idx >= 0) state.profiles[idx] = updated;
+    saveSnmpSwitchesState(state);
+    res.json({
+      success: true,
+      profile: updated,
+      poll,
+      snmpWalkAvailable: await isSnmpWalkAvailable(),
+      source: poll.source,
+      error,
+    });
+  } catch (err) {
+    console.error("[snmpPollSwitch]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/snmpPollAll", async (_req, res) => {
+  try {
+    const state = getSnmpSwitchesState();
+    const enabled = state.profiles.filter((p) => p.enabled !== false);
+    const pollResults = [];
+    for (const profile of enabled) {
+      const { profile: updated, poll } = await pollProfileAndSave(profile);
+      const idx = state.profiles.findIndex((p) => p.id === updated.id);
+      if (idx >= 0) state.profiles[idx] = updated;
+      const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+      pollResults.push({
+        ...poll,
+        ip: poll.ip || equipmentIp(eq),
+        name: poll.name || eq?.name,
+        location: updated.location || eq?.location,
+        deckId: updated.deckId,
+        roomId: updated.roomId,
+        equipmentId: profile.equipmentId,
+      });
+    }
+    saveSnmpSwitchesState(state);
+    const aggregate = buildPollAllResponse(pollResults);
+    res.json({
+      ...aggregate,
+      profiles: state.profiles,
+      snmpWalkAvailable: await isSnmpWalkAvailable(),
+    });
+  } catch (err) {
+    console.error("[snmpPollAll]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/snmpTestInterface", async (req, res) => {
+  try {
+    const { equipmentId, ifIndex } = req.body || {};
+    const state = getSnmpSwitchesState();
+    const profile = state.profiles.find((p) => p.equipmentId === equipmentId);
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "Managed switch profile not found" });
+    }
+    const opts = resolveProfilePollOpts(profile);
+    if (!opts.ip) {
+      return res.status(400).json({ success: false, error: "Switch has no IP address" });
+    }
+    const result = await testSwitchInterface(opts.ip, ifIndex, opts);
+    if (result.success && result.port && profile.lastPoll?.ports) {
+      const ports = profile.lastPoll.ports.map((p) =>
+        p.index === Number(ifIndex) ? { ...p, ...result.port, status: result.port.status } : p
+      );
+      profile.lastPoll = { ...profile.lastPoll, ports };
+      const idx = state.profiles.findIndex((p) => p.id === profile.id);
+      if (idx >= 0) state.profiles[idx] = profile;
+      saveSnmpSwitchesState(state);
+    }
+    res.json({ ...result, snmpWalkAvailable: await isSnmpWalkAvailable() });
+  } catch (err) {
+    console.error("[snmpTestInterface]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/snmpPortMap", async (_req, res) => {
+  try {
+    const state = getSnmpSwitchesState();
+    const enabled = state.profiles.filter((p) => p.enabled !== false);
+    if (!enabled.length) {
+      return res.json({
+        success: true,
+        switches: [],
+        connectionMap: [],
+        totalConnections: 0,
+        disconnectedPorts: 0,
+        polledAt: new Date().toISOString(),
+        message: "No managed switches registered",
+      });
+    }
+    const pollResults = [];
+    for (const profile of enabled) {
+      const { profile: updated, poll } = await pollProfileAndSave(profile);
+      const idx = state.profiles.findIndex((p) => p.id === updated.id);
+      if (idx >= 0) state.profiles[idx] = updated;
+      const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+      pollResults.push({
+        ...poll,
+        ip: poll.ip || equipmentIp(eq),
+        name: poll.name || eq?.name,
+        location: updated.location || eq?.location,
+      });
+    }
+    saveSnmpSwitchesState(state);
+    const switches = pollResults.map((r) => ({
+      ip: r.ip,
+      name: r.name,
+      location: r.location,
+      portsUp: r.ports?.filter((p) => p.status === "up").length || 0,
+      portsDown: r.ports?.filter((p) => p.status === "down").length || 0,
+      ports: (r.ports || []).map((p) => ({
+        port: p.index,
+        ifAlias: p.ifAlias,
+        ifOperStatus: p.status,
+        ifSpeed: p.speedMbps || p.speed,
+        connectedDevice: p.connectedDevice,
+        macAddr: p.macAddr,
+        vlan: p.vlan,
+        poeWatts: p.poeWatts,
+      })),
+    }));
+    const connectionMap = buildConnectionMap(
+      switches.map((sw) => ({
+        name: sw.name,
+        ip: sw.ip,
+        ports: sw.ports.map((p) => ({
+          index: p.port,
+          ifAlias: p.ifAlias,
+          status: p.ifOperStatus,
+          connectedDevice: p.connectedDevice,
+          macAddr: p.macAddr,
+          speedMbps: p.ifSpeed,
+          vlan: p.vlan,
+          poeWatts: p.poeWatts,
+        })),
+      }))
+    );
+    res.json({
+      success: true,
+      switches,
+      connectionMap,
+      totalConnections: connectionMap.length,
+      disconnectedPorts: connectionMap.filter((c) => c.status === "down").length,
+      polledAt: new Date().toISOString(),
+      snmpWalkAvailable: await isSnmpWalkAvailable(),
+    });
+  } catch (err) {
+    console.error("[snmpPortMap]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post("/api/apps/:appId/functions/loadTopologyLayout", (req, res) => {

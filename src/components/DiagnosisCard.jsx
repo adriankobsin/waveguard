@@ -2,8 +2,9 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle, Info, ChevronDown, ChevronUp, FileText,
-  CheckCircle2, X, Play, ShieldAlert, Loader2
+  CheckCircle2, X, Play, ShieldAlert, Loader2, CheckCheck, Network
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { toast } from "sonner";
 
@@ -22,7 +23,7 @@ const ACTION_LABELS = {
   none: null,
 };
 
-export default function DiagnosisCard({ diagnosis, onDismiss, onApprove, expanded: defaultExpanded = false }) {
+export default function DiagnosisCard({ diagnosis, onDismiss, onAcknowledge, onApprove, expanded: defaultExpanded = false }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [executing, setExecuting] = useState(false);
   const [executed, setExecuted] = useState(false);
@@ -33,6 +34,8 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onApprove, expande
   const Icon = cfg.icon;
   const actionLabel = ACTION_LABELS[diagnosis.suggestedAction];
   const isResolved = !!diagnosis.resolvedAt;
+  const isAcknowledged = !!diagnosis.acknowledgedAt;
+  const isSnmp = diagnosis.source === "snmp";
 
   const handleExecute = async () => {
     setConfirmOpen(false);
@@ -76,6 +79,16 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onApprove, expande
             <div className="flex items-center gap-2 flex-wrap">
               <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${cfg.badge}`}>{cfg.label}</span>
               <span className="text-xs text-muted-foreground">{diagnosis.equipmentName}</span>
+              {isSnmp && (
+                <span className="text-xs text-cyan-400/90 bg-cyan-500/10 px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                  <Network size={10} /> SNMP
+                </span>
+              )}
+              {isAcknowledged && !isResolved && (
+                <span className="text-xs text-slate-400 bg-secondary px-2 py-0.5 rounded-full flex items-center gap-0.5">
+                  <CheckCheck size={10} /> Acknowledged
+                </span>
+              )}
               {isResolved && <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Resolved</span>}
             </div>
             <p className="text-sm font-semibold text-foreground mt-1 leading-snug">{diagnosis.summary}</p>
@@ -137,9 +150,30 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onApprove, expande
                 </div>
               )}
 
+              {isSnmp && diagnosis.switchProfileId && (
+                <Link
+                  to="/snmp"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <Network size={12} /> Open in Switch Management
+                </Link>
+              )}
+
               {/* Action Area */}
-              {!isResolved && !executed && actionLabel && (
+              {!isResolved && !isAcknowledged && (
                 <div className="flex flex-wrap gap-2 pt-1">
+                  {onAcknowledge && (
+                    <button
+                      type="button"
+                      onClick={onAcknowledge}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-secondary text-foreground border border-border hover:bg-secondary/80 transition-colors"
+                    >
+                      <CheckCheck size={13} />
+                      Acknowledge
+                    </button>
+                  )}
+                  {!executed && actionLabel && (
+                  <>
                   {diagnosis.requiresApproval && !approved ? (
                     <button
                       onClick={() => setConfirmOpen(true)}
@@ -166,7 +200,21 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onApprove, expande
                       Dismiss
                     </button>
                   )}
+                  </>
+                  )}
                 </div>
+              )}
+
+              {isAcknowledged && !isResolved && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5 pt-1">
+                  <CheckCheck size={12} className="text-slate-400" />
+                  Acknowledged {new Date(diagnosis.acknowledgedAt).toLocaleString()}
+                  {onDismiss && (
+                    <button type="button" onClick={onDismiss} className="ml-2 text-muted-foreground hover:text-foreground underline">
+                      Dismiss permanently
+                    </button>
+                  )}
+                </p>
               )}
 
               {executed && (

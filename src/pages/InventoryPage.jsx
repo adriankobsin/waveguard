@@ -129,7 +129,7 @@ export default function InventoryPage() {
       };
       if (editing === "new") {
         await upsertEquipment({ ...payload, id: `eq-manual-${Date.now()}` });
-        toast.success("Equipment added to inventory");
+        toast.success("Equipment added");
       } else {
         await upsertEquipment({ ...payload, id: editing });
         toast.success("Equipment updated");
@@ -147,7 +147,7 @@ export default function InventoryPage() {
       await deleteEquipment(id);
       queryClient.invalidateQueries({ queryKey: ["equipment"] });
       queryClient.invalidateQueries({ queryKey: ["deviceGroups"] });
-      toast.success("Removed from inventory");
+      toast.success("Equipment removed");
     } catch (e) {
       toast.error(e.message || "Delete failed");
     }
@@ -198,7 +198,7 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
             <Package size={22} className="text-cyan-400" />
-            Inventory
+            Equipment
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {isLoading ? "Loading…" : `${equipment.length} items from discovery and manual entry`}
@@ -318,7 +318,7 @@ export default function InventoryPage() {
               {[
                 { key: "name", placeholder: "Name (e.g. SW-Bridge)" },
                 { key: "make", placeholder: "Make (e.g. Cisco)" },
-                { key: "model", placeholder: "Model (e.g. CBS350)" },
+                { key: "model", placeholder: "Model (e.g. C9300L-24P-4X-E)" },
                 { key: "ip", placeholder: "IP Address" },
                 { key: "mac", placeholder: "MAC Address" },
                 { key: "location", placeholder: "Location" },

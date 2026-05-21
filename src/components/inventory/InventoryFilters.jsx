@@ -134,7 +134,7 @@ export default function InventoryFilters({
 
       <p className="text-xs text-muted-foreground">
         {resultCount} shown
-        {totalCount !== resultCount ? ` of ${totalCount}` : ""} in inventory
+        {totalCount !== resultCount ? ` of ${totalCount}` : ""} in equipment
         {activeCount > 0 ? ` · ${activeCount} filter${activeCount !== 1 ? "s" : ""} active` : ""}
       </p>
     </div>

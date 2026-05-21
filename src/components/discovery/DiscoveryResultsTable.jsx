@@ -15,7 +15,7 @@ const CATEGORY_ICONS = {
 const CLASS_CFG = {
   unclassified: { label: "Pending",   color: "text-amber-400",   badge: "border-amber-500/25 bg-amber-500/10" },
   monitored:    { label: "Monitored", color: "text-emerald-400", badge: "border-emerald-500/25 bg-emerald-500/10" },
-  inventory:    { label: "Inventory", color: "text-blue-400",    badge: "border-blue-500/25 bg-blue-500/10" },
+  inventory:    { label: "Equipment", color: "text-blue-400",    badge: "border-blue-500/25 bg-blue-500/10" },
   ignored:      { label: "Ignored",   color: "text-slate-400",   badge: "border-slate-500/25 bg-slate-500/10" },
 };
 
@@ -118,7 +118,7 @@ function DeviceRow({ device, onClassify, index, registeringId }) {
             <button
               disabled={isRegistering}
               onClick={() => onClassify(device.id, "inventory")}
-              title="Add to Inventory"
+              title="Add to Equipment"
               className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all border disabled:opacity-40 ${
                 device.classification === "inventory"
                   ? "bg-blue-500/25 border-blue-500/40 text-blue-400"

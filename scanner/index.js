@@ -3,11 +3,13 @@ import { pingHost } from "./ping.js";
 import { probePorts, reverseHostname } from "./ports.js";
 import { readArpTable } from "./arp.js";
 import { snmpProbe } from "./snmp.js";
+import { pollSwitchPorts, testSwitchInterface, buildPollAllResponse, isSnmpWalkAvailable } from "./snmpPortMap.js";
 import { lookupVendor, guessCategory } from "./enrich.js";
 import { buildTopologyConnections, mapDevicesToTopology } from "./topology.js";
 
 export { detectLocalSubnets, getScanInterfaceLabel, buildTopologyConnections, mapDevicesToTopology };
 export { lookupVendor, guessCategory };
+export { pollSwitchPorts, testSwitchInterface, buildPollAllResponse, isSnmpWalkAvailable };
 
 const DEFAULT_OPTIONS = {
   subnets: ["192.168.10.0/24"],

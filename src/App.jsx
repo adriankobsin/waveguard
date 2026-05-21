@@ -59,7 +59,8 @@ function App() {
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/cables" element={<CablesPage />} />
-            <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/equipment" element={<InventoryPage />} />
+            <Route path="/inventory" element={<Navigate to="/equipment" replace />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/lighting" element={<LightingPage />} />
             <Route path="/discovery" element={<NetworkDiscoveryPage />} />

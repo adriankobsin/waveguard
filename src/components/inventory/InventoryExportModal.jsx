@@ -17,7 +17,7 @@ function exportCSV(items, label) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `inventory-${label}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `equipment-${label}-${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -31,7 +31,7 @@ function exportPDF(items, label) {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(13);
   doc.setFont("helvetica", "bold");
-  doc.text("Wave Guard — Inventory Report", 10, 12);
+  doc.text("Wave Guard — Equipment Report", 10, 12);
   doc.setFontSize(9);
   doc.setFont("helvetica", "normal");
   doc.text(`Generated: ${new Date().toLocaleString()}  |  Filter: ${label}  |  Items: ${items.length}`, 10, 17);
@@ -96,7 +96,7 @@ function exportPDF(items, label) {
     doc.text(`Page ${p} of ${pageCount}  ·  Wave Guard`, 10, 205);
   }
 
-  doc.save(`inventory-${label}-${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(`equipment-${label}-${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
 export default function InventoryExportModal({ equipment, onClose }) {
@@ -129,7 +129,7 @@ export default function InventoryExportModal({ equipment, onClose }) {
                 <Download size={14} className="text-cyan-400" />
               </div>
               <div>
-                <p className="text-sm font-bold text-white">Export Inventory</p>
+                <p className="text-sm font-bold text-white">Export Equipment</p>
                 <p className="text-xs text-slate-500">Choose filters, then download</p>
               </div>
             </div>

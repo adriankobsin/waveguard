@@ -109,7 +109,7 @@ function diagnosisForWarning(eq) {
     likelyCause:
       "The device is reachable but reporting warning status. Review telemetry, logs, and recent changes.",
     steps: [
-      `Inspect ${eq.name} in Inventory for notes and location`,
+      `Inspect ${eq.name} in Equipment for notes and location`,
       "Run a single-device scan from Topology",
       "Check related automation rules and action logs",
     ],
@@ -173,9 +173,12 @@ export function generateDiagnosesFromSystem({ equipment = [], tasks = [] }, { ex
 }
 
 export function getDiagnosisCounts(diagnoses) {
-  const active = diagnoses.filter((d) => !d.resolvedAt);
+  const active = diagnoses.filter((d) => !d.resolvedAt && !d.acknowledgedAt);
+  const acknowledged = diagnoses.filter((d) => d.acknowledgedAt && !d.resolvedAt);
   return {
     active: active.length,
     critical: active.filter((d) => d.severity === "critical").length,
+    acknowledged: acknowledged.length,
+    snmp: diagnoses.filter((d) => d.source === "snmp" && !d.acknowledgedAt && !d.resolvedAt).length,
   };
 }
