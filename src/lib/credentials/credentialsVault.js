@@ -10,6 +10,7 @@ export const CREDENTIAL_PLATFORMS = [
   { id: "kerio", label: "Kerio" },
   { id: "ssh", label: "SSH" },
   { id: "snmp", label: "SNMP" },
+  { id: "lutron", label: "Lutron LEAP" },
   { id: "api", label: "API / other" },
 ];
 

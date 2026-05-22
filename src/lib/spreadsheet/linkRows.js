@@ -3,6 +3,7 @@ import {
   endpointToEquipment,
   chassisToEquipment,
   applianceToEquipment,
+  genericRowToEquipment,
   patchToCable,
   switchPortToCable,
   collectSiteLocations,
@@ -77,6 +78,11 @@ export function buildImportPayload(parsed, options = {}) {
       for (const row of sheet.rows || []) {
         const cable = patchToCable(row, floorMap);
         if (cable.label) cables.push(cable);
+      }
+    } else if (sheet.sheetType === SHEET_GROUPS.generic) {
+      for (const row of sheet.rows || []) {
+        const eq = genericRowToEquipment(row, floorMap);
+        if (eq) addEquipment(eq);
       }
     }
   }

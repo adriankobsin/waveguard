@@ -457,6 +457,144 @@ export function getDemoRules() {
   return [];
 }
 
+/**
+ * Compact Lutron demo house used by the Lighting page when in demo mode and
+ * by the import flow as a built-in showcase. Each href mirrors what a real
+ * LEAP processor would expose so the same `lightingApi.setZoneLevel` /
+ * `activateScene` calls flow through identically.
+ */
+export function getDemoLightingHouse() {
+  const areas = [
+    { href: "/area/100", id: "100", floor: "Main Deck", name: "Saloon", fullPath: "Main Deck\\Saloon" },
+    { href: "/area/101", id: "101", floor: "Main Deck", name: "Dining", fullPath: "Main Deck\\Dining" },
+    { href: "/area/102", id: "102", floor: "Main Deck", name: "Galley", fullPath: "Main Deck\\Galley" },
+    { href: "/area/200", id: "200", floor: "Upper Deck", name: "Sky Lounge", fullPath: "Upper Deck\\Sky Lounge" },
+    { href: "/area/201", id: "201", floor: "Upper Deck", name: "Sun Deck", fullPath: "Upper Deck\\Sun Deck" },
+    { href: "/area/300", id: "300", floor: "Lower Deck", name: "Owner Cabin", fullPath: "Lower Deck\\Owner Cabin" },
+    { href: "/area/301", id: "301", floor: "Lower Deck", name: "Guest Cabin", fullPath: "Lower Deck\\Guest Cabin" },
+  ];
+
+  const zone = (id, areaId, name, kind = "light") => {
+    const area = areas.find((a) => a.id === areaId);
+    return {
+      href: `/zone/${id}`,
+      id: String(id),
+      area_id: areaId,
+      fullPath: `${area.fullPath}\\${name}`,
+      floor: area.floor,
+      area: area.name,
+      areaFullPath: area.fullPath,
+      name,
+      kind,
+    };
+  };
+
+  const scene = (id, areaId, name) => {
+    const area = areas.find((a) => a.id === areaId);
+    return {
+      href: `/areascene/${id}`,
+      id: String(id),
+      area_id: areaId,
+      fullPath: `${area.fullPath}\\${name}`,
+      floor: area.floor,
+      area: area.name,
+      areaFullPath: area.fullPath,
+      name,
+    };
+  };
+
+  const zones = [
+    zone(1001, "100", "DOWNLIGHTS"),
+    zone(1002, "100", "PENDANT"),
+    zone(1003, "100", "WALL LIGHTS"),
+    zone(1004, "100", "BLACKOUT BLIND", "blackout"),
+    zone(1101, "101", "DOWNLIGHTS"),
+    zone(1102, "101", "DINING PENDANT"),
+    zone(1103, "101", "ROMAN BLIND", "blind"),
+    zone(1201, "102", "DOWNLIGHTS"),
+    zone(1202, "102", "CABINET LIGHTS"),
+    zone(2001, "200", "DOWNLIGHTS"),
+    zone(2002, "200", "PENDANT"),
+    zone(2003, "200", "BLACKOUT BLIND", "blackout"),
+    zone(2101, "201", "WALL LIGHTS"),
+    zone(2102, "201", "STRIP LIGHT"),
+    zone(3001, "300", "DOWNLIGHTS"),
+    zone(3002, "300", "BED LHS"),
+    zone(3003, "300", "BED RHS"),
+    zone(3004, "300", "BLACKOUT BLIND", "blackout"),
+    zone(3101, "301", "DOWNLIGHTS"),
+    zone(3102, "301", "ROMAN BLIND", "blind"),
+  ];
+
+  const scenes = [];
+  for (const a of areas) {
+    ["Off Scene", "Scene 001", "Scene 002", "Scene 003", "Scene 004"].forEach((name, i) => {
+      scenes.push(scene(parseInt(a.id, 10) * 10 + i, a.id, name));
+    });
+  }
+
+  const devices = [
+    {
+      href: "/device/9001",
+      id: "9001",
+      model: "2 Column (2B-2B)",
+      fullPath: "Main Deck\\Saloon\\Entrance\\Device 1",
+      floor: "Main Deck",
+      area: "Saloon",
+      location: "Entrance · Device 1",
+      buttons: [
+        { kind: "button", index: 1, href: "/button/9011", componentName: "WELCOME" },
+        { kind: "button", index: 2, href: "/button/9012", componentName: "AMBIENCE" },
+        { kind: "button", index: 4, href: "/button/9013", componentName: "BRIGHT" },
+        { kind: "button", index: 5, href: "/button/9014", componentName: "ALL OFF" },
+      ],
+      leds: [
+        { kind: "led", index: 1, href: "/led/9111", componentName: null },
+        { kind: "led", index: 2, href: "/led/9112", componentName: null },
+      ],
+    },
+    {
+      href: "/device/9002",
+      id: "9002",
+      model: "Phantom Keypad",
+      fullPath: "Main Deck\\AV Rack\\Panel 1\\Light Control\\Device 1",
+      floor: "Main Deck",
+      area: "AV Rack",
+      location: "Panel 1 · Light Control · Device 1",
+      buttons: [
+        { kind: "button", index: 1, href: "/button/9021", componentName: "ALL LIGHTS FULL" },
+        { kind: "button", index: 2, href: "/button/9022", componentName: "ALL LIGHTS MED" },
+        { kind: "button", index: 3, href: "/button/9023", componentName: "ALL LIGHTS OFF" },
+      ],
+      leds: [],
+    },
+  ];
+
+  return {
+    house: {
+      fileName: "Demo Vessel — Lutron HomeWorks QSX (demo)",
+      processorId: null,
+      parsedAt: new Date().toISOString(),
+      counts: {
+        areas: areas.length,
+        zones: zones.length,
+        scenes: scenes.length,
+        devices: devices.length,
+        buttons: devices.reduce((s, d) => s + d.buttons.length, 0),
+        leds: devices.reduce((s, d) => s + d.leds.length, 0),
+        hvacZones: 0,
+        shadeGroups: 0,
+      },
+    },
+    areas,
+    zones,
+    scenes,
+    devices,
+    hvacZones: [],
+    shadeGroups: [],
+  };
+}
+
 /** Build the full demo sources payload used by SystemDataContext. */
 export function buildDemoSystemSources() {
   return {

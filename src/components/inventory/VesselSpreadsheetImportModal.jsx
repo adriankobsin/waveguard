@@ -34,6 +34,7 @@ const GROUP_LABELS = {
   [SHEET_GROUPS.appliance]: "WAN / Firewall / WLAN / PBX",
   [SHEET_GROUPS.ipScheme]: "IP Scheme (VLANs)",
   [SHEET_GROUPS.rack]: "Rack elevations",
+  [SHEET_GROUPS.generic]: "Auto-detected sheets (custom columns)",
 };
 
 export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComplete }) {
@@ -138,8 +139,9 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
             Import vessel spreadsheet
           </DialogTitle>
           <DialogDescription>
-            Upload an Albatros-style network workbook (.xlsx). Each sheet is parsed using its native column headers.
-            Usernames and passwords are never imported.
+            Upload any equipment workbook (.xlsx). Albatros-style sheets are parsed with their native
+            templates; other sheets are auto-detected from their column headers (Name, Model, IP, MAC,
+            Serial, etc.) so every recognized cell is imported. Usernames and passwords are never imported.
           </DialogDescription>
         </DialogHeader>
 

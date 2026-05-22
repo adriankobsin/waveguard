@@ -1,82 +1,158 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, Lightbulb } from "lucide-react";
+import { Lightbulb, Sun, Moon, Loader2 } from "lucide-react";
 
-const PROTOCOL_COLORS = {
-  DMX:    "text-purple-400 bg-purple-500/10 border-purple-500/20",
-  DALI:   "text-blue-400 bg-blue-500/10 border-blue-500/20",
-  KNX:    "text-orange-400 bg-orange-500/10 border-orange-500/20",
-  Lutron: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+/**
+ * Flat zone list for the selected floor in the Deck Control tab.
+ *
+ * Renders the live Lutron `zoneState` (level/on) and forwards level / toggle
+ * actions back up to the page-level handlers which speak LEAP / Telnet
+ * (or the local mock engine when no processor is configured).
+ */
+
+const KIND_META = {
+  light:    { label: "Light",    Icon: Lightbulb, tone: "amber" },
+  shade:    { label: "Shade",    Icon: Sun,       tone: "sky" },
+  blind:    { label: "Blind",    Icon: Sun,       tone: "indigo" },
+  blackout: { label: "Blackout", Icon: Moon,      tone: "violet" },
+  load:     { label: "Load",     Icon: Lightbulb, tone: "emerald" },
+};
+const TONE_CLS = {
+  amber:   "text-amber-400 bg-amber-500/10 border-amber-500/30",
+  sky:     "text-sky-400 bg-sky-500/10 border-sky-500/30",
+  indigo:  "text-indigo-400 bg-indigo-500/10 border-indigo-500/30",
+  violet:  "text-violet-400 bg-violet-500/10 border-violet-500/30",
+  emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
 };
 
-export default function LightingZoneList({ zones, selectedZone, onSelectZone, onUpdateZone }) {
-  return (
-    <div className="space-y-2 max-w-3xl mx-auto">
-      {zones.map((zone, i) => {
-        const isSelected = selectedZone === zone.id;
-        const pcls = PROTOCOL_COLORS[zone.protocol] || "text-muted-foreground bg-slate-500/10 border-slate-500/20";
+function meta(kind) {
+  return KIND_META[kind] || KIND_META.load;
+}
 
+export default function LightingZoneList({
+  zones,
+  zoneState,
+  pendingZones,
+  selectedHref,
+  onSelectZone,
+  onZoneLevel,
+  onZoneToggle,
+}) {
+  if (!zones || zones.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto py-12 px-6 text-center text-xs text-muted-foreground">
+        No loads in this floor.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 max-w-3xl mx-auto p-4">
+      {zones.map((zone, i) => {
+        const m = meta(zone.kind);
+        const Icon = m.Icon;
+        const state = zoneState?.[zone.href];
+        const level = state?.level ?? 0;
+        const isOn = state?.on ?? false;
+        const isBusy = !!pendingZones?.[zone.href];
+        const isSelected = selectedHref === zone.href;
         return (
           <motion.div
-            key={zone.id}
+            key={zone.href}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03 }}
-            onClick={() => onSelectZone(isSelected ? null : zone.id)}
+            transition={{ delay: i * 0.02 }}
+            onClick={() =>
+              onSelectZone?.(isSelected ? null : zone.href)
+            }
             className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border cursor-pointer transition-all ${
               isSelected
                 ? "border-amber-500/40 bg-amber-500/8"
-                : zone.fault
-                ? "border-red-500/25 bg-red-500/5 hover:bg-red-500/8"
-                : "border-border bg-muted/50 hover:bg-secondary hover:border-border"
+                : isOn
+                ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
+                : "border-border bg-muted/50 hover:bg-secondary"
             }`}
           >
-            {/* Status indicator */}
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              zone.fault ? "bg-red-500/15" : zone.on ? "bg-amber-500/15" : "bg-secondary"
-            }`}>
-              {zone.fault
-                ? <AlertTriangle size={16} className="text-red-400" />
-                : <Lightbulb size={16} className={zone.on ? "text-amber-400" : "text-muted-foreground"} />
-              }
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                isOn ? "bg-amber-500/15" : "bg-secondary"
+              }`}
+            >
+              <Icon
+                size={16}
+                className={
+                  isOn ? "text-amber-400" : "text-muted-foreground"
+                }
+              />
             </div>
 
-            {/* Name + location */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <p className="text-sm font-semibold text-foreground truncate">{zone.name}</p>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${pcls}`}>
-                  {zone.protocol}
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {zone.name}
+                </p>
+                <span
+                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${TONE_CLS[m.tone]}`}
+                >
+                  {m.label}
                 </span>
-                {zone.fault && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/12 text-red-400 flex-shrink-0">
-                    FAULT
-                  </span>
-                )}
               </div>
-              <p className="text-xs text-muted-foreground truncate">{zone.location} · {zone.fixtures} fixtures · Ch {zone.channel}</p>
+              <p className="text-xs text-muted-foreground truncate">
+                {zone.area} · <span className="font-mono">{zone.href}</span>
+              </p>
             </div>
 
-            {/* Dimmer slider */}
-            <div className="w-32 flex-shrink-0 hidden sm:block" onClick={e => e.stopPropagation()}>
+            <div
+              className="w-32 flex-shrink-0 hidden sm:block"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="flex justify-between text-[10px] mb-1">
                 <span className="text-muted-foreground">Level</span>
-                <span className={zone.on ? "text-amber-400 font-bold" : "text-muted-foreground"}>{zone.on ? `${zone.level}%` : "Off"}</span>
+                <span
+                  className={
+                    isOn
+                      ? "text-amber-400 font-bold"
+                      : "text-muted-foreground"
+                  }
+                >
+                  {isOn ? `${level}%` : "Off"}
+                </span>
               </div>
               <input
-                type="range" min={0} max={100} value={zone.level}
-                onChange={e => onUpdateZone(zone.id, { level: +e.target.value, on: +e.target.value > 0 })}
-                className="w-full h-1.5 cursor-pointer"
+                type="range"
+                min={0}
+                max={100}
+                value={level}
+                disabled={isBusy}
+                onChange={(e) =>
+                  onZoneLevel(zone, Number(e.target.value))
+                }
+                className="w-full h-1.5 cursor-pointer disabled:opacity-50"
                 style={{ accentColor: "#f59e0b" }}
               />
             </div>
 
-            {/* Toggle */}
             <button
-              onClick={e => { e.stopPropagation(); onUpdateZone(zone.id, { on: !zone.on }); }}
-              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${zone.on ? "bg-amber-500" : "bg-muted"}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onZoneToggle(zone, !isOn);
+              }}
+              disabled={isBusy}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+                isOn ? "bg-amber-500" : "bg-muted"
+              }`}
             >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${zone.on ? "translate-x-5" : "translate-x-0"}`} />
+              <span
+                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                  isOn ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
             </button>
+
+            {isBusy && (
+              <Loader2
+                size={12}
+                className="text-amber-400 animate-spin flex-shrink-0"
+              />
+            )}
           </motion.div>
         );
       })}

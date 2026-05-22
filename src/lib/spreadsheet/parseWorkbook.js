@@ -1,6 +1,20 @@
 import * as XLSX from "xlsx";
 import { detectSheetType, headerRowForType } from "./detectSheetType.js";
 import { SHEET_GROUPS, normalizeHeader, isCredentialHeader } from "./schemas.js";
+import { detectGenericHeaderRow, rowToGenericEquipment } from "./headerMapping.js";
+
+/** Sheet names we should never auto-import even via the generic fallback. */
+const EXPLICIT_SKIP_NAMES = new Set([
+  "search",
+  "data",
+  "ip scheme",
+  "instructions",
+  "readme",
+  "legend",
+  "key",
+  "notes",
+  "tabs",
+]);
 
 function cellStr(v) {
   if (v == null || v === "") return "";
@@ -85,6 +99,19 @@ function parseSwitchSheet(sheetName, rows, headerIdx) {
         serial: obj["serial number"] || "",
         poeTotal: obj["poe total (w)"] || "",
         notes: obj.notes || "",
+        rawObj: obj,
+        consumedKeys: [
+          "hostname",
+          "mac address",
+          "firmware",
+          "location",
+          "model no",
+          "model no.",
+          "management ip",
+          "serial number",
+          "poe total (w)",
+          "notes",
+        ],
         kind: "chassis",
       };
       chassis.push(currentChassis);
@@ -160,6 +187,24 @@ function parseIpScheme(rows) {
   return { vlans };
 }
 
+function parseGenericEquipmentSheet(sheetName, rows) {
+  const detected = detectGenericHeaderRow(rows);
+  if (!detected) return null;
+  const items = [];
+  for (let i = detected.index + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (isEmptyRow(row)) continue;
+    const eq = rowToGenericEquipment(row, detected, sheetName, i + 1);
+    if (eq) items.push(eq);
+  }
+  return {
+    headerRow: detected.index + 1,
+    detectedColumns: detected.fieldByCol,
+    headers: detected.headers,
+    rows: items,
+  };
+}
+
 function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
   const headers = (rows[headerIdx] || []).map(cellStr);
   const parsed = [];
@@ -185,6 +230,21 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
         mac: obj.mac || "",
         serial: obj["serial #"] || obj.serial || "",
         notes: obj.notes || "",
+        rawObj: obj,
+        consumedKeys: [
+          "floor",
+          "room",
+          "location",
+          "system",
+          "type",
+          "end device",
+          "end device port",
+          "poe (w)",
+          "mac",
+          "serial #",
+          "serial",
+          "notes",
+        ],
         kind: "endpoint",
       });
     } else if (sheetType === SHEET_GROUPS.patchPanels) {
@@ -220,6 +280,20 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
         managementIp: obj["management ip"] || "",
         serial: obj["serial number"] || "",
         notes: obj.notes || "",
+        rawObj: obj,
+        consumedKeys: [
+          "hostname",
+          "mac address",
+          "base mac address",
+          "location",
+          "firmware",
+          "firmware version",
+          "model no",
+          "model no (controller)",
+          "management ip",
+          "serial number",
+          "notes",
+        ],
         kind: "appliance",
       });
     }
@@ -238,14 +312,39 @@ export function parseWorkbook(buffer) {
   const summary = { byGroup: {}, totalRows: 0, warnings: [] };
 
   for (const sheetName of wb.SheetNames) {
-    const sheetType = detectSheetType(sheetName);
-    if (sheetType === SHEET_GROUPS.skip) {
+    let sheetType = detectSheetType(sheetName);
+    const lower = String(sheetName || "").trim().toLowerCase();
+
+    if (sheetType === SHEET_GROUPS.skip && EXPLICIT_SKIP_NAMES.has(lower)) {
       sheets.push({ sheetName, sheetType, skipped: true, rows: [] });
       continue;
     }
 
     const ws = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
+
+    // Unknown sheet → attempt auto-detect using column header synonyms.
+    if (sheetType === SHEET_GROUPS.skip) {
+      const generic = parseGenericEquipmentSheet(sheetName, rows);
+      if (generic && generic.rows.length) {
+        summary.byGroup[SHEET_GROUPS.generic] =
+          (summary.byGroup[SHEET_GROUPS.generic] || 0) + generic.rows.length;
+        summary.totalRows += generic.rows.length;
+        sheets.push({
+          sheetName,
+          sheetType: SHEET_GROUPS.generic,
+          headerRow: generic.headerRow,
+          rowCount: generic.rows.length,
+          detectedColumns: generic.detectedColumns,
+          headers: generic.headers,
+          rows: generic.rows,
+        });
+      } else {
+        sheets.push({ sheetName, sheetType, skipped: true, rows: [] });
+      }
+      continue;
+    }
+
     const headerIdx = findHeaderRow(rows, sheetType);
 
     let payload;

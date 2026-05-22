@@ -7,6 +7,7 @@ export const SHEET_GROUPS = {
   appliance: "appliance",
   ipScheme: "ipScheme",
   rack: "rack",
+  generic: "generic",
   skip: "skip",
 };
 
@@ -16,6 +17,7 @@ export const PHASE1_GROUPS = [
   SHEET_GROUPS.patchPanels,
   SHEET_GROUPS.switchPorts,
   SHEET_GROUPS.appliance,
+  SHEET_GROUPS.generic,
 ];
 
 /** Phase 2 groups. */

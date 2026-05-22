@@ -8,6 +8,11 @@ export {
 } from "./schemas.js";
 export { detectSheetType } from "./detectSheetType.js";
 export { stripVesselEquipmentName } from "./equipmentName.js";
+export {
+  FIELD_SYNONYMS,
+  mapHeaderToField,
+  detectGenericHeaderRow,
+} from "./headerMapping.js";
 
 import { parseWorkbook } from "./parseWorkbook.js";
 import { buildImportPayload } from "./linkRows.js";

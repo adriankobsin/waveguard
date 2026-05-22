@@ -8,6 +8,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdmin } from "@/lib/permissions";
 import { WIDGET_TYPES } from "@/components/dashboard/widgets/DashboardWidgets";
+import { testLutronProcessor } from "@/api/lightingApi";
 import {
   testIntegration,
   testOpenAiKey,
@@ -94,7 +95,17 @@ const INTEGRATION_DEFS = [
   { key: "qsys", label: "Q-SYS", fields: [{ k: "host", l: "Host" }, { k: "port", l: "Port" }] },
   { key: "dahua", label: "Dahua CCTV", fields: [{ k: "host", l: "Host" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
   { key: "mqtt", label: "MQTT", fields: [{ k: "brokerUrl", l: "Broker URL" }, { k: "topicPrefix", l: "Topic prefix" }] },
-  { key: "lutron", label: "Lutron", fields: [{ k: "host", l: "Host" }] },
+  {
+    key: "lutron",
+    label: "Lutron (HomeWorks QSX / Athena / RadioRA 3)",
+    fields: [
+      { k: "host", l: "Processor host / IP" },
+      { k: "port", l: "Port (LEAP 443, Telnet 23)" },
+      { k: "user", l: "Username" },
+      { k: "password", l: "Password", secret: true },
+      { k: "api", l: "API mode (leap | telnet)" },
+    ],
+  },
   { key: "dali", label: "DALI", fields: [{ k: "host", l: "Gateway host" }] },
   { key: "dmx", label: "DMX / Art-Net", fields: [{ k: "host", l: "Art-Net host" }] },
   { key: "knx", label: "KNX", fields: [{ k: "host", l: "Gateway host" }, { k: "port", l: "Port" }] },
@@ -122,8 +133,27 @@ export function IntegrationsPanel() {
     setTesting(key);
     setTestResult(null);
     try {
-      const res = await testIntegration(key, cfg[key]);
-      setTestResult({ key, ok: true, message: res.message });
+      if (key === "lutron") {
+        const ic = cfg.lutron || {};
+        const res = await testLutronProcessor({
+          host: ic.host,
+          port: Number(ic.port) || 443,
+          username: ic.user,
+          password: ic.password,
+        });
+        if (!res.success) throw new Error(res.message || "Lutron processor unreachable");
+        const detail = [res.product, res.firmware ? `fw ${res.firmware}` : null, res.api]
+          .filter(Boolean)
+          .join(" · ");
+        setTestResult({
+          key,
+          ok: true,
+          message: `${res.processor} — ${res.message}${detail ? ` (${detail})` : ""}`,
+        });
+      } else {
+        const res = await testIntegration(key, cfg[key]);
+        setTestResult({ key, ok: true, message: res.message });
+      }
     } catch (e) {
       setTestResult({ key, ok: false, message: e.message });
     } finally {

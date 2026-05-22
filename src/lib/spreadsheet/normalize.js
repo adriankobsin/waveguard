@@ -1,5 +1,30 @@
 import { DEFAULT_FLOOR_MAP, SHEET_GROUPS } from "./schemas.js";
 import { stripVesselEquipmentName } from "./equipmentName.js";
+import { extractExtraFieldsFromObject } from "./headerMapping.js";
+
+function appendNote(existing, addition) {
+  if (!addition) return existing || "";
+  if (!existing) return addition;
+  if (existing.includes(addition)) return existing;
+  return `${existing} | ${addition}`;
+}
+
+function mergeExtrasIntoEquipment(eq, rawObj, consumedKeys = []) {
+  if (!rawObj) return eq;
+  const extras = extractExtraFieldsFromObject(rawObj, new Set(consumedKeys || []));
+  const { _extraNotes, ...recognized } = extras;
+  const merged = { ...eq };
+  for (const [field, val] of Object.entries(recognized)) {
+    if (val == null || val === "") continue;
+    if (merged[field] == null || merged[field] === "") {
+      merged[field] = val;
+    }
+  }
+  if (_extraNotes) {
+    merged.notes = appendNote(merged.notes, _extraNotes);
+  }
+  return merged;
+}
 
 const SYSTEM_TO_CATEGORY = {
   IT: "Network",
@@ -68,7 +93,7 @@ function baseEquipment(fields) {
 }
 
 export function endpointToEquipment(row, floorMap) {
-  return baseEquipment({
+  const base = baseEquipment({
     name: row.endDevice,
     model: row.type || "",
     category: mapSystemToCategory(row.system, row.type),
@@ -83,10 +108,11 @@ export function endpointToEquipment(row, floorMap) {
     notes: row.notes || "",
     importSource: { sheet: row.sheet, row: row.row },
   });
+  return mergeExtrasIntoEquipment(base, row.rawObj, row.consumedKeys);
 }
 
 export function chassisToEquipment(row, floorMap) {
-  return baseEquipment({
+  const base = baseEquipment({
     name: row.hostname,
     model: row.model || "",
     category: "Network",
@@ -99,10 +125,11 @@ export function chassisToEquipment(row, floorMap) {
     systemCategory: "IT",
     importSource: { sheet: row.sheet, row: row.row },
   });
+  return mergeExtrasIntoEquipment(base, row.rawObj, row.consumedKeys);
 }
 
 export function applianceToEquipment(row) {
-  return baseEquipment({
+  const base = baseEquipment({
     name: row.hostname,
     model: row.model || "",
     category: mapSystemToCategory("", row.model),
@@ -113,6 +140,39 @@ export function applianceToEquipment(row) {
     firmware: row.firmware || "",
     notes: row.notes || "",
     systemCategory: "IT",
+    importSource: { sheet: row.sheet, row: row.row },
+  });
+  return mergeExtrasIntoEquipment(base, row.rawObj, row.consumedKeys);
+}
+
+export function genericRowToEquipment(row, floorMap) {
+  if (!row?.name) return null;
+  const floor = row.floor || "";
+  const room = row.room != null && row.room !== "" ? String(row.room) : "";
+  const location = row.location || buildLocation(floor, room, floorMap);
+  return baseEquipment({
+    name: row.name,
+    make: row.make || "",
+    model: row.model || "",
+    category: row.category || mapSystemToCategory(row.category, row.model),
+    ip: row.ip || "",
+    mac: row.mac || "",
+    location,
+    floor,
+    room,
+    systemCategory: row.category || "",
+    portLabel: row.portLabel || "",
+    poeWatts:
+      row.poeWatts != null
+        ? typeof row.poeWatts === "number"
+          ? row.poeWatts
+          : parseFloat(row.poeWatts) || null
+        : null,
+    serial: row.serial || "",
+    firmware: row.firmware || "",
+    condition: row.condition || "Good",
+    status: row.status || "unknown",
+    notes: row.notes || "",
     importSource: { sheet: row.sheet, row: row.row },
   });
 }
