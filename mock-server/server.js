@@ -46,6 +46,9 @@ import {
   probeLutronPorts,
   recommendationFromPorts,
 } from "../scanner/integrations/lutron/lutronClient.js";
+import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
+import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
+import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
 import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 
@@ -1305,8 +1308,19 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
     const engine = engineForSystemType(systemType);
 
     const live = resolveLiveConnection(req.body);
-    // Live client is only available for Lutron Telnet
-    const liveClient = live && live.protocol === "telnet" && systemType === "lutron" ? getLutronClient(live) : null;
+    // Live client based on system type
+    let liveClient = null;
+    if (live) {
+      if (systemType === "lutron" && live.protocol === "telnet") {
+        liveClient = getLutronClient(live);
+      } else if (systemType === "knx") {
+        liveClient = getKnxClient(live);
+      } else if (systemType === "dali") {
+        liveClient = getDaliClient(live);
+      } else if (systemType === "dmx") {
+        liveClient = getDmxClient(live);
+      }
+    }
     // For testProcessor we let the dedicated branch handle connectivity so it
     // can run the port scan and produce a precise recommendation even when
     // the Telnet socket refuses to open. For every other op we eagerly try
@@ -1581,17 +1595,65 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
         }
       } // end if (systemType === "lutron")
 
-      // Non-Lutron systems — always mock mode
-      return res.json({
-        success: true,
-        mode: "mock",
-        processor: target,
-        protocol: resolvedProtocol,
-        product: `${systemType.toUpperCase()} Engine (mock)`,
-        firmware: "1.0.0",
-        api,
-        message: `Mock ${systemType.toUpperCase()} processor reachable at ${target}.`,
-      });
+      // KNX / DALI / DMX — probe ports and try live client
+      async function probeNonLutron() {
+        let availablePorts = [];
+        if (systemType === "knx") {
+          availablePorts = await probeKnxPorts(targetHost);
+        } else if (systemType === "dali") {
+          availablePorts = await probeDaliPorts(targetHost);
+        } else if (systemType === "dmx") {
+          availablePorts = await probeDmxPorts(targetHost);
+        }
+        const openPorts = availablePorts.filter((p) => p.open).map((p) => p.port);
+        const recFn = systemType === "knx" ? knxRecommendation : systemType === "dali" ? daliRecommendation : dmxRecommendation;
+        const recommendation = recFn(availablePorts, resolvedProtocol);
+        if (liveClient) {
+          try {
+            await liveClient.connect();
+            await liveClient.ping();
+            return res.json({
+              success: true,
+              mode: "live",
+              processor: target,
+              protocol: resolvedProtocol,
+              api,
+              product: `${systemType.toUpperCase()} controller`,
+              firmware: "1.0.0",
+              availablePorts,
+              openPorts,
+              recommendation,
+              message: `Connected to ${systemType.toUpperCase()} controller at ${target}.`,
+            });
+          } catch (err) {
+            return res.json({
+              success: false,
+              mode: "live",
+              processor: target,
+              protocol: resolvedProtocol,
+              api,
+              availablePorts,
+              openPorts,
+              recommendation,
+              message: err.message,
+            });
+          }
+        }
+        return res.json({
+          success: true,
+          mode: "mock",
+          processor: target,
+          protocol: resolvedProtocol,
+          product: `${systemType.toUpperCase()} Engine (mock)`,
+          firmware: "1.0.0",
+          api,
+          availablePorts,
+          openPorts,
+          recommendation,
+          message: `Mock ${systemType.toUpperCase()} engine — no host configured.`,
+        });
+      }
+      return probeNonLutron();
 
       } // end case "testProcessor"
 
@@ -1604,14 +1666,13 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
   }
 });
 
-// Close any active Lutron socket on process exit so dev restarts don't leak.
+// Close any active lighting client sockets on process exit so dev restarts don't leak.
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.once(sig, () => {
-    try {
-      closeLutronClient();
-    } catch {
-      /* ignore */
-    }
+    try { closeLutronClient(); } catch { /* */ }
+    try { closeKnxClient(); } catch { /* */ }
+    try { closeDaliClient(); } catch { /* */ }
+    try { closeDmxClient(); } catch { /* */ }
     process.exit(0);
   });
 }

@@ -16,6 +16,7 @@ import {
   Loader2,
   KeyRound,
   Settings,
+  Table2,
 } from "lucide-react";
 import LightingZoneMap from "../components/lighting/LightingZoneMap";
 import LightingZoneList from "../components/lighting/LightingZoneList";
@@ -25,6 +26,7 @@ import LightingMapTab from "../components/topology/LightingMapTab";
 import LutronAreaLoads from "../components/lighting/LutronAreaLoads";
 import LutronImportModal from "../components/lighting/LutronImportModal";
 import LutronConnectionModal from "../components/lighting/LutronConnectionModal";
+import LoadScheduleTable from "../components/lighting/LoadScheduleTable";
 import { toast } from "@/components/ui/use-toast";
 import {
   loadLightingHouse,
@@ -66,6 +68,7 @@ export default function LightingPage() {
   const [pendingScene, setPendingScene] = useState(null);
   const [connection, setConnection] = useState(null);
   const [connectionTesting, setConnectionTesting] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [lutronConn, setLutronConn] = useState(DEFAULT_LUTRON_CONNECTION);
   const [pollingAll, setPollingAll] = useState(false);
 
@@ -453,6 +456,19 @@ export default function LightingPage() {
                 <Settings size={12} />
                 {house?.devices?.length || 0} keypads
               </span>
+              {(house?.loadSchedule?.length || 0) > 0 && (
+                <button
+                  onClick={() => setScheduleOpen(!scheduleOpen)}
+                  className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[11px] font-semibold transition-colors ${
+                    scheduleOpen
+                      ? "bg-cyan-500/15 border-cyan-500/30 text-cyan-400"
+                      : "border-border text-muted-foreground hover:text-foreground hover:bg-muted"
+                  }`}
+                >
+                  <Table2 size={11} />
+                  Schedule · {house.loadSchedule.length}
+                </button>
+              )}
               {connection && (
                 <span
                   className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${
@@ -493,6 +509,12 @@ export default function LightingPage() {
               )}
             </div>
           )}
+
+          <LoadScheduleTable
+            house={house}
+            open={scheduleOpen}
+            onClose={() => setScheduleOpen(false)}
+          />
 
           {houseLoading ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground p-6">

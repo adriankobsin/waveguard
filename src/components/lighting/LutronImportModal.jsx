@@ -11,67 +11,96 @@ import {
   Layers3,
   Boxes,
   Cpu,
+  Table2,
 } from "lucide-react";
 import { extractLutronPdfText } from "@/lib/lighting/extractLutronPdfText";
 import { parseLutronIntegrationReport } from "@/lib/lighting/parseLutronIntegrationReport";
+import { parseLoadScheduleCsv } from "@/lib/lighting/parseLoadScheduleCsv";
+import { normalizeLightingHouse } from "@/lib/lighting/lightingSettings";
 
-const COUNT_TILES = [
+const REPORT_TILES = [
   { key: "areas", label: "Areas", icon: Layers3, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20" },
   { key: "zones", label: "Loads", icon: Lightbulb, color: "text-amber-400 bg-amber-500/10 border-amber-500/20" },
-  { key: "scenes", label: "Scenes", icon: Boxes, color: "text-sky-400 bg-sky-500/10 border-sky-500/20" },
+  { key: "scenes", labels: "Scenes", icon: Boxes, color: "text-sky-400 bg-sky-500/10 border-sky-500/20" },
   { key: "devices", label: "Keypads", icon: Cpu, color: "text-violet-400 bg-violet-500/10 border-violet-500/20" },
 ];
 
+const SCHEDULE_TILES = [
+  { key: "total", label: "Scheduled loads", icon: Table2, color: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20" },
+  { key: "panels", label: "Panels", icon: Layers3, color: "text-indigo-400 bg-indigo-500/10 border-indigo-500/20" },
+];
+
 export default function LutronImportModal({ open, onClose, onImport }) {
-  const fileInputRef = useRef(null);
-  const [file, setFile] = useState(null);
+  const pdfInputRef = useRef(null);
+  const csvInputRef = useRef(null);
+  const [reportFile, setReportFile] = useState(null);
+  const [scheduleFile, setScheduleFile] = useState(null);
   const [textInput, setTextInput] = useState("");
   const [parsing, setParsing] = useState(false);
   const [error, setError] = useState(null);
-  const [parsed, setParsed] = useState(null);
+  const [parsedReport, setParsedReport] = useState(null);
+  const [parsedSchedule, setParsedSchedule] = useState(null);
   const [saving, setSaving] = useState(false);
 
   function reset() {
-    setFile(null);
+    setReportFile(null);
+    setScheduleFile(null);
     setTextInput("");
     setParsing(false);
     setError(null);
-    setParsed(null);
+    setParsedReport(null);
+    setParsedSchedule(null);
     setSaving(false);
   }
 
-  async function handleFileChange(e) {
+  async function handleReportFile(e) {
     const f = e.target.files?.[0];
     if (!f) return;
-    setFile(f);
+    setReportFile(f);
     setError(null);
-    setParsed(null);
+    setParsedReport(null);
     setParsing(true);
     try {
       const text = await extractLutronPdfText(f);
       const data = parseLutronIntegrationReport(text, { fileName: f.name });
-      setParsed(data);
+      setParsedReport(data);
       setTextInput(text);
     } catch (err) {
-      console.error("[LutronImport] PDF parse failed:", err);
-      setError(
-        err?.message ||
-          "Unable to read this PDF. Try pasting the report text instead."
-      );
+      setError(err?.message || "Unable to read this PDF.");
     } finally {
       setParsing(false);
     }
   }
 
+  function handleScheduleFile(e) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setScheduleFile(f);
+    setParsedSchedule(null);
+    setError(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const entries = parseLoadScheduleCsv(reader.result);
+        const panels = new Set(entries.map((e) => e.panel).filter(Boolean));
+        setParsedSchedule({ entries, panelCount: panels.size });
+      } catch (err) {
+        setError("Failed to parse load schedule: " + (err?.message || ""));
+      }
+    };
+    reader.onerror = () => setError("Failed to read load schedule file.");
+    reader.readAsText(f);
+  }
+
   async function handleParseText() {
     setError(null);
-    setParsed(null);
+    setParsedReport(null);
     setParsing(true);
     try {
       const data = parseLutronIntegrationReport(textInput, {
-        fileName: file?.name || "Pasted text",
+        fileName: reportFile?.name || "Pasted text",
       });
-      setParsed(data);
+      setParsedReport(data);
     } catch (err) {
       setError(err?.message || "Parse failed");
     } finally {
@@ -80,10 +109,22 @@ export default function LutronImportModal({ open, onClose, onImport }) {
   }
 
   async function handleConfirm() {
-    if (!parsed) return;
+    if (!parsedReport && !parsedSchedule) return;
     setSaving(true);
     try {
-      await onImport?.(parsed);
+      const merged = normalizeLightingHouse({
+        ...(parsedReport || {}),
+        loadSchedule: parsedSchedule?.entries || [],
+        house: {
+          ...((parsedReport || {}).house || {}),
+          counts: {
+            ...((parsedReport || {}).house?.counts || {}),
+            scheduledLoads: parsedSchedule?.entries?.length || 0,
+            panels: parsedSchedule?.panelCount || 0,
+          },
+        },
+      });
+      await onImport?.(merged);
       reset();
       onClose?.();
     } catch (err) {
@@ -102,10 +143,7 @@ export default function LutronImportModal({ open, onClose, onImport }) {
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
           onClick={() => {
-            if (!parsing && !saving) {
-              reset();
-              onClose?.();
-            }
+            if (!parsing && !saving) { reset(); onClose?.(); }
           }}
         >
           <motion.div
@@ -122,20 +160,17 @@ export default function LutronImportModal({ open, onClose, onImport }) {
                 </div>
                 <div>
                   <p className="text-sm font-bold text-foreground">
-                    Import Lutron Integration Report
+                    Import lighting data
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Parse the report PDF exported by Lutron Designer to load
-                    areas, zones, scenes and keypads.
+                    Import the Integration Report (PDF) and optionally the Load
+                    Schedule (CSV) exported from Lutron Designer.
                   </p>
                 </div>
               </div>
               <button
                 disabled={parsing || saving}
-                onClick={() => {
-                  reset();
-                  onClose?.();
-                }}
+                onClick={() => { reset(); onClose?.(); }}
                 className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground disabled:opacity-50"
               >
                 <X size={16} />
@@ -143,34 +178,64 @@ export default function LutronImportModal({ open, onClose, onImport }) {
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              {/* File picker */}
-              <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-6 text-center">
+              {/* Integration Report file picker */}
+              <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-4 text-center">
                 <input
-                  ref={fileInputRef}
+                  ref={pdfInputRef}
                   type="file"
                   accept="application/pdf,.pdf,.txt"
                   className="hidden"
-                  onChange={handleFileChange}
+                  onChange={handleReportFile}
                 />
-                <Upload size={22} className="mx-auto text-amber-400 mb-2" />
+                <Upload size={18} className="mx-auto text-amber-400 mb-1.5" />
                 <p className="text-sm font-semibold text-foreground mb-1">
-                  Drop or pick the Integration Report PDF
+                  1. Integration Report
                 </p>
-                <p className="text-[11px] text-muted-foreground mb-3">
-                  Exported from Lutron Designer (works for HomeWorks QSX, Athena,
-                  RadioRA 3).
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  PDF exported from Lutron Designer (zones, scenes, keypads).
                 </p>
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => pdfInputRef.current?.click()}
                   className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-xs font-semibold text-amber-400 hover:bg-amber-500/25 transition-colors"
                 >
                   <FileText size={12} />
-                  Choose file
+                  Choose report
                 </button>
-                {file && (
-                  <p className="text-[11px] text-muted-foreground mt-2">
+                {reportFile && (
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
                     <FileText size={10} className="inline -mt-0.5 mr-1" />
-                    {file.name} · {(file.size / 1024).toFixed(0)} KB
+                    {reportFile.name} · {(reportFile.size / 1024).toFixed(0)} KB
+                  </p>
+                )}
+              </div>
+
+              {/* Load Schedule CSV file picker */}
+              <div className="rounded-xl border border-dashed border-border bg-muted/30 px-4 py-4 text-center">
+                <input
+                  ref={csvInputRef}
+                  type="file"
+                  accept=".csv"
+                  className="hidden"
+                  onChange={handleScheduleFile}
+                />
+                <Table2 size={18} className="mx-auto text-cyan-400 mb-1.5" />
+                <p className="text-sm font-semibold text-foreground mb-1">
+                  2. Load Schedule (optional)
+                </p>
+                <p className="text-[11px] text-muted-foreground mb-2">
+                  CSV exported from Lutron Designer (panel assignments, load types, wattages).
+                </p>
+                <button
+                  onClick={() => csvInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-500/15 border border-cyan-500/30 text-xs font-semibold text-cyan-400 hover:bg-cyan-500/25 transition-colors"
+                >
+                  <Table2 size={12} />
+                  Choose schedule
+                </button>
+                {scheduleFile && (
+                  <p className="text-[11px] text-muted-foreground mt-1.5">
+                    <FileText size={10} className="inline -mt-0.5 mr-1" />
+                    {scheduleFile.name} · {(scheduleFile.size / 1024).toFixed(0)} KB
                   </p>
                 )}
               </div>
@@ -183,10 +248,8 @@ export default function LutronImportModal({ open, onClose, onImport }) {
                 <textarea
                   value={textInput}
                   onChange={(e) => setTextInput(e.target.value)}
-                  rows={8}
-                  placeholder={
-                    "Paste the integration report content here, e.g.\nDevice name Model href Component...\nZone Name href..."
-                  }
+                  rows={6}
+                  placeholder="Paste the integration report content here..."
                   className="mt-2 w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-[11px] font-mono text-foreground"
                 />
                 <button
@@ -213,35 +276,48 @@ export default function LutronImportModal({ open, onClose, onImport }) {
                 </div>
               )}
 
-              {parsed && (
-                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 space-y-3">
+              {/* Integration report parse result */}
+              {parsedReport && (
+                <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/8 px-4 py-3 space-y-2">
                   <div className="flex items-center gap-2 text-xs text-emerald-400">
                     <CheckCircle2 size={14} />
-                    <span className="font-semibold">
-                      Parsed {parsed.house.fileName}
-                    </span>
+                    <span className="font-semibold">Integration report: {parsedReport.house.fileName}</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {COUNT_TILES.map((tile) => {
+                  <div className="grid grid-cols-4 gap-2">
+                    {REPORT_TILES.map((tile) => {
                       const Icon = tile.icon;
-                      const value = parsed.house.counts?.[tile.key] ?? 0;
+                      const value = parsedReport.house.counts?.[tile.key] ?? 0;
                       return (
-                        <div
-                          key={tile.key}
-                          className={`rounded-lg border px-2.5 py-2 text-center ${tile.color}`}
-                        >
-                          <Icon size={14} className="mx-auto mb-1" />
-                          <p className="text-base font-bold">{value}</p>
-                          <p className="text-[9px] uppercase tracking-widest opacity-80">
-                            {tile.label}
-                          </p>
+                        <div key={tile.key} className={`rounded-lg border px-2 py-1.5 text-center ${tile.color}`}>
+                          <Icon size={13} className="mx-auto mb-0.5" />
+                          <p className="text-sm font-bold">{value}</p>
+                          <p className="text-[8px] uppercase tracking-widest opacity-80">{tile.label}</p>
                         </div>
                       );
                     })}
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Buttons: {parsed.house.counts?.buttons || 0} · LEDs:{" "}
-                    {parsed.house.counts?.leds || 0}
+                </div>
+              )}
+
+              {/* Load schedule parse result */}
+              {parsedSchedule && (
+                <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/8 px-4 py-3 space-y-2">
+                  <div className="flex items-center gap-2 text-xs text-cyan-400">
+                    <CheckCircle2 size={14} />
+                    <span className="font-semibold">Load schedule: {scheduleFile?.name}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {SCHEDULE_TILES.map((tile) => {
+                      const Icon = tile.icon;
+                      const value = tile.key === "total" ? parsedSchedule.entries.length : parsedSchedule.panelCount;
+                      return (
+                        <div key={tile.key} className={`rounded-lg border px-2 py-1.5 text-center ${tile.color}`}>
+                          <Icon size={13} className="mx-auto mb-0.5" />
+                          <p className="text-sm font-bold">{value}</p>
+                          <p className="text-[8px] uppercase tracking-widest opacity-80">{tile.label}</p>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -250,24 +326,17 @@ export default function LutronImportModal({ open, onClose, onImport }) {
             <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border bg-muted/30">
               <button
                 disabled={parsing || saving}
-                onClick={() => {
-                  reset();
-                  onClose?.();
-                }}
+                onClick={() => { reset(); onClose?.(); }}
                 className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                disabled={!parsed || saving}
+                disabled={(!parsedReport && !parsedSchedule) || saving}
                 onClick={handleConfirm}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500 text-amber-950 text-xs font-bold hover:bg-amber-400 disabled:opacity-50"
               >
-                {saving ? (
-                  <Loader2 size={12} className="animate-spin" />
-                ) : (
-                  <CheckCircle2 size={12} />
-                )}
+                {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
                 Import &amp; replace
               </button>
             </div>

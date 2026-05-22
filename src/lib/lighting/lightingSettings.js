@@ -34,6 +34,7 @@ export const DEFAULT_LIGHTING_HOUSE = {
   devices: [],
   hvacZones: [],
   shadeGroups: [],
+  loadSchedule: [],
 };
 
 const DEFAULT_ZONE_STATE = {};
@@ -156,7 +157,35 @@ export function normalizeLightingHouse(value) {
     devices: Array.isArray(value.devices) ? value.devices : [],
     hvacZones: Array.isArray(value.hvacZones) ? value.hvacZones : [],
     shadeGroups: Array.isArray(value.shadeGroups) ? value.shadeGroups : [],
+    loadSchedule: Array.isArray(value.loadSchedule) ? value.loadSchedule.map(normalizeLoadScheduleEntry) : [],
   };
+}
+
+export function normalizeLoadScheduleEntry(entry) {
+  if (!entry || typeof entry !== "object") return null;
+  return {
+    zoneName: String(entry.zoneName || ""),
+    areaFullPath: String(entry.areaFullPath || ""),
+    floor: String(entry.floor || ""),
+    area: String(entry.area || ""),
+    loadNumber: Number.isFinite(entry.loadNumber) ? entry.loadNumber : null,
+    loadType: String(entry.loadType || ""),
+    wattage: Number.isFinite(entry.wattage) ? entry.wattage : null,
+    assignedTo: String(entry.assignedTo || ""),
+    panel: String(entry.panel || ""),
+    module: String(entry.module || ""),
+    output: String(entry.output || ""),
+  };
+}
+
+/** Build a zone href lookup from the house zones for cross-referencing load schedule entries. */
+export function buildZoneLookup(house) {
+  const byNameArea = new Map();
+  for (const z of house.zones || []) {
+    const key = `${z.name}|${z.areaFullPath}`;
+    byNameArea.set(key, z);
+  }
+  return { byNameArea };
 }
 
 export function loadLightingHouseLocal() {
