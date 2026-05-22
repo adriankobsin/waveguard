@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb,
-  Sun,
   Moon,
   X,
   Building2,
@@ -16,6 +15,9 @@ import {
   PlayCircle,
   Filter,
   Square,
+  PanelTop,
+  Blinds,
+  Zap,
 } from "lucide-react";
 import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
@@ -34,8 +36,10 @@ function accent(kind) {
 }
 
 function kindIcon(kind) {
-  if (kind === "shade" || kind === "blind") return Sun;
+  if (kind === "shade") return PanelTop;
+  if (kind === "blind") return Blinds;
   if (kind === "blackout") return Moon;
+  if (kind === "load") return Zap;
   return Lightbulb;
 }
 

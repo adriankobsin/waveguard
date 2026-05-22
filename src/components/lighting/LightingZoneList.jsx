@@ -1,13 +1,13 @@
 import { motion } from "framer-motion";
-import { Lightbulb, Sun, Moon, Loader2, ChevronUp, ChevronDown, Square } from "lucide-react";
+import { Lightbulb, Moon, Loader2, ChevronUp, ChevronDown, Square, PanelTop, Blinds, Zap } from "lucide-react";
 import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
 const KIND_META = {
   light:    { label: "Light",    Icon: Lightbulb, tone: "amber" },
-  shade:    { label: "Shade",    Icon: Sun,       tone: "sky" },
-  blind:    { label: "Blind",    Icon: Sun,       tone: "indigo" },
+  shade:    { label: "Shade",    Icon: PanelTop,  tone: "sky" },
+  blind:    { label: "Blind",    Icon: Blinds,    tone: "indigo" },
   blackout: { label: "Blackout", Icon: Moon,      tone: "violet" },
-  load:     { label: "Load",     Icon: Lightbulb, tone: "emerald" },
+  load:     { label: "Load",     Icon: Zap,       tone: "emerald" },
 };
 const TONE_CLS = {
   amber:   "text-amber-400 bg-amber-500/10 border-amber-500/30",

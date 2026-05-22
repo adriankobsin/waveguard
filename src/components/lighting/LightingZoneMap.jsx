@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Lightbulb, Sun, Moon, MapPin, Loader2 } from "lucide-react";
+import { Lightbulb, Moon, MapPin, Loader2, PanelTop, Blinds, Zap } from "lucide-react";
 import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
 const KIND_ACCENT = {
@@ -22,8 +22,10 @@ function accent(kind) {
 }
 
 function kindIcon(kind) {
-  if (kind === "shade" || kind === "blind") return Sun;
+  if (kind === "shade") return PanelTop;
+  if (kind === "blind") return Blinds;
   if (kind === "blackout") return Moon;
+  if (kind === "load") return Zap;
   return Lightbulb;
 }
 

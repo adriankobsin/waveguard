@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb,
-  Sun,
   Moon,
   ChevronDown,
   ChevronUp,
@@ -14,6 +13,9 @@ import {
   MapPin,
   Wand2,
   Square,
+  PanelTop,
+  Blinds,
+  Zap,
 } from "lucide-react";
 import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
@@ -27,14 +29,14 @@ const KIND_META = {
   },
   shade: {
     label: "Shade",
-    icon: Sun,
+    icon: PanelTop,
     accent: "text-sky-400 bg-sky-500/12 border-sky-500/30",
     onIcon: "text-sky-400",
     offIcon: "text-muted-foreground",
   },
   blind: {
     label: "Blind",
-    icon: Sun,
+    icon: Blinds,
     accent: "text-indigo-400 bg-indigo-500/12 border-indigo-500/30",
     onIcon: "text-indigo-400",
     offIcon: "text-muted-foreground",
@@ -48,7 +50,7 @@ const KIND_META = {
   },
   load: {
     label: "Load",
-    icon: Lightbulb,
+    icon: Zap,
     accent: "text-emerald-400 bg-emerald-500/12 border-emerald-500/30",
     onIcon: "text-emerald-400",
     offIcon: "text-muted-foreground",
