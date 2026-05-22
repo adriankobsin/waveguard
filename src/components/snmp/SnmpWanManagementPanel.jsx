@@ -2,23 +2,12 @@ import { useMemo, useState } from "react";
 import {
   Globe,
   Plus,
-  RefreshCw,
-  Gauge,
-  Pencil,
-  Star,
-  Wifi,
-  WifiOff,
-  Signal,
-  Loader2,
-  Trash2,
   Server,
   X,
   Search,
-  Cpu,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildWanLinks, WAN_PRIORITIES } from "@/lib/wan/wanManagementSettings";
-import { formatRelativeTime } from "@/lib/systemData/formatRelativeTime";
 import { formatSpeedMbps } from "@/lib/snmp/snmpAnalytics";
 import { runWanSpeedTest } from "@/api/wanApi";
 import {

@@ -36,6 +36,7 @@ import {
   setZoneLevel,
   activateScene,
   pollZones,
+  stopShade,
   testLutronProcessor,
 } from "@/api/lightingApi";
 import {
@@ -44,6 +45,7 @@ import {
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
+  isShadeZone,
 } from "@/lib/lighting/lightingSettings";
 
 const PAGE_TABS = [

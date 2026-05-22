@@ -1,14 +1,14 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
-  Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
-  WifiOff, Activity, Globe, BarChart3, Server, Clock, Bot,
-  Sliders, Lightbulb, Radio, Loader2, Cable, Unplug, ArrowRight,
+  Wifi, Camera, Monitor, Zap, AlertTriangle,
+  WifiOff, Globe, BarChart3, Server, Clock, Bot,
+  Sliders, Lightbulb, Loader2, Cable, Unplug, ArrowRight,
   Gauge, ChevronDown, RefreshCw,
 } from "lucide-react";
 import {
-  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine
+  AreaChart, Area, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer
 } from "recharts";
 import StatusPulse from "../../StatusPulse";
 import { useSystemData } from "@/contexts/SystemDataContext";
@@ -483,7 +483,7 @@ export function UpsPowerWidget() {
     <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400">
       <div className="space-y-2 text-xs">
         <div className="flex justify-between"><span className="text-muted-foreground">{ups.name}</span><span className="text-emerald-400 font-medium">{ups.status}</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Battery</span><span className={ups.battery < 50 ? "text-amber-400" : "text-foreground"} font-medium>{ups.battery}%</span></div>
+         <div className="flex justify-between"><span className="text-muted-foreground">Battery</span><span className={`${ups.battery < 50 ? "text-amber-400" : "text-foreground"} font-medium`}>{ups.battery}%</span></div>
         <div className="flex justify-between"><span className="text-muted-foreground">Load</span><span className="text-foreground font-medium">{ups.load}%</span></div>
       </div>
     </WidgetShell>

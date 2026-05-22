@@ -11,16 +11,20 @@
 export const LIGHTING_HOUSE_SETTINGS_KEY = "lighting-house";
 export const LIGHTING_ZONE_STATE_SETTINGS_KEY = "lighting-zone-state";
 export const LIGHTING_LUTRON_CONNECTION_KEY = "lighting-lutron-connection";
+export const LIGHTING_CONNECTION_KEY = "lighting-connection";
 
 export const LIGHTING_HOUSE_CHANGED_EVENT = "waveguard-lighting-house-changed";
 export const LIGHTING_ZONE_STATE_CHANGED_EVENT = "waveguard-lighting-zone-state-changed";
 export const LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT =
   "waveguard-lighting-lutron-connection-changed";
+export const LIGHTING_CONNECTION_CHANGED_EVENT =
+  "waveguard-lighting-connection-changed";
 
 const HOUSE_LOCAL_KEY = "waveguard:lighting:house";
 const ZONE_STATE_LOCAL_KEY = "waveguard:lighting:zone-state";
 const ACTIVE_SCENE_LOCAL_KEY = "waveguard:lighting:active-scene";
 const LUTRON_CONNECTION_LOCAL_KEY = "waveguard:lighting:lutron-connection";
+const LIGHTING_CONNECTION_LOCAL_KEY = "waveguard:lighting:connection";
 
 export const DEFAULT_LIGHTING_HOUSE = {
   house: null,
@@ -53,8 +57,35 @@ const DEFAULT_ZONE_STATE = {};
  * itself is persisted.
  */
 export const LUTRON_PROTOCOLS = ["telnet", "leap"];
+export const KNX_PROTOCOLS = ["knx-ip", "knx-tunnelling"];
+export const DALI_PROTOCOLS = ["dali-usb", "dali-ip"];
+export const DMX_PROTOCOLS = ["art-net", "sacn", "enttec-usb"];
 
-export const DEFAULT_LUTRON_CONNECTION = {
+export const LIGHTING_SYSTEM_TYPES = ["lutron", "knx", "dali", "dmx"];
+
+export const SYSTEM_TYPE_PROTOCOLS = {
+  lutron: LUTRON_PROTOCOLS,
+  knx: KNX_PROTOCOLS,
+  dali: DALI_PROTOCOLS,
+  dmx: DMX_PROTOCOLS,
+};
+
+export const SYSTEM_TYPE_DEFAULT_PORTS = {
+  lutron: { telnet: 23, leap: 8081 },
+  knx: { "knx-ip": 3671, "knx-tunnelling": 3671 },
+  dali: { "dali-usb": 0, "dali-ip": 5582 },
+  dmx: { "art-net": 6454, "sacn": 5568, "enttec-usb": 0 },
+};
+
+export const SYSTEM_TYPE_DEFAULT_CREDENTIALS = {
+  lutron: { username: "lutron", password: "integration" },
+  knx: { username: "", password: "" },
+  dali: { username: "", password: "" },
+  dmx: { username: "", password: "" },
+};
+
+export const DEFAULT_LIGHTING_CONNECTION = {
+  systemType: "lutron",
   enabled: false,
   host: "",
   port: 23,
@@ -65,8 +96,45 @@ export const DEFAULT_LUTRON_CONNECTION = {
   updatedAt: null,
 };
 
-export function defaultPortForProtocol(protocol) {
-  return protocol === "leap" ? 8081 : 23;
+export function defaultPortForProtocol(protocol, systemType = "lutron") {
+  const ports = SYSTEM_TYPE_DEFAULT_PORTS[systemType] || SYSTEM_TYPE_DEFAULT_PORTS.lutron;
+  return ports[protocol] || 23;
+}
+
+export function normalizeLightingConnection(value) {
+  if (!value || typeof value !== "object") {
+    return { ...DEFAULT_LIGHTING_CONNECTION };
+  }
+  const systemType = LIGHTING_SYSTEM_TYPES.includes(value.systemType)
+    ? value.systemType
+    : DEFAULT_LIGHTING_CONNECTION.systemType;
+  const protocols = SYSTEM_TYPE_PROTOCOLS[systemType] || LUTRON_PROTOCOLS;
+  const protocol = protocols.includes(value.protocol)
+    ? value.protocol
+    : protocols[0];
+  const rawPort = Number(value.port);
+  const port =
+    Number.isFinite(rawPort) && rawPort > 0
+      ? Math.min(65535, Math.floor(rawPort))
+      : defaultPortForProtocol(protocol, systemType);
+  const defaults = SYSTEM_TYPE_DEFAULT_CREDENTIALS[systemType] || SYSTEM_TYPE_DEFAULT_CREDENTIALS.lutron;
+  return {
+    systemType,
+    enabled: !!value.enabled,
+    host: String(value.host || "").trim(),
+    port,
+    protocol,
+    username:
+      typeof value.username === "string" && value.username.trim()
+        ? value.username.trim()
+        : defaults.username,
+    password:
+      typeof value.password === "string"
+        ? value.password
+        : defaults.password,
+    tlsVerify: value.tlsVerify !== false,
+    updatedAt: value.updatedAt || null,
+  };
 }
 
 function safeLocalStorage() {
@@ -182,34 +250,17 @@ export function setActiveSceneLocal(href) {
   }
 }
 
+/** @deprecated Use normalizeLightingConnection instead. */
+export const DEFAULT_LUTRON_CONNECTION = DEFAULT_LIGHTING_CONNECTION;
+
+/** @deprecated Use normalizeLightingConnection instead. */
 export function normalizeLutronConnection(value) {
-  if (!value || typeof value !== "object") {
-    return { ...DEFAULT_LUTRON_CONNECTION };
-  }
-  const protocol = LUTRON_PROTOCOLS.includes(value.protocol)
-    ? value.protocol
-    : DEFAULT_LUTRON_CONNECTION.protocol;
-  const rawPort = Number(value.port);
-  const port =
-    Number.isFinite(rawPort) && rawPort > 0
-      ? Math.min(65535, Math.floor(rawPort))
-      : defaultPortForProtocol(protocol);
-  return {
-    enabled: !!value.enabled,
-    host: String(value.host || "").trim(),
-    port,
-    protocol,
-    username:
-      typeof value.username === "string" && value.username.trim()
-        ? value.username.trim()
-        : DEFAULT_LUTRON_CONNECTION.username,
-    password:
-      typeof value.password === "string"
-        ? value.password
-        : DEFAULT_LUTRON_CONNECTION.password,
-    tlsVerify: value.tlsVerify !== false,
-    updatedAt: value.updatedAt || null,
-  };
+  return normalizeLightingConnection(value);
+}
+
+/** @deprecated Use defaultPortForProtocol with systemType instead. */
+export function defaultPortForProtocolLegacy(protocol) {
+  return defaultPortForProtocol(protocol, "lutron");
 }
 
 export function loadLutronConnectionLocal() {
@@ -247,10 +298,62 @@ export function clearLutronConnectionLocal() {
   }
 }
 
+export function loadLightingConnectionLocal() {
+  const ls = safeLocalStorage();
+  if (!ls) return null;
+  try {
+    const raw = ls.getItem(LIGHTING_CONNECTION_LOCAL_KEY);
+    if (!raw) return null;
+    return normalizeLightingConnection(JSON.parse(raw));
+  } catch (_e) {
+    return null;
+  }
+}
+
+export function saveLightingConnectionLocal(conn) {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    ls.setItem(
+      LIGHTING_CONNECTION_LOCAL_KEY,
+      JSON.stringify(normalizeLightingConnection(conn))
+    );
+  } catch (_e) {
+    /* quota */
+  }
+}
+
+export function clearLightingConnectionLocal() {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    ls.removeItem(LIGHTING_CONNECTION_LOCAL_KEY);
+  } catch (_e) {
+    /* */
+  }
+}
+
 /** Strip the password from a connection record for safe logging / display. */
 export function redactLutronConnection(conn) {
   const c = normalizeLutronConnection(conn);
   return { ...c, password: c.password ? "••••••••" : "" };
+}
+
+/** Strip the password from a connection record for safe logging / display. */
+export function redactLightingConnection(conn) {
+  const c = normalizeLightingConnection(conn);
+  return { ...c, password: c.password ? "••••••••" : "" };
+}
+
+const SHADE_KINDS = new Set(["shade", "blind", "blackout"]);
+const SHADE_NAME_KEYWORDS = ["shade", "blind", "blackout", "venetian", "roman", "curtain"];
+
+/** Returns true if the zone is a shade/blind/curtain based on kind or name. */
+export function isShadeZone(zone) {
+  if (!zone) return false;
+  if (SHADE_KINDS.has(zone.kind)) return true;
+  const name = (zone.name || "").toLowerCase();
+  return SHADE_NAME_KEYWORDS.some((kw) => name.includes(kw));
 }
 
 /** Group zones for the UI: floors → areas → zones. */

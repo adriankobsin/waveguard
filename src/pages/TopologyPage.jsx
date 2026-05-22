@@ -159,7 +159,7 @@ export default function TopologyPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per mount; cache supplies initial state
+     
   }, []);
 
   useEffect(() => {

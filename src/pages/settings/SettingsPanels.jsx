@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import {
-  CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Key, BookOpen,
+  CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, Key, BookOpen,
   HardDrive, Download, RotateCcw, Trash2, LayoutDashboard, ExternalLink,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -8,7 +8,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdmin } from "@/lib/permissions";
 import { WIDGET_TYPES } from "@/components/dashboard/widgets/DashboardWidgets";
-import { testLutronProcessor } from "@/api/lightingApi";
+import { testLightingProcessor } from "@/api/lightingApi";
 import {
   testIntegration,
   testOpenAiKey,
@@ -133,15 +133,16 @@ export function IntegrationsPanel() {
     setTesting(key);
     setTestResult(null);
     try {
-      if (key === "lutron") {
-        const ic = cfg.lutron || {};
-        const res = await testLutronProcessor({
+      if (key === "lutron" || key === "knx" || key === "dali" || key === "dmx") {
+        const ic = cfg[key] || {};
+        const res = await testLightingProcessor({
           host: ic.host,
-          port: Number(ic.port) || 443,
+          port: Number(ic.port) || undefined,
           username: ic.user,
           password: ic.password,
+          systemType: key,
         });
-        if (!res.success) throw new Error(res.message || "Lutron processor unreachable");
+        if (!res.success) throw new Error(res.message || `${key.toUpperCase()} processor unreachable`);
         const detail = [res.product, res.firmware ? `fw ${res.firmware}` : null, res.api]
           .filter(Boolean)
           .join(" · ");

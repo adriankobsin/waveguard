@@ -6,20 +6,26 @@ import {
   LIGHTING_HOUSE_SETTINGS_KEY,
   LIGHTING_ZONE_STATE_SETTINGS_KEY,
   LIGHTING_LUTRON_CONNECTION_KEY,
+  LIGHTING_CONNECTION_KEY,
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
+  LIGHTING_CONNECTION_CHANGED_EVENT,
   DEFAULT_LIGHTING_HOUSE,
   DEFAULT_LUTRON_CONNECTION,
+  DEFAULT_LIGHTING_CONNECTION,
   normalizeLightingHouse,
   normalizeZoneState,
   normalizeLutronConnection,
+  normalizeLightingConnection,
   loadLightingHouseLocal,
   saveLightingHouseLocal,
   loadZoneStateLocal,
   saveZoneStateLocal,
   loadLutronConnectionLocal,
   saveLutronConnectionLocal,
+  loadLightingConnectionLocal,
+  saveLightingConnectionLocal,
   defaultPortForProtocol,
   setActiveSceneLocal,
 } from "@/lib/lighting/lightingSettings";
@@ -154,16 +160,80 @@ export async function loadZoneState() {
   return loadZoneStateFromSettings();
 }
 
+// ── Lighting processor connection (generic, multi-system) ──────────────
+// Operates identically to the Lutron-specific section below but supports
+// any systemType (lutron, knx, dali, dmx) stored under the generic key.
+
+async function loadLightingConnectionFromSettings() {
+  try {
+    const records = await base44.entities.SystemSettings.filter({
+      key: LIGHTING_CONNECTION_KEY,
+    });
+    if (records.length > 0 && records[0].value != null) {
+      return normalizeLightingConnection(parseSettingsValue(records[0].value));
+    }
+  } catch (err) {
+    console.warn("[lightingApi] lighting connection load failed:", err);
+  }
+  // Fall back to the legacy Lutron-specific key for backward compat
+  try {
+    const records = await base44.entities.SystemSettings.filter({
+      key: LIGHTING_LUTRON_CONNECTION_KEY,
+    });
+    if (records.length > 0 && records[0].value != null) {
+      const lutronConn = normalizeLutronConnection(parseSettingsValue(records[0].value));
+      return { ...lutronConn, systemType: "lutron" };
+    }
+  } catch (_) {}
+  return loadLightingConnectionLocal() || { ...DEFAULT_LIGHTING_CONNECTION };
+}
+
+async function persistLightingConnectionToSettings(conn) {
+  const normalized = normalizeLightingConnection(conn);
+  saveLightingConnectionLocal(normalized);
+  try {
+    const records = await base44.entities.SystemSettings.filter({
+      key: LIGHTING_CONNECTION_KEY,
+    });
+    const payload = { key: LIGHTING_CONNECTION_KEY, value: normalized };
+    if (records.length > 0) {
+      await base44.entities.SystemSettings.update(records[0].id, payload);
+    } else {
+      await base44.entities.SystemSettings.create(payload);
+    }
+  } catch (err) {
+    console.warn("[lightingApi] lighting connection save failed:", err);
+  }
+  return normalized;
+}
+
+export async function loadLightingConnection() {
+  if (isDemoModeActive()) {
+    return loadLightingConnectionLocal() || { ...DEFAULT_LIGHTING_CONNECTION };
+  }
+  return loadLightingConnectionFromSettings();
+}
+
+export async function saveLightingConnection(conn) {
+  const normalized = normalizeLightingConnection({
+    ...conn,
+    updatedAt: new Date().toISOString(),
+  });
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(LIGHTING_CONNECTION_CHANGED_EVENT, {
+        detail: normalized,
+      })
+    );
+  }
+  if (isDemoModeActive()) {
+    saveLightingConnectionLocal(normalized);
+    return normalized;
+  }
+  return persistLightingConnectionToSettings(normalized);
+}
+
 // ── Lutron processor connection (integration credentials) ────────────────────
-//
-// The processor will not accept 3rd-party Telnet / LEAP commands until
-// integration access is enabled in Lutron Designer and an integration
-// username + password are paired with it. We persist those credentials
-// alongside the lighting house so the platform can reconnect after restart.
-//
-// NOTE: the SystemSettings store does not encrypt values. In production this
-// should be moved to a secret-management entity; for now the password is
-// kept in the same vault as Peplink/SMTP credentials.
 
 async function loadLutronConnectionFromSettings() {
   try {
@@ -280,6 +350,10 @@ async function callMockLutron(op, body) {
     /* fall through */
   }
   return null;
+}
+
+async function callMockLighting(op, body, systemType) {
+  return callMockLutron(op, { ...body, systemType });
 }
 
 /**
@@ -412,6 +486,24 @@ export async function pollZones({ hrefs = [] } = {}) {
 }
 
 /**
+ * Stop a moving shade/blind. Sends the raiseLowerStop command to halt
+ * the shade at its current position.
+ */
+export async function stopShade({ zoneHref }) {
+  if (!zoneHref) throw new Error("zoneHref required");
+  if (isDemoModeActive() || !isMockServer) {
+    return getLocalEngine().raiseLower(zoneHref, "stop");
+  }
+
+  const remote = await callMockLutron("raiseLowerStop", {
+    zoneHref,
+    action: "stop",
+  });
+  if (remote?.success) return remote;
+  return getLocalEngine().raiseLower(zoneHref, "stop");
+}
+
+/**
  * Test connectivity to the configured Lutron processor.
  *
  * Called with no arguments, the stored connection (host / port / protocol /
@@ -420,12 +512,21 @@ export async function pollZones({ hrefs = [] } = {}) {
  * connection settings modal before saving.
  */
 export async function testLutronProcessor(override = {}) {
-  const stored = await loadLutronConnection();
-  const merged = normalizeLutronConnection({ ...stored, ...override });
+  return testLightingProcessor(override, "lutron");
+}
+
+/**
+ * Test connectivity to any lighting processor. Pass `override.systemType` or
+ * it defaults to `"lutron"` for backward compatibility.
+ */
+export async function testLightingProcessor(override = {}, systemType) {
+  const stored = await loadLightingConnection();
+  const effectiveType = systemType || override.systemType || stored.systemType || "lutron";
+  const merged = normalizeLightingConnection({ ...stored, ...override, systemType: effectiveType });
   const { host, protocol, username, password } = merged;
-  const port = merged.port || defaultPortForProtocol(protocol);
+  const port = merged.port || defaultPortForProtocol(protocol, effectiveType);
   const target = host ? `${host}:${port}` : "(mock)";
-  const api = protocol === "leap" ? "LEAP" : "Telnet";
+  const api = protocol === "leap" ? "LEAP" : protocol === "knx-ip" ? "KNX IP" : protocol === "art-net" ? "Art-Net" : protocol === "sacn" ? "sACN" : protocol === "dali-ip" ? "DALI IP" : (protocol || "").toUpperCase().replace(/-/g, " ");
 
   if (!host) {
     await new Promise((r) => setTimeout(r, 400));
@@ -434,11 +535,11 @@ export async function testLutronProcessor(override = {}) {
       mode: "mock",
       processor: target,
       protocol,
-      product: "HomeWorks QSX Processor (mock)",
-      firmware: "12.6.40",
+      product: `${effectiveType.toUpperCase()} Mock Engine`,
+      firmware: "1.0.0",
       api,
       message:
-        "No processor host configured — using local mock engine. " +
+        `No ${effectiveType.toUpperCase()} processor host configured — using local mock engine. ` +
         "Save the integration host + credentials to enable live control.",
     };
   }
@@ -450,24 +551,22 @@ export async function testLutronProcessor(override = {}) {
       mode: "mock-bridge",
       processor: target,
       protocol,
-      product: "HomeWorks QSX Processor (mock)",
-      firmware: "12.6.40",
+      product: `${effectiveType.toUpperCase()} Processor (mock)`,
+      firmware: "1.0.0",
       api,
       message: `Mock processor reachable at ${target} as ${username || "(no user)"}.`,
     };
   }
 
-  const remote = await callMockLutron("testProcessor", {
+  const remote = await callMockLighting("testProcessor", {
     host,
     port,
     protocol,
     username,
     password,
-  });
+  }, effectiveType);
+
   if (remote?.success) return { protocol, ...remote };
-  // Forward every field the server returned (mode, availablePorts,
-  // suggestion, etc.) but pin success/processor/protocol so callers can
-  // rely on them. The original server message wins over the local fallback.
   return {
     ...(remote || {}),
     success: false,
@@ -478,6 +577,6 @@ export async function testLutronProcessor(override = {}) {
     message:
       remote?.message ||
       remote?.error ||
-      "Unable to reach Lutron processor",
+      `Unable to reach ${effectiveType.toUpperCase()} processor`,
   };
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertTriangle, Info, ChevronDown, ChevronUp, FileText,
-  CheckCircle2, X, Play, ShieldAlert, Loader2, CheckCheck, Network
+  CheckCircle2, X, Play, ShieldAlert, CheckCheck, Network
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";

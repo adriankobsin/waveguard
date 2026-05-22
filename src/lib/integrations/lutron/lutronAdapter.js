@@ -134,3 +134,13 @@ export function buildLeapPressButtonBody() {
     Body: { Command: { CommandType: "PressAndRelease" } },
   };
 }
+
+/**
+ * Create a live Lutron Telnet client for the given connection config.
+ * Server-side only (requires Node.js `net` module).
+ * In the browser, returns null — commands go through the mock-server HTTP API.
+ */
+export function createLutronClient(_conn) {
+  // Browser-side: live commands are sent to the mock-server via HTTP.
+  return null;
+}

@@ -36,6 +36,9 @@ import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrati
 import { fetchPeplinkStatus, testPeplinkConnection } from "../scanner/integrations/peplinkPoll.js";
 import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
 import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
+import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
+import { buildMockDaliEngine } from "../src/lib/integrations/dali/daliAdapter.js";
+import { buildMockDmxEngine } from "../src/lib/integrations/dmx/dmxAdapter.js";
 import {
   getLutronClient,
   closeLutronClient,
@@ -43,7 +46,7 @@ import {
   probeLutronPorts,
   recommendationFromPorts,
 } from "../scanner/integrations/lutron/lutronClient.js";
-import { LIGHTING_LUTRON_CONNECTION_KEY } from "../src/lib/lighting/lightingSettings.js";
+import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -294,6 +297,9 @@ function generateMockEquipment(count) {
     { name: "TV-Saloon-01", model: "Samsung QLED 75\"", category: "AV", ip: "192.168.30.10", location: "Saloon Wall", serial: "SAM-001", condition: "Good", avRole: "display", ruHeight: 1 },
     { name: "TV-Saloon-02", model: "Samsung QLED 55\"", category: "AV", ip: "192.168.30.11", location: "Saloon Wall", serial: "SAM-002", condition: "Good", avRole: "display", ruHeight: 1 },
     { name: "Lighting-Controller", model: "Lutron QS", category: "Lighting", ip: "192.168.40.2", location: "AV Rack", serial: "LUT-001", condition: "Good", controlType: "KNX" },
+    { name: "KNX-Gateway", model: "KNX IP Router 753", category: "Lighting", ip: "192.168.40.10", location: "AV Rack", serial: "KNX-001", condition: "Good", controlType: "KNX" },
+    { name: "DALI-Gateway", model: "DALI USB 2.0 LC", category: "Lighting", ip: "192.168.40.11", location: "AV Rack", serial: "DALI-001", condition: "Good", controlType: "DALI" },
+    { name: "Art-Net-Node", model: "DMX King Art-Net Pro", category: "Lighting", ip: "192.168.40.12", location: "Stage Rack", serial: "DMX-001", condition: "Good", controlType: "Art-Net" },
     { name: "Sirius-Weather", model: "Sirius XM Weather", category: "Other", ip: "192.168.10.200", location: "Bridge Console", serial: "SIRIUS-001", condition: "Excellent" },
     { name: "Starlink", model: "Starlink Standard", category: "Network", ip: "10.0.0.2", location: "Upper Deck", serial: "SLINK-001", condition: "Good" },
     { name: "SW-AV-Rack", model: "Cisco CBS350-8P", category: "Network", ip: "192.168.30.1", location: "AV Rack", serial: "FOC2241X0AD", condition: "Excellent" },
@@ -1185,8 +1191,20 @@ app.post("/api/apps/:appId/functions/wanSpeedTest", async (req, res) => {
   }
 });
 
-// ── Lutron lighting (mock + live LEAP/Telnet) ──────────────────────────────
+// ── Lighting engines (mock + live) ──────────────────────────────────────
 const lutronEngine = buildMockLutronEngine();
+const knxEngine = buildMockKnxEngine();
+const daliEngine = buildMockDaliEngine();
+const dmxEngine = buildMockDmxEngine();
+
+function engineForSystemType(systemType) {
+  switch (systemType) {
+    case "knx": return knxEngine;
+    case "dali": return daliEngine;
+    case "dmx": return dmxEngine;
+    default: return lutronEngine;
+  }
+}
 
 /** Pull the saved Lutron processor connection from the in-memory settings. */
 function getStoredLutronConnection() {
@@ -1202,13 +1220,31 @@ function getStoredLutronConnection() {
   return raw && typeof raw === "object" ? raw : null;
 }
 
+/** Pull the stored generic lighting connection by systemType. */
+function getStoredLightingConnection(systemType) {
+  const row = db.systemSettings.find((s) => s.key === LIGHTING_CONNECTION_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  const conn = raw && typeof raw === "object" ? raw : null;
+  if (!conn) return null;
+  if (systemType && conn.systemType !== systemType) return null;
+  return conn;
+}
+
 /**
- * Decide whether the live Telnet integration should handle a command. We
+ * Decide whether the live integration should handle a command. We
  * honour any per-request override (so the connection-test modal can validate
  * draft values without saving) and otherwise fall back to the stored
  * connection. LEAP / Athena is not yet wired — see lutronClient.js header.
  */
 function resolveLiveConnection(reqBody = {}) {
+  const systemType = reqBody.systemType || "lutron";
   const override = reqBody.host
     ? {
         enabled: true,
@@ -1219,14 +1255,17 @@ function resolveLiveConnection(reqBody = {}) {
         password: reqBody.password,
       }
     : null;
-  const stored = getStoredLutronConnection();
+  const stored =
+    systemType === "lutron"
+      ? getStoredLutronConnection()
+      : getStoredLightingConnection(systemType);
   const conn = override || stored;
   if (!conn?.enabled || !conn.host || !conn.username) return null;
-  const protocol = conn.protocol === "leap" ? "leap" : "telnet";
+  const protocol = conn.protocol === "leap" ? "leap" : conn.protocol || "telnet";
   return {
     enabled: true,
     host: conn.host,
-    port: Number(conn.port) || (protocol === "leap" ? 8081 : 23),
+    port: Number(conn.port) || defaultPortForProtocol(protocol, systemType),
     protocol,
     username: conn.username,
     password: conn.password,
@@ -1259,10 +1298,15 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
       port,
       protocol: bodyProtocol,
       username,
+      systemType: bodySystemType,
     } = req.body || {};
 
+    const systemType = bodySystemType || "lutron";
+    const engine = engineForSystemType(systemType);
+
     const live = resolveLiveConnection(req.body);
-    const liveClient = live && live.protocol === "telnet" ? getLutronClient(live) : null;
+    // Live client is only available for Lutron Telnet
+    const liveClient = live && live.protocol === "telnet" && systemType === "lutron" ? getLutronClient(live) : null;
     // For testProcessor we let the dedicated branch handle connectivity so it
     // can run the port scan and produce a precise recommendation even when
     // the Telnet socket refuses to open. For every other op we eagerly try
@@ -1308,7 +1352,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             },
           });
         }
-        const zone = lutronEngine.setZoneLevel(zoneHref, level, fadeSeconds || 0);
+        const zone = engine.setZoneLevel(zoneHref, level, fadeSeconds || 0);
         return res.json({ success: true, mode: "mock", zone });
       }
 
@@ -1329,7 +1373,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
           await liveClient.raiseLower(integrationId, action);
           return res.json({ success: true, mode: "live", href: zoneHref, action });
         }
-        const zone = lutronEngine.raiseLower(zoneHref, action);
+        const zone = engine.raiseLower(zoneHref, action);
         return res.json({ success: true, mode: "mock", zone });
       }
 
@@ -1380,7 +1424,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             zones: results,
           });
         }
-        const result = lutronEngine.activateScene(sceneHref, zonesList);
+        const result = engine.activateScene(sceneHref, zonesList);
         return res.json({ success: true, mode: "mock", ...result });
       }
 
@@ -1409,7 +1453,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
           const entry = await liveClient.pressButton(deviceId, componentId);
           return res.json({ success: true, mode: "live", buttonHref: targetHref, ...entry });
         }
-        const entry = lutronEngine.pressButton(targetHref);
+        const entry = engine.pressButton(targetHref);
         return res.json({ success: true, mode: "mock", ...entry });
       }
 
@@ -1432,20 +1476,20 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
           });
           return res.json({ success: true, mode: "live", zones });
         }
-        const zones = lutronEngine.pollZones(wanted);
+        const zones = engine.pollZones(wanted);
         return res.json({ success: true, mode: "mock", zones });
       }
 
       case "snapshot":
-        return res.json({ success: true, mode: liveClient ? "live" : "mock", ...lutronEngine.snapshot() });
+        return res.json({ success: true, mode: liveClient ? "live" : "mock", ...engine.snapshot() });
 
       case "testProcessor": {
-        const resolvedProtocol = (bodyProtocol || live?.protocol) === "leap" ? "leap" : "telnet";
-        const defaultPort = resolvedProtocol === "leap" ? 8081 : 23;
+        const resolvedProtocol = (bodyProtocol || live?.protocol) || "telnet";
+        const defaultPort = defaultPortForProtocol(resolvedProtocol, systemType);
         const effectivePort = port || live?.port || defaultPort;
         const targetHost = host || live?.host || "";
         const target = targetHost ? `${targetHost}:${effectivePort}` : "(mock)";
-        const api = resolvedProtocol === "leap" ? "LEAP" : "Telnet";
+        const api = (resolvedProtocol || "").toUpperCase().replace(/-/g, " ");
         const effectiveUser = username || live?.username || "";
 
         if (!targetHost) {
@@ -1454,73 +1498,66 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             mode: "mock",
             processor: target,
             protocol: resolvedProtocol,
-            product: "HomeWorks QSX Processor (mock)",
-            firmware: "12.6.40",
+            product: `${systemType.toUpperCase()} Engine (mock)`,
+            firmware: "1.0.0",
             api,
             message: "Local mock engine active — no host configured.",
           });
         }
 
-        // Probe the standard Lutron integration ports up front. Doing this
-        // before any protocol-specific attempt lets us tell the operator
-        // exactly which interface is reachable even when their selected
-        // protocol fails (the #1 cause of "Test connection" failures is
-        // Telnet being disabled in Designer while LEAP is up).
-        const availablePorts = await probeLutronPorts(targetHost);
-        const openPorts = availablePorts.filter((p) => p.open).map((p) => p.port);
-        const recommendation = recommendationFromPorts(availablePorts, resolvedProtocol);
-        const buildResponse = (overrides) => ({
-          processor: target,
-          protocol: resolvedProtocol,
-          api,
-          availablePorts,
-          openPorts,
-          recommendation,
-          ...overrides,
-        });
+        // Lutron-specific probing (Telnet port scan, LEAP detection)
+        if (systemType === "lutron") {
+          const availablePorts = await probeLutronPorts(targetHost);
+          const openPorts = availablePorts.filter((p) => p.open).map((p) => p.port);
+          const recommendation = recommendationFromPorts(availablePorts, resolvedProtocol);
+          const buildResponse = (overrides) => ({
+            processor: target,
+            protocol: resolvedProtocol,
+            api,
+            availablePorts,
+            openPorts,
+            recommendation,
+            ...overrides,
+          });
 
-        if (resolvedProtocol === "leap") {
-          return res.json(
-            buildResponse({
-              success: false,
-              mode: "live",
-              message:
-                "LEAP / Athena (TLS) live control is not wired yet. " +
-                "Switch the protocol to Telnet (port 23) once it has been " +
-                "enabled in Lutron Designer.",
-            })
-          );
-        }
+          if (resolvedProtocol === "leap") {
+            return res.json(
+              buildResponse({
+                success: false,
+                mode: "live",
+                message:
+                  "LEAP / Athena (TLS) live control is not wired yet. " +
+                  "Switch the protocol to Telnet (port 23) once it has been " +
+                  "enabled in Lutron Designer.",
+              })
+            );
+          }
 
-        if (!effectiveUser) {
-          return res.json(
-            buildResponse({
-              success: false,
-              mode: "live",
-              message: "Integration username is required by the processor.",
-            })
-          );
-        }
+          if (!effectiveUser) {
+            return res.json(
+              buildResponse({
+                success: false,
+                mode: "live",
+                message: "Integration username is required by the processor.",
+              })
+            );
+          }
 
-        // Bail out early if Telnet (23) is closed — there's no point trying
-        // a login when the TCP socket won't even open. The recommendation
-        // string explains the exact fix in Lutron Designer.
-        const telnetPort = availablePorts.find((p) => p.role === "telnet");
-        if (telnetPort && !telnetPort.open) {
-          return res.json(
-            buildResponse({
-              success: false,
-              mode: "live",
-              message:
-                `TCP port 23 is closed on ${targetHost}. The processor is ` +
-                `reachable but Telnet integration is not exposed.`,
-            })
-          );
-        }
+          const telnetPort = availablePorts.find((p) => p.role === "telnet");
+          if (telnetPort && !telnetPort.open) {
+            return res.json(
+              buildResponse({
+                success: false,
+                mode: "live",
+                message:
+                  `TCP port 23 is closed on ${targetHost}. The processor is ` +
+                  `reachable but Telnet integration is not exposed.`,
+              })
+            );
+          }
 
-        // Real Telnet probe: open the socket, login, send a lightweight query.
-        if (liveClient) {
-          try {
+          if (liveClient) {
+            try {
             await liveClient.connect();
             await liveClient.ping();
             return res.json(
@@ -1542,16 +1579,21 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             );
           }
         }
+      } // end if (systemType === "lutron")
 
-        return res.json(
-          buildResponse({
-            success: false,
-            mode: "live",
-            message:
-              "Could not initialise the Lutron client. Enable live control and provide a username/password.",
-          })
-        );
-      }
+      // Non-Lutron systems — always mock mode
+      return res.json({
+        success: true,
+        mode: "mock",
+        processor: target,
+        protocol: resolvedProtocol,
+        product: `${systemType.toUpperCase()} Engine (mock)`,
+        firmware: "1.0.0",
+        api,
+        message: `Mock ${systemType.toUpperCase()} processor reachable at ${target}.`,
+      });
+
+      } // end case "testProcessor"
 
       default:
         return res.status(400).json({ success: false, error: `Unknown lutron op: ${op}` });
