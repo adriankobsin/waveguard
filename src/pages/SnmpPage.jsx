@@ -11,10 +11,15 @@ import {
   Server,
   Bell,
   SlidersHorizontal,
+  Trash2,
+  Globe,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { listEquipment } from "@/api/equipmentApi";
+import { listEquipment, updateEquipment } from "@/api/equipmentApi";
+import { listCredentials, saveCredentials } from "@/api/credentialsApi";
+import { upsertEquipmentCredential } from "@/lib/credentials/credentialsVault";
+import { getEquipmentIp } from "@/lib/snmp/snmpSwitchProfiles";
 import {
   listManagedSwitches,
   saveManagedSwitches,
@@ -26,6 +31,9 @@ import {
   profileIdForEquipment,
   portCountFromModel,
   parseSwitchModel,
+  parseNetworkDeviceModel,
+  buildDefaultProfileFields,
+  buildFleetProfileForEquipment,
   SNMP_SWITCHES_CHANGED_EVENT,
   DEFAULT_SNMP_SWITCHES,
 } from "@/lib/snmp/snmpSwitchProfiles";
@@ -47,6 +55,9 @@ import SnmpAlertsPanel from "@/components/snmp/SnmpAlertsPanel";
 import SnmpPlatformSettings from "@/components/snmp/SnmpPlatformSettings";
 import SnmpAddSwitchModal from "@/components/snmp/SnmpAddSwitchModal";
 import SnmpSwitchSettingsDrawer from "@/components/snmp/SnmpSwitchSettingsDrawer";
+import SnmpWanManagementPanel from "@/components/snmp/SnmpWanManagementPanel";
+import { loadWanManagement, saveWanManagement } from "@/api/wanManagementApi";
+import { DEFAULT_WAN_MANAGEMENT } from "@/lib/wan/wanManagementSettings";
 
 const HEALTH_BORDER = {
   healthy: "border-l-emerald-500",
@@ -55,6 +66,26 @@ const HEALTH_BORDER = {
   disabled: "border-l-slate-600",
   unknown: "border-l-slate-500",
 };
+
+function EmptyFleetPrompt({ onRegister }) {
+  return (
+    <div className="glass rounded-2xl p-12 text-center border border-border">
+      <Server size={48} className="mx-auto text-muted-foreground mb-4 opacity-60" />
+      <h2 className="text-lg font-semibold">Build your Core Network fleet</h2>
+      <p className="text-sm text-muted-foreground mt-2 max-w-lg mx-auto">
+        Register switches, Peplink WAN routers, and firewalls from Equipment. Poll IF-MIB and
+        vendor APIs for interface status, traffic, and WAN/cellular health.
+      </p>
+      <button
+        type="button"
+        onClick={onRegister}
+        className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
+      >
+        <Plus size={16} /> Register first device
+      </button>
+    </div>
+  );
+}
 
 export default function SnmpPage() {
   const [state, setState] = useState(DEFAULT_SNMP_SWITCHES);
@@ -70,6 +101,8 @@ export default function SnmpPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editProfile, setEditProfile] = useState(null);
   const [globalDraft, setGlobalDraft] = useState(DEFAULT_SNMP_GLOBAL);
+  const [wanManagement, setWanManagement] = useState(DEFAULT_WAN_MANAGEMENT);
+  const [pollingRouterId, setPollingRouterId] = useState(null);
   const pollInFlight = useRef(false);
   const profileCountRef = useRef(0);
 
@@ -86,14 +119,19 @@ export default function SnmpPage() {
     const showFullPageLoader = profileCountRef.current === 0;
     if (showFullPageLoader) setLoading(true);
     try {
-      const [swState, eq] = await Promise.all([listManagedSwitches(), listEquipment()]);
+      const [swState, eq, wanMgmt] = await Promise.all([
+        listManagedSwitches(),
+        listEquipment(),
+        loadWanManagement(),
+      ]);
       setState(swState);
       setGlobalDraft(swState.global || DEFAULT_SNMP_GLOBAL);
       setPortView(swState.global?.defaultPortView || "panel");
       setEquipment(eq);
+      setWanManagement(wanMgmt || DEFAULT_WAN_MANAGEMENT);
       setSelectedId((id) => id || swState.profiles?.[0]?.id || null);
     } catch (err) {
-      toast.error(err.message || "Failed to load switch management");
+      toast.error(err.message || "Failed to load Core Network");
     } finally {
       if (showFullPageLoader) setLoading(false);
     }
@@ -153,11 +191,12 @@ export default function SnmpPage() {
   };
 
   const handleAdd = async (eq) => {
+    const defaults = buildDefaultProfileFields(eq);
     const profile = {
       id: profileIdForEquipment(eq.id),
       equipmentId: eq.id,
       enabled: true,
-      portCount: portCountFromModel(eq.model) || null,
+      portCount: portCountFromModel(eq.model) || parseNetworkDeviceModel(eq.model)?.portCount || null,
       pollIntervalSec: null,
       deckId: eq.deckId || "",
       roomId: eq.roomId || "",
@@ -169,6 +208,7 @@ export default function SnmpPage() {
       lastPollAt: null,
       lastPollError: null,
       lastPoll: null,
+      ...defaults,
     };
     await persistProfiles([...state.profiles, profile]);
     setSelectedId(profile.id);
@@ -198,10 +238,6 @@ export default function SnmpPage() {
           toast.success(`Fleet poll complete — ${res.switches?.length ?? state.profiles.length} switch(es)`);
         }
       } catch (err) {
-        setConnectionsPollMeta((m) => ({
-          ...m,
-          error: err.message || "Fleet poll failed",
-        }));
         if (!silent) toast.error(err.message || "Fleet poll failed");
       } finally {
         setPolling(false);
@@ -228,9 +264,6 @@ export default function SnmpPage() {
           const profiles = prev.profiles.map((p) =>
             p.id === res.profile.id ? res.profile : p
           );
-          syncConnectionsPollMeta(profiles, {
-            polledAt: res.profile.lastPollAt || new Date().toISOString(),
-          });
           return { ...prev, profiles };
         });
         if (res.source === "mock" && !discovery.snmpEnabled) {
@@ -300,6 +333,20 @@ export default function SnmpPage() {
     toast.success("Port inventory exported");
   };
 
+  const removeFromFleet = async (profileId) => {
+    const p = state.profiles.find((x) => x.id === profileId);
+    if (!p) return;
+    if (!window.confirm(`Remove "${equipmentById.get(p.equipmentId)?.name || p.id}" from Core Network fleet?`)) {
+      return;
+    }
+    await persistProfiles(state.profiles.filter((x) => x.id !== profileId));
+    if (selectedId === profileId) {
+      const next = state.profiles.filter((x) => x.id !== profileId)[0];
+      setSelectedId(next?.id || null);
+    }
+    toast.success("Device removed from fleet");
+  };
+
   const goToSwitch = (switchId, portIndex) => {
     setSelectedId(switchId);
     setTab("switches");
@@ -312,11 +359,82 @@ export default function SnmpPage() {
     }
   };
 
-  if (loading && !state.profiles.length) {
+  const goToRouter = (profileId) => {
+    setSelectedId(profileId);
+    setSelectedPort(null);
+    setTab("switches");
+  };
+
+  const handleSaveWanManagement = async (next) => {
+    const saved = await saveWanManagement(next);
+    setWanManagement(saved);
+    return saved;
+  };
+
+  const handleAssignWanRouter = async (eq) => {
+    if (!eq?.id) return;
+    const existing = state.profiles.find((p) => p.equipmentId === eq.id);
+    let nextProfiles = state.profiles;
+    if (!existing) {
+      const profile = buildFleetProfileForEquipment(eq, { forceWanRouter: true });
+      nextProfiles = [...state.profiles, profile];
+      await persistProfiles(nextProfiles);
+      setSelectedId(profile.id);
+    } else if (existing.deviceRole !== "wan_router") {
+      nextProfiles = state.profiles.map((p) =>
+        p.id === existing.id ? { ...p, deviceRole: "wan_router" } : p
+      );
+      await persistProfiles(nextProfiles);
+    }
+    const nextWan = {
+      ...wanManagement,
+      assignedRouterEquipmentIds: [
+        ...new Set([...(wanManagement.assignedRouterEquipmentIds || []), eq.id]),
+      ],
+    };
+    await handleSaveWanManagement(nextWan);
+    pollRouterForWan(profileIdForEquipment(eq.id)).catch(() => {});
+  };
+
+  const handleUnassignWanRouter = async (equipmentId) => {
+    if (!equipmentId) return;
+    const nextWan = {
+      ...wanManagement,
+      assignedRouterEquipmentIds: (wanManagement.assignedRouterEquipmentIds || []).filter(
+        (id) => id !== equipmentId
+      ),
+    };
+    await handleSaveWanManagement(nextWan);
+  };
+
+  const pollRouterForWan = async (profileId) => {
+    const profile = state.profiles.find((p) => p.id === profileId);
+    if (!profile?.equipmentId) {
+      toast.error("Router not found in fleet");
+      return;
+    }
+    setPollingRouterId(profileId);
+    try {
+      const res = await pollSwitch(profile.equipmentId);
+      if (res.profile) {
+        setState((prev) => ({
+          ...prev,
+          profiles: prev.profiles.map((p) => (p.id === res.profile.id ? res.profile : p)),
+        }));
+        toast.success("WAN router polled successfully");
+      }
+    } catch (err) {
+      toast.error(err.message || "Poll failed");
+    } finally {
+      setPollingRouterId(null);
+    }
+  };
+
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
         <Loader2 className="animate-spin mr-2" size={20} />
-        Loading switch management…
+        Loading Core Network…
       </div>
     );
   }
@@ -339,10 +457,10 @@ export default function SnmpPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <Network size={22} className="text-primary" />
-            Switch Management
+            Core Network
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Enterprise SNMP monitoring — fleet health, interfaces, PoE, and cable faults
+            Managed switches, WAN routers, and firewalls — fleet health, interfaces, and cable faults
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -359,7 +477,7 @@ export default function SnmpPage() {
             onClick={openAddModal}
             className="flex items-center gap-2 text-sm border border-border rounded-xl px-3 py-2 hover:border-primary/40"
           >
-            <Plus size={14} /> Register switch
+            <Plus size={14} /> Register device
           </button>
           <button
             type="button"
@@ -374,21 +492,61 @@ export default function SnmpPage() {
       </header>
 
       {state.profiles.length === 0 ? (
-        <div className="glass rounded-2xl p-12 text-center border border-border">
-          <Server size={48} className="mx-auto text-muted-foreground mb-4 opacity-60" />
-          <h2 className="text-lg font-semibold">Build your managed switch fleet</h2>
-          <p className="text-sm text-muted-foreground mt-2 max-w-lg mx-auto">
-            Register Cisco and other managed switches from Equipment. Poll IF-MIB for oper status,
-            traffic rates, PoE, and MAC/FDB neighbour resolution.
-          </p>
-          <button
-            type="button"
-            onClick={openAddModal}
-            className="mt-6 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
-          >
-            <Plus size={16} /> Register first switch
-          </button>
-        </div>
+        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+          <TabsList className="flex flex-wrap h-auto gap-1 bg-secondary/50 p-1">
+            <TabsTrigger value="overview" className="gap-1.5">
+              <LayoutDashboard size={14} /> Overview
+            </TabsTrigger>
+            <TabsTrigger value="switches" className="gap-1.5">
+              <Server size={14} /> Fleet
+            </TabsTrigger>
+            <TabsTrigger value="wan" className="gap-1.5">
+              <Globe size={14} /> WAN Management
+            </TabsTrigger>
+            <TabsTrigger value="alerts" className="gap-1.5">
+              <Bell size={14} /> Alerts
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="gap-1.5">
+              <SlidersHorizontal size={14} /> Settings
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="mt-0">
+            <EmptyFleetPrompt onRegister={openAddModal} />
+          </TabsContent>
+
+          <TabsContent value="switches" className="mt-0">
+            <EmptyFleetPrompt onRegister={openAddModal} />
+          </TabsContent>
+
+          <TabsContent value="wan" className="mt-0">
+            <SnmpWanManagementPanel
+              snmpState={state}
+              equipment={equipment}
+              wanManagement={wanManagement}
+              onSaveWanManagement={handleSaveWanManagement}
+              onAssignRouter={handleAssignWanRouter}
+              onUnassignRouter={handleUnassignWanRouter}
+              onPollRouter={pollRouterForWan}
+              pollingRouterId={pollingRouterId}
+              onSelectRouter={goToRouter}
+            />
+          </TabsContent>
+
+          <TabsContent value="alerts" className="mt-0">
+            <SnmpAlertsPanel summary={summary} onSelectSwitch={goToSwitch} />
+          </TabsContent>
+
+          <TabsContent value="settings" className="mt-0">
+            <SnmpPlatformSettings
+              global={globalDraft}
+              discovery={discovery}
+              onChange={setGlobalDraft}
+              onSave={handleSaveGlobal}
+              saving={savingGlobal}
+            />
+          </TabsContent>
+        </Tabs>
       ) : (
         <Tabs value={tab} onValueChange={setTab} className="space-y-4">
           <TabsList className="flex flex-wrap h-auto gap-1 bg-secondary/50 p-1">
@@ -396,7 +554,10 @@ export default function SnmpPage() {
               <LayoutDashboard size={14} /> Overview
             </TabsTrigger>
             <TabsTrigger value="switches" className="gap-1.5">
-              <Server size={14} /> Switches
+              <Server size={14} /> Fleet
+            </TabsTrigger>
+            <TabsTrigger value="wan" className="gap-1.5">
+              <Globe size={14} /> WAN Management
             </TabsTrigger>
             <TabsTrigger value="alerts" className="gap-1.5 relative">
               <Bell size={14} /> Alerts
@@ -416,6 +577,7 @@ export default function SnmpPage() {
               summary={summary}
               enriched={enriched}
               onSelectSwitch={(id) => goToSwitch(id)}
+              onRemoveDevice={removeFromFleet}
             />
             <SnmpPortMapPanel
               enriched={enriched}
@@ -424,6 +586,7 @@ export default function SnmpPage() {
               pollMeta={overviewPollMeta}
               discoverySnmpEnabled={discovery.snmpEnabled}
               onPortClick={(switchId, port) => goToSwitch(switchId, port.port)}
+              onRemoveDevice={removeFromFleet}
             />
           </TabsContent>
 
@@ -438,6 +601,11 @@ export default function SnmpPage() {
                   return (
                     <div
                       key={sw.id}
+                      className={`relative rounded-xl border border-border border-l-4 transition-all ${
+                        HEALTH_BORDER[sw.health?.status] || HEALTH_BORDER.unknown
+                      } ${selected?.id === sw.id ? "bg-primary/10 ring-1 ring-primary/30" : "bg-card/40 hover:bg-secondary/30"}`}
+                    >
+                    <div
                       role="button"
                       tabIndex={0}
                       onClick={() => {
@@ -450,11 +618,16 @@ export default function SnmpPage() {
                           setSelectedPort(null);
                         }
                       }}
-                      className={`w-full text-left rounded-xl p-3 border border-border border-l-4 cursor-pointer transition-all ${
-                        HEALTH_BORDER[sw.health?.status] || HEALTH_BORDER.unknown
-                      } ${selected?.id === sw.id ? "bg-primary/10 ring-1 ring-primary/30" : "bg-card/40 hover:bg-secondary/30"}`}
+                      className="w-full text-left p-3 cursor-pointer pr-10"
                     >
-                      <p className="font-medium text-sm truncate">{sw.displayName}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-sm truncate flex-1">{sw.displayName}</p>
+                        {sw.roleLabel && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-secondary text-muted-foreground shrink-0">
+                            {sw.roleLabel}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs font-mono text-muted-foreground">{sw.ip || "No IP"}</p>
                       {sw.model && (
                         <p className="text-xs font-mono text-muted-foreground/80 truncate">{sw.model}</p>
@@ -463,6 +636,18 @@ export default function SnmpPage() {
                         {sw.ports.length ? `${up}/${sw.ports.length} up` : "Not polled"}
                         {sw.enabled === false && " · Disabled"}
                       </p>
+                    </div>
+                    <button
+                      type="button"
+                      title="Remove from fleet"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromFleet(sw.id);
+                      }}
+                      className="absolute top-2 right-2 p-1.5 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                     </div>
                   );
                 })}
@@ -482,6 +667,20 @@ export default function SnmpPage() {
                 onEditSettings={() => setEditProfile(selected)}
               />
             </div>
+          </TabsContent>
+
+          <TabsContent value="wan" className="mt-0">
+            <SnmpWanManagementPanel
+              snmpState={state}
+              equipment={equipment}
+              wanManagement={wanManagement}
+              onSaveWanManagement={handleSaveWanManagement}
+              onAssignRouter={handleAssignWanRouter}
+              onUnassignRouter={handleUnassignWanRouter}
+              onPollRouter={pollRouterForWan}
+              pollingRouterId={pollingRouterId}
+              onSelectRouter={goToRouter}
+            />
           </TabsContent>
 
           <TabsContent value="alerts" className="mt-0">
@@ -512,18 +711,68 @@ export default function SnmpPage() {
       {editProfile && (
         <SnmpSwitchSettingsDrawer
           profile={editProfile}
-          equipment={editProfile?.eq}
+          equipment={equipmentById.get(editProfile.equipmentId)}
           discovery={discovery}
-          onSave={async (draft) => {
-            await persistProfiles(state.profiles.map((p) => (p.id === draft.id ? draft : p)));
+          onSave={async ({ profile: draft, equipmentPatch }) => {
+            const eq = equipmentById.get(draft.equipmentId);
+            if (eq && equipmentPatch) {
+              const pepMake =
+                draft.integrationVendor === "peplink"
+                  ? equipmentPatch.make || "Peplink"
+                  : equipmentPatch.make;
+              await updateEquipment(eq.id, {
+                ...eq,
+                name: equipmentPatch.name,
+                make: pepMake,
+                vendor: pepMake,
+                model: equipmentPatch.model,
+                ip: equipmentPatch.ip,
+                mac: equipmentPatch.mac,
+                serial: equipmentPatch.serial,
+                category: equipmentPatch.category || "Network",
+              });
+              setEquipment((prev) =>
+                prev.map((e) =>
+                  e.id === eq.id
+                    ? { ...e, ...equipmentPatch, make: pepMake, vendor: pepMake }
+                    : e
+                )
+              );
+            }
+            let profileToSave = draft;
+            if (draft.browserLogin && (draft.browserLogin.username || draft.browserLogin.password)) {
+              const creds = await listCredentials();
+              const platform = draft.integrationVendor === "peplink" ? "peplink" : "web";
+              const { credentials, credentialId } = upsertEquipmentCredential(
+                creds,
+                draft.equipmentId,
+                {
+                  platform,
+                  loginUrl: draft.browserLogin.loginUrl,
+                  username: draft.browserLogin.username,
+                  password: draft.browserLogin.password,
+                  host: equipmentPatch?.ip || getEquipmentIp(eq),
+                  label: `${equipmentPatch?.name || eq?.name || "Device"} — browser`,
+                },
+                `${equipmentPatch?.name || eq?.name} login`
+              );
+              await saveCredentials(credentials);
+              profileToSave = {
+                ...draft,
+                browserLogin: { ...draft.browserLogin, credentialId },
+              };
+            }
+            await persistProfiles(
+              state.profiles.map((p) => (p.id === profileToSave.id ? profileToSave : p))
+            );
             setEditProfile(null);
-            toast.success("Switch configuration saved");
+            toast.success("Device and login credentials saved");
           }}
           onRemove={async (draft) => {
             await persistProfiles(state.profiles.filter((p) => p.id !== draft.id));
             if (selectedId === draft.id) setSelectedId(state.profiles[0]?.id);
             setEditProfile(null);
-            toast.success("Switch removed from fleet");
+            toast.success("Device removed from fleet");
           }}
           onClose={() => setEditProfile(null)}
         />

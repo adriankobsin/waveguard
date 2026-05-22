@@ -10,8 +10,8 @@ const CONTROL_COLORS = CONTROL_TYPE_COLORS;
 function DetailRow({ label, value }) {
   return (
     <div className="flex justify-between gap-2 text-xs">
-      <span className="text-slate-500">{label}</span>
-      <span className="text-slate-200">{value || "—"}</span>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-foreground">{value || "—"}</span>
     </div>
   );
 }
@@ -107,7 +107,7 @@ export default function ControlPathTab({ topologyData, onRefresh, loading }) {
 
   if (loading || linksLoading) {
     return (
-      <div className="flex items-center justify-center h-full gap-2 text-slate-400">
+      <div className="flex items-center justify-center h-full gap-2 text-muted-foreground">
         <Loader2 className="animate-spin" size={18} />
         <span className="text-sm">Loading control path…</span>
       </div>
@@ -115,22 +115,22 @@ export default function ControlPathTab({ topologyData, onRefresh, loading }) {
   }
 
   return (
-    <div className="flex h-full bg-[#060912]">
+    <div className="flex h-full bg-background">
       <div ref={containerRef} className="flex-1 relative min-w-0">
         <div className="absolute top-4 left-4 z-10 flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-[#0a0f1c]/90 border border-white/10 rounded-xl px-3 py-2">
-            <Search size={14} className="text-slate-500" />
+          <div className="flex items-center gap-2 bg-secondary/90 border border-border rounded-xl px-3 py-2">
+            <Search size={14} className="text-muted-foreground" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search..."
-              className="bg-transparent text-sm text-white w-40 focus:outline-none"
+              className="bg-transparent text-sm text-foreground w-40 focus:outline-none"
             />
           </div>
           <button
             type="button"
             onClick={onRefresh}
-            className="px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-xs text-slate-400 hover:text-white flex items-center gap-1"
+            className="px-3 py-2 rounded-xl border border-border bg-secondary/90 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
           >
             <RefreshCw size={12} /> Refresh
           </button>
@@ -146,8 +146,8 @@ export default function ControlPathTab({ topologyData, onRefresh, loading }) {
           dimensions={dimensions}
         />
 
-        <div className="absolute bottom-4 left-4 z-10 rounded-xl border border-white/10 bg-[#0a0f1c]/90 p-3 space-y-1">
-          <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">Control type</p>
+        <div className="absolute bottom-4 left-4 z-10 rounded-xl border border-border bg-secondary/90 p-3 space-y-1">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Control type</p>
           {controlTypes.map((ct) => (
             <button
               key={ct}
@@ -156,27 +156,27 @@ export default function ControlPathTab({ topologyData, onRefresh, loading }) {
               className={`flex items-center gap-2 text-xs w-full ${controlFilter && controlFilter !== ct ? "opacity-40" : ""}`}
             >
               <span className="w-2 h-2 rounded-full" style={{ background: CONTROL_COLORS[ct] }} />
-              <span className="text-slate-400">{ct}</span>
+              <span className="text-muted-foreground">{ct}</span>
             </button>
           ))}
         </div>
       </div>
 
       {selected && (
-        <aside className="w-72 border-l border-white/8 bg-[#0a0f1c]/95 p-4 flex-shrink-0 overflow-y-auto">
-          <p className="text-sm font-semibold text-white">{selected.label}</p>
-          <p className="text-xs text-slate-500 mt-1">{deviceMap[selected.id]?.model}</p>
+        <aside className="w-72 border-l border-border bg-secondary/95 p-4 flex-shrink-0 overflow-y-auto">
+          <p className="text-sm font-semibold text-foreground">{selected.label}</p>
+          <p className="text-xs text-muted-foreground mt-1">{deviceMap[selected.id]?.model}</p>
           <div className="mt-4 space-y-2">
             <DetailRow label="Control" value={deviceMap[selected.id]?.controlType} />
             <DetailRow label="IP" value={deviceMap[selected.id]?.ip} />
             <DetailRow label="Status" value={deviceMap[selected.id]?.status} />
             <DetailRow label="Location" value={deviceMap[selected.id]?.location} />
           </div>
-          <p className="text-[10px] text-slate-500 uppercase mt-4 mb-2">Links</p>
+          <p className="text-[10px] text-muted-foreground uppercase mt-4 mb-2">Links</p>
           {links
             .filter((l) => l.sourceEquipmentId === selected.id || l.targetEquipmentId === selected.id)
             .map((l) => (
-              <div key={l.id} className="text-xs text-slate-400 py-1 border-b border-white/5">
+              <div key={l.id} className="text-xs text-muted-foreground py-1 border-b border-border">
                 {l.label || l.protocol}
               </div>
             ))}

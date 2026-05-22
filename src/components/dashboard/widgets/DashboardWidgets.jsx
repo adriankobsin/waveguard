@@ -1,8 +1,10 @@
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
   Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
   WifiOff, Activity, Globe, BarChart3, Server, Clock, Bot,
   Sliders, Lightbulb, Radio, Loader2, Cable, Unplug, ArrowRight,
+  Gauge, ChevronDown, RefreshCw,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -10,6 +12,15 @@ import {
 } from "recharts";
 import StatusPulse from "../../StatusPulse";
 import { useSystemData } from "@/contexts/SystemDataContext";
+import { buildWanSnapshot } from "@/lib/wan/buildWanSnapshot";
+import {
+  loadWanWidgetSelection,
+  saveWanWidgetSelection,
+  getWanSpeedTestForPort,
+  saveWanSpeedTestResult,
+} from "@/lib/wan/wanWidgetStorage";
+import { runWanSpeedTest } from "@/api/wanApi";
+import { formatRelativeTime } from "@/lib/systemData/formatRelativeTime";
 
 function WidgetLoading() {
   return (
@@ -141,11 +152,11 @@ export const WIDGET_TYPES = {
   wan_internet: {
     id: "wan_internet",
     name: "WAN / internet",
-    description: "WAN link status and throughput",
+    description: "Live WAN throughput, ISP details, and speed tests",
     icon: Globe,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 4 },
-    defaultSize: { w: 3, h: 3 },
+    minSize: { w: 3, h: 3 },
+    maxSize: { w: 6, h: 6 },
+    defaultSize: { w: 3, h: 4 },
   },
   offline_devices: {
     id: "offline_devices",
@@ -317,7 +328,7 @@ export function NetworkWidget() {
           to="/snmp"
           className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:underline"
         >
-          Switch Management <ArrowRight size={11} />
+          Core Network <ArrowRight size={11} />
         </Link>
       </WidgetShell>
     );
@@ -437,7 +448,7 @@ export function NetworkWidget() {
           <p className="text-xs text-muted-foreground">
             Register switches in{" "}
             <Link to="/snmp" className="text-primary hover:underline">
-              Switch Management
+              Core Network
             </Link>{" "}
             for port and cable monitoring.
           </p>
@@ -479,20 +490,244 @@ export function UpsPowerWidget() {
   );
 }
 
+function WanInfoRow({ label, value, mono }) {
+  if (value == null || value === "") return null;
+  return (
+    <div className="flex justify-between gap-2 text-[11px]">
+      <span className="text-muted-foreground shrink-0">{label}</span>
+      <span className={`text-foreground font-medium text-right truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
 export function WanInternetWidget() {
-  const { snapshot, loading } = useSystemData();
-  const wan = snapshot?.wan;
-  if (loading && !snapshot) return <WidgetShell title="WAN / internet" icon={Globe}><WidgetLoading /></WidgetShell>;
-  const pulseStatus = wan?.status === "online" ? "online" : wan?.status === "offline" ? "offline" : "warning";
+  const { snapshot, loading, sources, refresh } = useSystemData();
+  const [selection, setSelection] = useState(() => loadWanWidgetSelection());
+  const [testing, setTesting] = useState(false);
+  const [testError, setTestError] = useState(null);
+  const [speedTest, setSpeedTest] = useState(null);
+
+  const wanData = useMemo(() => {
+    if (!sources) return null;
+    return buildWanSnapshot(
+      sources.snmpSwitches,
+      sources.equipment,
+      selection,
+      sources.wanManagement
+    );
+  }, [sources, selection]);
+
+  const selected = wanData?.selected;
+  const portsForRouter = useMemo(() => {
+    if (!wanData?.ports?.length) return [];
+    const pid = selection?.profileId || selected?.profileId;
+    if (!pid) return wanData.ports;
+    return wanData.ports.filter((p) => p.profileId === pid);
+  }, [wanData?.ports, selection?.profileId, selected?.profileId]);
+
+  useEffect(() => {
+    if (!selected) return;
+    setSpeedTest(getWanSpeedTestForPort(selected.profileId, selected.index));
+  }, [selected?.profileId, selected?.index]);
+
+  const handleRouterChange = (profileId) => {
+    const next = { profileId, portIndex: null };
+    setSelection(next);
+    saveWanWidgetSelection(next);
+  };
+
+  const handlePortChange = (portIndex) => {
+    const profileId = selection?.profileId || selected?.profileId;
+    if (!profileId) return;
+    const next = { profileId, portIndex: Number(portIndex) };
+    setSelection(next);
+    saveWanWidgetSelection(next);
+  };
+
+  const handleSpeedTest = async () => {
+    if (!selected || testing) return;
+    setTesting(true);
+    setTestError(null);
+    try {
+      const result = await runWanSpeedTest({
+        profileId: selected.profileId,
+        portIndex: selected.index,
+        portName: selected.name,
+      });
+      const saved = saveWanSpeedTestResult({
+        ...result,
+        profileId: selected.profileId,
+        portIndex: selected.index,
+        portName: selected.name,
+      });
+      setSpeedTest(saved);
+    } catch (err) {
+      setTestError(err.message || "Speed test failed");
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  if (loading && !snapshot) {
+    return (
+      <WidgetShell title="WAN / internet" icon={Globe}>
+        <WidgetLoading />
+      </WidgetShell>
+    );
+  }
+
+  if (!wanData?.configured || !selected) {
+    return (
+      <WidgetShell title="WAN / internet" icon={Globe}>
+        <div className="space-y-3 text-xs">
+          <p className="text-muted-foreground leading-relaxed">
+            Register your WAN router or firewall in Core Network and poll it to see live throughput,
+            public IP, and ISP details here.
+          </p>
+          <Link to="/snmp" className="inline-flex items-center gap-1 text-primary hover:underline">
+            Core Network → WAN Management <ArrowRight size={11} />
+          </Link>
+        </div>
+      </WidgetShell>
+    );
+  }
+
+  const pulseStatus =
+    selected.status === "online" ? "online" : selected.status === "offline" ? "offline" : "warning";
+  const showTest = speedTest && !testing;
+  const downloadMbps = showTest ? speedTest.downloadMbps : selected.downloadMbps;
+  const uploadMbps = showTest ? speedTest.uploadMbps : selected.uploadMbps;
+
   return (
     <WidgetShell title="WAN / internet" icon={Globe}>
-      <div className="space-y-2 text-xs mb-3">
-        <div className="flex justify-between items-center">
-          <span className="text-muted-foreground">{wan?.name || "WAN"}</span>
+      <div className="space-y-3 text-xs">
+        {wanData.synthetic && (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 leading-relaxed">
+            Preview data — assign and poll a WAN router in{" "}
+            <Link to="/snmp" className="underline font-medium">Core Network → WAN Management</Link> for live telemetry.
+          </p>
+        )}
+
+        {(wanData.availableRouters?.length || 0) > 1 && (
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 block">
+              Router
+            </label>
+            <div className="relative">
+              <select
+                value={selection?.profileId || selected.profileId}
+                onChange={(e) => handleRouterChange(e.target.value)}
+                className="w-full appearance-none bg-secondary border border-border rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              >
+                {wanData.availableRouters.map((r) => (
+                  <option key={r.profileId} value={r.profileId}>
+                    {r.name} {r.ip ? `(${r.ip})` : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+        )}
+
+        {portsForRouter.length > 1 && (
+          <div>
+            <label className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 block">
+              WAN link
+            </label>
+            <div className="relative">
+              <select
+                value={selected.index}
+                onChange={(e) => handlePortChange(e.target.value)}
+                className="w-full appearance-none bg-secondary border border-border rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
+              >
+                {portsForRouter.map((p) => (
+                  <option key={`${p.profileId}-${p.index}`} value={p.index}>
+                    {p.name} — {p.status === "online" ? "Up" : p.status === "offline" ? "Down" : "Idle"}
+                    {p.isp ? ` · ${p.isp}` : ""}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="font-semibold text-foreground truncate">{selected.name}</p>
+            <p className="text-[10px] text-muted-foreground truncate">
+              {selected.routerName}
+              {selected.routerIp ? ` · ${selected.routerIp}` : ""}
+            </p>
+          </div>
           <StatusPulse status={pulseStatus} />
         </div>
-        <div className="flex justify-between"><span className="text-muted-foreground">↓ Down</span><span className="text-primary font-bold">{wan?.downloadMbps ?? 0} Mbps</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">↑ Up</span><span className="text-emerald-500 font-bold">{wan?.uploadMbps ?? 0} Mbps</span></div>
+
+        <div className="rounded-xl bg-secondary/60 border border-border/60 p-2.5 space-y-1.5">
+          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
+            <span>{showTest ? "Speed test result" : "Live throughput"}</span>
+            {showTest && speedTest.testedAt && (
+              <span>{formatRelativeTime(speedTest.testedAt)}</span>
+            )}
+            {!showTest && selected.lastPollAt && (
+              <span>Poll {formatRelativeTime(selected.lastPollAt)}</span>
+            )}
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">↓ Down</span>
+            <span className="text-primary font-bold tabular-nums">{downloadMbps ?? 0} Mbps</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">↑ Up</span>
+            <span className="text-emerald-500 font-bold tabular-nums">{uploadMbps ?? 0} Mbps</span>
+          </div>
+          {showTest && speedTest.latencyMs != null && (
+            <div className="flex justify-between pt-1 border-t border-border/50">
+              <span className="text-muted-foreground">Latency</span>
+              <span className="text-foreground tabular-nums">{speedTest.latencyMs} ms</span>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-1 pt-1 border-t border-border/50">
+          <WanInfoRow label="ISP / provider" value={selected.isp} />
+          <WanInfoRow label="Public IP" value={selected.publicIp} mono />
+          <WanInfoRow label="Gateway" value={selected.gateway} mono />
+          <WanInfoRow label="DNS" value={selected.dns} mono />
+          <WanInfoRow label="Link speed" value={selected.linkSpeedMbps ? `${selected.linkSpeedMbps} Mbps` : null} />
+          {selected.carrier && <WanInfoRow label="Carrier" value={selected.carrier} />}
+          {selected.signalDbm != null && (
+            <WanInfoRow label="Signal" value={`${selected.signalDbm} dBm`} />
+          )}
+          {selected.vpnUp != null && (
+            <WanInfoRow label="VPN" value={selected.vpnUp ? "Connected" : "Down"} />
+          )}
+        </div>
+
+        {testError && (
+          <p className="text-[10px] text-red-500">{testError}</p>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <button
+            type="button"
+            onClick={handleSpeedTest}
+            disabled={testing || selected.status === "offline"}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+          >
+            {testing ? <Loader2 size={12} className="animate-spin" /> : <Gauge size={12} />}
+            {testing ? "Testing…" : "Speed test"}
+          </button>
+          <button
+            type="button"
+            onClick={() => refresh?.()}
+            title="Refresh poll data"
+            className="px-3 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+          >
+            <RefreshCw size={12} />
+          </button>
+        </div>
       </div>
     </WidgetShell>
   );

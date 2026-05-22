@@ -44,8 +44,8 @@ export default function InventoryFilters({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="flex items-center gap-1.5 text-muted-foreground pb-1.5 flex-shrink-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
           <Filter size={13} />
           <span className="text-xs font-medium">Filters</span>
           {activeCount > 0 && (
@@ -54,7 +54,37 @@ export default function InventoryFilters({
             </span>
           )}
         </div>
+        {activeCount > 0 && (
+          <button
+            type="button"
+            onClick={clearAll}
+            disabled={disabled}
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground border border-border hover:bg-secondary transition-colors disabled:opacity-50"
+          >
+            <X size={12} />
+            Clear filters
+          </button>
+        )}
+      </div>
 
+      <div className="flex flex-wrap items-end gap-2 p-2.5 rounded-xl border border-primary/20 bg-primary/5">
+        <FilterSelect
+          label="Area / deck"
+          value={filters.area ?? "All"}
+          onChange={set("area")}
+          options={options.areas}
+          disabled={disabled}
+        />
+        <FilterSelect
+          label="Room"
+          value={filters.room ?? "All"}
+          onChange={set("room")}
+          options={options.rooms}
+          disabled={disabled}
+        />
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2">
         <FilterSelect
           label="Category"
           value={filters.category ?? "All"}
@@ -84,17 +114,10 @@ export default function InventoryFilters({
           disabled={disabled}
         />
         <FilterSelect
-          label="Area / deck"
-          value={filters.area ?? "All"}
-          onChange={set("area")}
-          options={options.areas}
-          disabled={disabled}
-        />
-        <FilterSelect
-          label="Room"
-          value={filters.room ?? "All"}
-          onChange={set("room")}
-          options={options.rooms}
+          label="Condition"
+          value={filters.condition ?? "All"}
+          onChange={set("condition")}
+          options={options.conditions}
           disabled={disabled}
         />
         <FilterSelect
@@ -105,35 +128,16 @@ export default function InventoryFilters({
           disabled={disabled}
         />
         <FilterSelect
-          label="Condition"
-          value={filters.condition ?? "All"}
-          onChange={set("condition")}
-          options={options.conditions}
-          disabled={disabled}
-        />
-        <FilterSelect
           label="Status"
           value={filters.status ?? "All"}
           onChange={set("status")}
           options={options.statuses}
           disabled={disabled}
         />
-
-        {activeCount > 0 && (
-          <button
-            type="button"
-            onClick={clearAll}
-            disabled={disabled}
-            className="flex items-center gap-1 px-2.5 py-1.5 mb-0.5 rounded-lg text-xs text-muted-foreground hover:text-foreground border border-border hover:bg-secondary transition-colors disabled:opacity-50"
-          >
-            <X size={12} />
-            Clear
-          </button>
-        )}
       </div>
 
       <p className="text-xs text-muted-foreground">
-        {resultCount} shown
+        <span className="font-medium text-foreground">{resultCount}</span> shown
         {totalCount !== resultCount ? ` of ${totalCount}` : ""} in equipment
         {activeCount > 0 ? ` · ${activeCount} filter${activeCount !== 1 ? "s" : ""} active` : ""}
       </p>

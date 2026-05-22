@@ -4,11 +4,12 @@ import {
   Settings, Mail, Brain, Database, Bell,
   ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Upload, ImageIcon,
   Anchor, LayoutDashboard, Network, Puzzle, Key, BookOpen, Users, HardDrive, Wifi, MapPin,
-  Moon, Sun, Save, RotateCcw,
+  Save, RotateCcw, Activity, FlaskConical,
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
-import { useTheme } from "@/contexts/ThemeContext";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
+import { usePlatformMode } from "@/contexts/PlatformModeContext";
+import { PLATFORM_MODES } from "@/lib/platformMode";
 import { useAuth } from "@/lib/AuthContext";
 import { filterSettingsSections, canAccessSettingsSection } from "@/lib/permissions";
 import {
@@ -22,6 +23,7 @@ import {
 import DecksRoomsPanel from "@/pages/settings/DecksRoomsPanel";
 import DiscoverySettingsPanel from "@/pages/settings/DiscoverySettingsPanel";
 import PlatformResetPanel from "@/pages/settings/PlatformResetPanel";
+import CredentialsVaultPanel from "@/components/credentials/CredentialsVaultPanel";
 import { base44 } from "@/api/base44Client";
 import { uploadLogoFile } from "@/lib/uploadLogo";
 import { toast } from "sonner";
@@ -29,11 +31,12 @@ import { toast } from "sonner";
 // ─── Sections list ─────────────────────────────────────────────────────────────
 const SECTIONS = [
   { key: "general",            label: "General",             icon: Anchor,        desc: "Vessel / property profile" },
+  { key: "platform-mode",      label: "Platform mode",       icon: Activity,      desc: "Switch between Live and Demo operation" },
   { key: "site-locations",     label: "Decks & rooms",       icon: MapPin,        desc: "Decks and rooms for equipment placement" },
   { key: "discovery",          label: "Network discovery",   icon: Wifi,          desc: "Scan subnets, SNMP, and agent URL" },
-  { key: "appearance",         label: "Appearance",          icon: Moon,          desc: "Light/dark mode theme switcher" },
   { key: "dashboard",          label: "Dashboard widgets",   icon: LayoutDashboard, desc: "Add and arrange dashboard widgets" },
   { key: "integrations",       label: "Integrations",        icon: Puzzle,        desc: "Vendor drivers and external services" },
+  { key: "credentials",      label: "Login credentials",   icon: Key,           desc: "Usernames and passwords for devices and platforms" },
   { key: "ai",                 label: "AI & OpenAI",         icon: Brain,         desc: "OpenAI API key, chat model, embeddings" },
   { key: "documentation",      label: "Documentation",       icon: BookOpen,      desc: "Storage path and AI re-indexing" },
   { key: "notifications",      label: "Notifications",       icon: Bell,          desc: "Bell retention, email, WhatsApp" },
@@ -225,31 +228,101 @@ function GeneralPanel() {
   );
 }
 
-function AppearancePanel() {
-  const { theme, setTheme, saveTheme, saving, saved } = useTheme();
+function PlatformModePanel() {
+  const { mode, setMode, saving } = usePlatformMode();
+  const [pending, setPending] = useState(null);
+
+  const choose = async (next) => {
+    if (next === mode) return;
+    setPending(next);
+    try {
+      await setMode(next);
+      toast.success(next === PLATFORM_MODES.DEMO
+        ? "Demo mode enabled — using sample data"
+        : "Live mode enabled — real equipment and polls");
+    } catch (err) {
+      toast.error(err.message || "Failed to switch mode");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const cards = [
+    {
+      value: PLATFORM_MODES.LIVE,
+      label: "Live system",
+      desc: "Real equipment, polls, and saved configuration",
+      sub: "Default operating mode for production deployments. Uses your saved Equipment, attempts real SNMP/API polls, and never synthesizes WAN data.",
+      Icon: Activity,
+      tone: "text-emerald-400",
+    },
+    {
+      value: PLATFORM_MODES.DEMO,
+      label: "Demo system",
+      desc: "Showcase mode with sample data and simulated telemetry",
+      sub: "Read-only overlay for demonstrations and training. Replaces telemetry with sample vessel data and forces mock polls. Your saved Equipment is never modified.",
+      Icon: FlaskConical,
+      tone: "text-purple-400",
+    },
+  ];
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">Choose your preferred color scheme. Theme applies across the entire app.</p>
+      <p className="text-xs text-muted-foreground">
+        Toggle between live operation and a safe demo showcase. Switching modes does not modify your saved Equipment or settings.
+      </p>
+
+      {mode === PLATFORM_MODES.DEMO && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-sm">
+          <AlertTriangle size={14} className="text-purple-400 flex-shrink-0 mt-0.5" />
+          <span className="text-foreground">
+            <span className="font-medium">Demo mode is active.</span>{" "}
+            <span className="text-muted-foreground">
+              Telemetry, polls, and WAN data are simulated. Switch back to Live for real monitoring.
+            </span>
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {[
-          { value: "light", label: "Light Mode", desc: "Bright and clean", Icon: Sun },
-          { value: "dark",  label: "Dark Mode",  desc: "Easy on the eyes", Icon: Moon },
-        ].map(({ value, label, desc, Icon }) => (
-          <button key={value} onClick={() => setTheme(value)}
-            className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${theme === value ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/30"}`}>
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${theme === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-              <Icon size={18} />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold text-foreground">{label}</p>
-              <p className="text-xs text-muted-foreground">{desc}</p>
-            </div>
-            {theme === value && <CheckCircle2 size={16} className="ml-auto text-primary" />}
-          </button>
-        ))}
+        {cards.map(({ value, label, desc, sub, Icon, tone }) => {
+          const active = mode === value;
+          const isPending = pending === value && saving;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => choose(value)}
+              disabled={saving}
+              className={`flex flex-col gap-2 p-4 rounded-xl border-2 transition-all text-left ${
+                active
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-secondary hover:border-primary/30"
+              } disabled:opacity-60`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    active ? "bg-primary text-primary-foreground" : `bg-muted ${tone}`
+                  }`}
+                >
+                  <Icon size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+                {isPending ? (
+                  <Loader2 size={16} className="animate-spin text-primary" />
+                ) : active ? (
+                  <CheckCircle2 size={16} className="text-primary" />
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{sub}</p>
+            </button>
+          );
+        })}
       </div>
-      <SaveBar saving={saving} saved={saved} onSave={() => saveTheme(theme)} />
     </div>
   );
 }
@@ -429,11 +502,12 @@ function RetentionPanel() {
 // ─── Panel registry ─────────────────────────────────────────────────────────────
 const PANEL_COMPONENTS = {
   general:       GeneralPanel,
+  "platform-mode": PlatformModePanel,
   "site-locations": DecksRoomsPanel,
   discovery:     DiscoverySettingsPanel,
-  appearance:    AppearancePanel,
   dashboard:     DashboardWidgetsPanel,
   integrations:  IntegrationsPanel,
+  credentials:   CredentialsVaultPanel,
   ai:            AIPanel,
   documentation: DocumentationPanel,
   notifications: NotificationsPanel,

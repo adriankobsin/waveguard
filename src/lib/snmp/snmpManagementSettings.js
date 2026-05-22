@@ -1,4 +1,4 @@
-/** Platform-wide SNMP switch management settings. */
+/** Platform-wide Core Network (SNMP fleet) settings. */
 
 export const DEFAULT_SNMP_GLOBAL = {
   autoPollEnabled: false,

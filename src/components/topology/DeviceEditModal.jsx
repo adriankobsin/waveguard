@@ -79,33 +79,33 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="bg-[#0a0f1c] border border-white/10 max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="bg-secondary border border-border max-w-2xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-white">Edit Device</DialogTitle>
+          <DialogTitle className="text-foreground">Edit Device</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-slate-300">Device Name *</Label>
+              <Label className="text-secondary-foreground">Device Name *</Label>
               <Input
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="bg-white/5 border-white/10 text-white"
+                className="bg-secondary border-border text-foreground"
                 placeholder="e.g., SW-Bridge"
               />
             </div>
             <div>
-              <Label className="text-slate-300">Category</Label>
+              <Label className="text-secondary-foreground">Category</Label>
               <Select
                 value={formData.category}
                 onValueChange={(value) => setFormData({ ...formData, category: value })}
               >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="bg-secondary border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0a0f1c] border border-white/10 max-h-60">
+                <SelectContent className="bg-secondary border border-border max-h-60">
                   {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat} className="text-white">
+                    <SelectItem key={cat} value={cat} className="text-foreground">
                       {cat}
                     </SelectItem>
                   ))}
@@ -116,20 +116,20 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-slate-300">IP Address</Label>
+              <Label className="text-secondary-foreground">IP Address</Label>
               <Input
                 value={formData.ip}
                 onChange={(e) => setFormData({ ...formData, ip: e.target.value })}
-                className="bg-white/5 border-white/10 text-white font-mono"
+                className="bg-secondary border-border text-foreground font-mono"
                 placeholder="192.168.1.1"
               />
             </div>
             <div>
-              <Label className="text-slate-300">MAC Address</Label>
+              <Label className="text-secondary-foreground">MAC Address</Label>
               <Input
                 value={formData.mac}
                 onChange={(e) => setFormData({ ...formData, mac: e.target.value })}
-                className="bg-white/5 border-white/10 text-white font-mono"
+                className="bg-secondary border-border text-foreground font-mono"
                 placeholder="00:1A:2B:3C:4D:5E"
               />
             </div>
@@ -137,20 +137,20 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-slate-300">Make</Label>
+              <Label className="text-secondary-foreground">Make</Label>
               <Input
                 value={formData.make}
                 onChange={(e) => setFormData({ ...formData, make: e.target.value })}
-                className="bg-white/5 border-white/10 text-white"
+                className="bg-secondary border-border text-foreground"
                 placeholder="e.g., Cisco, Crestron, Axis"
               />
             </div>
             <div>
-              <Label className="text-slate-300">Model</Label>
+              <Label className="text-secondary-foreground">Model</Label>
               <Input
                 value={formData.model}
                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                className="bg-white/5 border-white/10 text-white"
+                className="bg-secondary border-border text-foreground"
                 placeholder="e.g., CBS350-24P"
               />
             </div>
@@ -158,27 +158,27 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-slate-300">Firmware Version</Label>
+              <Label className="text-secondary-foreground">Firmware Version</Label>
               <Input
                 value={formData.firmware}
                 onChange={(e) => setFormData({ ...formData, firmware: e.target.value })}
-                className="bg-white/5 border-white/10 text-white"
+                className="bg-secondary border-border text-foreground"
                 placeholder="e.g., 1.0.5.3"
               />
             </div>
             <div>
-              <Label className="text-slate-300">Serial Number</Label>
+              <Label className="text-secondary-foreground">Serial Number</Label>
               <Input
                 value={formData.serial}
                 onChange={(e) => setFormData({ ...formData, serial: e.target.value })}
-                className="bg-white/5 border-white/10 text-white font-mono"
+                className="bg-secondary border-border text-foreground font-mono"
                 placeholder="e.g., FOC2241X0AB"
               />
             </div>
           </div>
 
           <div>
-            <Label className="text-slate-300 mb-2 block">Location (deck & room)</Label>
+            <Label className="text-secondary-foreground mb-2 block">Location (deck & room)</Label>
             <LocationPicker
               deckId={formData.deckId}
               roomId={formData.roomId}
@@ -190,17 +190,17 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-slate-300">Status</Label>
+              <Label className="text-secondary-foreground">Status</Label>
               <Select
                 value={formData.status}
                 onValueChange={(value) => setFormData({ ...formData, status: value })}
               >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="bg-secondary border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0a0f1c] border border-white/10">
+                <SelectContent className="bg-secondary border border-border">
                   {DEVICE_STATUSES.map((status) => (
-                    <SelectItem key={status} value={status} className="text-white capitalize">
+                    <SelectItem key={status} value={status} className="text-foreground capitalize">
                       {status}
                     </SelectItem>
                   ))}
@@ -208,17 +208,17 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               </Select>
             </div>
             <div>
-              <Label className="text-slate-300">Control type</Label>
+              <Label className="text-secondary-foreground">Control type</Label>
               <Select
                 value={formData.controlType}
                 onValueChange={(value) => setFormData({ ...formData, controlType: value })}
               >
-                <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                <SelectTrigger className="bg-secondary border-border text-foreground">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[#0a0f1c] border border-white/10 max-h-60">
+                <SelectContent className="bg-secondary border border-border max-h-60">
                   {controlTypes.map((t) => (
-                    <SelectItem key={t} value={t} className="text-white">
+                    <SelectItem key={t} value={t} className="text-foreground">
                       {t === "none" ? "None" : t}
                     </SelectItem>
                   ))}
@@ -228,17 +228,17 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
           </div>
 
           <div>
-            <Label className="text-slate-300">Notes</Label>
+            <Label className="text-secondary-foreground">Notes</Label>
             <textarea
               value={formData.notes}
               onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              className="w-full min-h-[80px] bg-white/5 border border-border rounded-md px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
+              className="w-full min-h-[80px] bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
               placeholder="Additional notes about this device..."
             />
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" onClick={onClose} className="flex-1 border-white/10">
+            <Button variant="outline" onClick={onClose} className="flex-1 border-border">
               Cancel
             </Button>
             <Button onClick={handleSubmit} className="flex-1 bg-cyan-500 hover:bg-cyan-600">

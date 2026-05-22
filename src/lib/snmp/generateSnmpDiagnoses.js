@@ -25,10 +25,10 @@ export function generateSnmpDiagnoses({ profiles = [], equipment = [], global = 
       summary: `Cable fault — ${fault.switchName} port ${fault.portIndex} down with ${fault.connectedDevice || "known device"} still mapped`,
       likelyCause: `Port ${fault.portIndex} (${fault.portName || `Gi0/${fault.portIndex}`}) is operationally down but the MAC/FDB table still shows ${fault.connectedDevice || "a connected endpoint"}. This usually indicates a cable fault, device powered off, or a stale FDB entry.`,
       steps: [
-        `Open Switch Management and inspect port ${fault.portIndex} on ${fault.switchName}`,
+        `Open Core Network and inspect port ${fault.portIndex} on ${fault.switchName}`,
         fault.ifAlias ? `Check interface alias: ${fault.ifAlias}` : "Verify interface alias and VLAN assignment",
         `Confirm ${fault.connectedDevice || "the endpoint"} is powered and link LED status`,
-        "Re-seat or replace patch cable; run interface test from Switch Management",
+        "Re-seat or replace patch cable; run interface test from Core Network",
         fault.macAddr ? `Expected MAC: ${fault.macAddr}` : "Clear stale MAC if device was moved",
       ],
       suggestedAction: "snmp_port_bounce",
@@ -115,8 +115,8 @@ export function generateSnmpDiagnoses({ profiles = [], equipment = [], global = 
         summary: `${sw.displayName} registered but never polled`,
         likelyCause: "Switch is in the managed fleet but has no SNMP snapshot yet.",
         steps: [
-          "Open Switch Management and run Poll now",
-          "Or enable auto-poll in Switch Management → Settings",
+          "Open Core Network and run Poll now",
+          "Or enable auto-poll in Core Network → Settings",
         ],
         suggestedAction: "none",
         requiresApproval: false,
@@ -149,7 +149,7 @@ export function generateSnmpDiagnoses({ profiles = [], equipment = [], global = 
         likelyCause:
           "SNMP reports multiple down interfaces or poor oper status across the chassis.",
         steps: [
-          "Review port panel in Switch Management",
+          "Review port panel in Core Network",
           "Check power and environmental status in the rack",
           "Compare with last known good poll timestamp",
         ],

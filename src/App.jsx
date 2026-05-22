@@ -28,6 +28,7 @@ import AppLayout from './components/AppLayout';
 import { BrandingProvider } from './contexts/BrandingContext';
 import { SiteLocationsProvider } from './contexts/SiteLocationsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { PlatformModeProvider } from './contexts/PlatformModeContext';
 import { AuthProvider } from './lib/AuthContext';
 import { Toaster } from 'sonner';
 
@@ -35,6 +36,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
       <ThemeProvider>
+      <PlatformModeProvider>
       <AuthProvider>
       <SiteLocationsProvider>
       <BrandingProvider>
@@ -74,6 +76,7 @@ function App() {
       </BrandingProvider>
       </SiteLocationsProvider>
       </AuthProvider>
+      </PlatformModeProvider>
     </ThemeProvider>
     </QueryClientProvider>
   );

@@ -1,5 +1,6 @@
-import { getEquipmentIp } from "@/lib/snmp/snmpSwitchProfiles";
-import { resolveSwitchChassis, deployPortsOnChassis } from "@/lib/snmp/switchModelCatalog";
+import { getEquipmentIp, resolveDeviceChassis, deployPortsOnDevice } from "@/lib/snmp/snmpSwitchProfiles";
+import { resolveEquipmentModelString } from "@/lib/snmp/networkDeviceCatalog";
+import { DEVICE_ROLE_LABELS } from "@/lib/integrations/vendorRegistry";
 import { buildConnectionsFleetView } from "@/lib/snmp/connectionMapView";
 import { formatRelativeTime } from "@/lib/systemData/formatRelativeTime";
 
@@ -133,13 +134,13 @@ export function enrichProfiles(profiles, equipmentById) {
   return (profiles || []).map((p) => {
     const eq = equipmentById.get(p.equipmentId);
     const polled = p.lastPoll?.ports || [];
-    const chassis = resolveSwitchChassis(eq, p);
+    const chassis = resolveDeviceChassis(eq, p);
     const ports = chassis
-      ? deployPortsOnChassis(polled, chassis)
+      ? deployPortsOnDevice(polled, chassis)
       : polled.length
         ? polled
         : chassis
-          ? deployPortsOnChassis([], chassis)
+          ? deployPortsOnDevice([], chassis)
           : [];
     const health = getSwitchHealth(p, ports.filter((pt) => !pt.slotEmpty));
     return {
@@ -148,7 +149,7 @@ export function enrichProfiles(profiles, equipmentById) {
       chassis,
       displayName: eq?.name || p.lastPoll?.sysName || p.id,
       ip: getEquipmentIp(eq),
-      model: eq?.model || "",
+      model: resolveEquipmentModelString(eq) || eq?.model || "",
       make: eq?.make || "",
       vendor: eq?.vendor || "",
       serial: eq?.serial || "",
@@ -157,6 +158,7 @@ export function enrichProfiles(profiles, equipmentById) {
       sysName: p.lastPoll?.sysName,
       pollSource: p.lastPoll?.source || p.lastPollError ? "error" : null,
       health,
+      roleLabel: DEVICE_ROLE_LABELS[p.deviceRole] || "Device",
     };
   });
 }

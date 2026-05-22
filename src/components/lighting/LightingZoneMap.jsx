@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { readThemeColors, getCssVarHsl } from "@/lib/appearanceSettingsStorage";
 
 const PROTOCOL_COLORS = {
   DMX:    { fill: "rgba(168,85,247,0.18)",  stroke: "#a855f7", text: "#c084fc" },
@@ -7,8 +9,16 @@ const PROTOCOL_COLORS = {
   Lutron: { fill: "rgba(6,182,212,0.18)",   stroke: "#06b6d4", text: "#22d3ee" },
 };
 
-const OFF_STYLE  = { fill: "rgba(255,255,255,0.03)", stroke: "rgba(255,255,255,0.12)", text: "#475569" };
 const FAULT_STYLE = { fill: "rgba(239,68,68,0.12)",  stroke: "#ef4444", text: "#f87171" };
+
+function getOffStyle() {
+  const colors = readThemeColors();
+  return {
+    fill: getCssVarHsl("muted", 0.45) || "rgba(255,255,255,0.03)",
+    stroke: colors.border || "rgba(255,255,255,0.12)",
+    text: colors.mutedForeground || "#475569",
+  };
+}
 
 function getLevelGradient(on, level, protocol) {
   if (!on || level === 0) return null;
@@ -27,13 +37,16 @@ function hexToRgb(hex) {
 
 export default function LightingZoneMap({ deck, zones, selectedZone, onSelectZone, onUpdateZone }) {
   const [hoveredZone, setHoveredZone] = useState(null);
+  const { theme } = useTheme();
+  const mapColors = useMemo(() => readThemeColors(), [theme]);
+  const offStyle = useMemo(() => getOffStyle(), [theme]);
 
   return (
-    <div className="w-full h-full flex flex-col bg-[#060912]">
+    <div className="w-full h-full flex flex-col bg-background">
       {/* Deck label */}
-      <div className="px-5 py-2.5 border-b border-white/4 bg-[#070b13]/40 flex-shrink-0">
-        <p className="text-xs font-semibold text-white">{deck?.label}</p>
-        <p className="text-[10px] text-slate-600">{zones.length} zones — click a zone to control</p>
+      <div className="px-5 py-2.5 border-b border-border bg-card/40 flex-shrink-0">
+        <p className="text-xs font-semibold text-foreground">{deck?.label}</p>
+        <p className="text-[10px] text-muted-foreground">{zones.length} zones — click a zone to control</p>
       </div>
 
       {/* SVG floor plan */}
@@ -45,17 +58,17 @@ export default function LightingZoneMap({ deck, zones, selectedZone, onSelectZon
           preserveAspectRatio="xMidYMid meet"
         >
           {/* Background */}
-          <rect width="100" height="100" fill="#07090f" rx="1" />
+          <rect width="100" height="100" fill={mapColors.background || "hsl(var(--background))"} rx="1" />
 
           {/* Deck border */}
           <rect x="6" y="8" width="88" height="84" rx="2"
-            fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="0.3" />
+            fill="none" stroke={getCssVarHsl("border", 0.6) || "rgba(255,255,255,0.06)"} strokeWidth="0.3" />
 
           {/* Grid lines */}
           {[20, 40, 60, 80].map(v => (
             <g key={v}>
-              <line x1={v} y1="8" x2={v} y2="92" stroke="rgba(255,255,255,0.03)" strokeWidth="0.2" />
-              <line x1="6" y1={v} x2="94" y2={v} stroke="rgba(255,255,255,0.03)" strokeWidth="0.2" />
+              <line x1={v} y1="8" x2={v} y2="92" stroke={getCssVarHsl("border", 0.25) || "rgba(255,255,255,0.03)"} strokeWidth="0.2" />
+              <line x1="6" y1={v} x2="94" y2={v} stroke={getCssVarHsl("border", 0.25) || "rgba(255,255,255,0.03)"} strokeWidth="0.2" />
             </g>
           ))}
 
@@ -66,8 +79,8 @@ export default function LightingZoneMap({ deck, zones, selectedZone, onSelectZon
             const style = zone.fault
               ? FAULT_STYLE
               : zone.on
-              ? (PROTOCOL_COLORS[zone.protocol] || OFF_STYLE)
-              : OFF_STYLE;
+              ? (PROTOCOL_COLORS[zone.protocol] || offStyle)
+              : offStyle;
 
             const fillColor = zone.on && !zone.fault
               ? getLevelGradient(zone.on, zone.level, zone.protocol) || style.fill
@@ -191,14 +204,14 @@ export default function LightingZoneMap({ deck, zones, selectedZone, onSelectZon
         </svg>
 
         {/* Protocol legend */}
-        <div className="absolute bottom-4 right-4 rounded-xl border border-white/8 bg-[#0a0f1c]/90 backdrop-blur-md px-3 py-2.5 space-y-1.5">
+        <div className="absolute bottom-4 right-4 rounded-xl border border-border bg-secondary/90 backdrop-blur-md px-3 py-2.5 space-y-1.5">
           {Object.entries(PROTOCOL_COLORS).map(([proto, style]) => (
             <div key={proto} className="flex items-center gap-2 text-[10px]">
               <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: style.stroke }} />
               <span style={{ color: style.text }}>{proto}</span>
             </div>
           ))}
-          <div className="border-t border-white/8 pt-1.5 mt-1">
+          <div className="border-t border-border pt-1.5 mt-1">
             <div className="flex items-center gap-2 text-[10px]">
               <span className="w-2.5 h-2.5 rounded-sm bg-red-500 flex-shrink-0" />
               <span className="text-red-400">Fault</span>

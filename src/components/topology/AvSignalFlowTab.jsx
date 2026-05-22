@@ -110,7 +110,7 @@ export default function AvSignalFlowTab({ topologyData, onRefresh, loading }) {
 
   if (loading || linksLoading) {
     return (
-      <div className="flex items-center justify-center h-full gap-2 text-slate-400">
+      <div className="flex items-center justify-center h-full gap-2 text-muted-foreground">
         <Loader2 className="animate-spin" size={18} />
         <span className="text-sm">Loading AV signal flow…</span>
       </div>
@@ -118,21 +118,21 @@ export default function AvSignalFlowTab({ topologyData, onRefresh, loading }) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-[#060912]">
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-white/8 flex-shrink-0">
-        <div className="flex items-center gap-2 bg-[#0a0f1c]/90 border border-white/10 rounded-xl px-3 py-2">
-          <Search size={14} className="text-slate-500" />
+    <div className="flex flex-col h-full bg-background">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-border flex-shrink-0">
+        <div className="flex items-center gap-2 bg-secondary/90 border border-border rounded-xl px-3 py-2">
+          <Search size={14} className="text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search AV devices..."
-            className="bg-transparent text-sm text-white w-48 focus:outline-none"
+            className="bg-transparent text-sm text-foreground w-48 focus:outline-none"
           />
         </div>
         <button
           type="button"
           onClick={onRefresh}
-          className="px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c]/90 text-xs text-slate-400 hover:text-white flex items-center gap-1"
+          className="px-3 py-2 rounded-xl border border-border bg-secondary/90 text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
         >
           <RefreshCw size={12} /> Refresh
         </button>
@@ -157,10 +157,10 @@ export default function AvSignalFlowTab({ topologyData, onRefresh, loading }) {
         />
       </div>
 
-      <div className="flex-shrink-0 border-t border-white/8 bg-[#0a0f1c]/95 max-h-48 overflow-auto">
+      <div className="flex-shrink-0 border-t border-border bg-secondary/95 max-h-48 overflow-auto">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-[#0a0f1c]">
-            <tr className="text-slate-500 text-left">
+          <thead className="sticky top-0 bg-secondary">
+            <tr className="text-muted-foreground text-left">
               <th className="px-4 py-2 font-medium">Endpoint A</th>
               <th className="px-4 py-2 font-medium">Endpoint B</th>
               <th className="px-4 py-2 font-medium">Protocol</th>
@@ -176,16 +176,16 @@ export default function AvSignalFlowTab({ topologyData, onRefresh, loading }) {
                   setSelectedStream(s);
                   setSelectedNode({ id: s.raw.sourceEquipmentId });
                 }}
-                className={`border-t border-white/5 cursor-pointer hover:bg-white/5 ${
+                className={`border-t border-border cursor-pointer hover:bg-secondary ${
                   selectedStream?.id === s.id ? "bg-cyan-500/10" : ""
                 }`}
               >
-                <td className="px-4 py-2 text-slate-200">{s.from}</td>
-                <td className="px-4 py-2 text-slate-200">{s.to}</td>
+                <td className="px-4 py-2 text-foreground">{s.from}</td>
+                <td className="px-4 py-2 text-foreground">{s.to}</td>
                 <td className="px-4 py-2" style={{ color: PROTOCOL_COLORS[s.protocol] }}>
                   {s.protocol}
                 </td>
-                <td className="px-4 py-2 font-mono text-slate-400">{s.multicast}</td>
+                <td className="px-4 py-2 font-mono text-muted-foreground">{s.multicast}</td>
                 <td className="px-4 py-2 text-emerald-400 capitalize">{s.status}</td>
               </tr>
             ))}

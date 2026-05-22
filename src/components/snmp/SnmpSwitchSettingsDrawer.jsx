@@ -1,8 +1,37 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Settings, Trash2, X, ExternalLink } from "lucide-react";
+import { Settings, Trash2, X, ExternalLink, Loader2, Radio } from "lucide-react";
+import { toast } from "sonner";
 import LocationPicker from "@/components/location/LocationPicker";
 import { parseSwitchModel, resolveSwitchChassis } from "@/lib/snmp/switchModelCatalog";
+import {
+  resolveDeviceChassis,
+  getEquipmentIp,
+  DEVICE_ROLES,
+  INTEGRATION_VENDORS,
+  POLL_METHODS,
+} from "@/lib/snmp/snmpSwitchProfiles";
+import { resolveEquipmentModelString } from "@/lib/snmp/networkDeviceCatalog";
+import { getVendorInfo, DEVICE_ROLE_LABELS, VENDOR_REGISTRY } from "@/lib/integrations/vendorRegistry";
+import { testPeplinkConnection } from "@/api/snmpSwitchApi";
+import { listCredentials } from "@/api/credentialsApi";
+import { findCredentialForEquipment } from "@/lib/credentials/credentialsVault";
+import { matchPeplinkDevice, getPeplinkDefaultLogin } from "@/lib/integrations/peplink/peplinkDeviceCatalog";
+
+function equipmentToDraft(eq) {
+  if (!eq) {
+    return { name: "", make: "", model: "", ip: "", mac: "", serial: "", category: "Network" };
+  }
+  return {
+    name: eq.name || "",
+    make: eq.make || eq.vendor || "",
+    model: eq.model || "",
+    ip: getEquipmentIp(eq),
+    mac: eq.mac || "",
+    serial: eq.serial || "",
+    category: eq.category || "Network",
+  };
+}
 
 export default function SnmpSwitchSettingsDrawer({
   profile,
@@ -13,17 +42,80 @@ export default function SnmpSwitchSettingsDrawer({
   onClose,
 }) {
   const [draft, setDraft] = useState(profile);
-  useEffect(() => setDraft(profile), [profile]);
+  const [eqDraft, setEqDraft] = useState(() => equipmentToDraft(equipment));
+  const [testingPeplink, setTestingPeplink] = useState(false);
+  useEffect(() => {
+    setDraft(profile);
+    setEqDraft(equipmentToDraft(equipment));
+    if (!profile?.equipmentId) return;
+    listCredentials().then((creds) => {
+      const linked = findCredentialForEquipment(
+        creds,
+        profile.equipmentId,
+        profile.integrationVendor === "peplink" ? "peplink" : "web"
+      );
+      if (linked) {
+        setDraft((d) => ({
+          ...d,
+          browserLogin: {
+            loginUrl: linked.loginUrl || d.browserLogin?.loginUrl,
+            username: linked.username || d.browserLogin?.username,
+            password: linked.password || d.browserLogin?.password,
+            credentialId: linked.id,
+          },
+        }));
+      } else if (!profile.browserLogin?.username && equipment) {
+        const pep = matchPeplinkDevice(equipment);
+        if (pep) {
+          const login = getPeplinkDefaultLogin(pep);
+          const ip = getEquipmentIp(equipment);
+          setDraft((d) => ({
+            ...d,
+            browserLogin: {
+              loginUrl: ip ? `https://${ip}/` : "",
+              username: login.username,
+              password: login.password,
+              credentialId: "",
+            },
+          }));
+        }
+      }
+    });
+  }, [profile, equipment]);
   if (!draft) return null;
 
-  const chassis = resolveSwitchChassis(equipment, draft);
-  const modelSpec = parseSwitchModel(equipment?.model || "");
+  const mergedEq = equipment ? { ...equipment, ...eqDraft, ip: eqDraft.ip } : { ...eqDraft };
+  const chassis = resolveDeviceChassis(mergedEq, draft) || resolveSwitchChassis(mergedEq, draft);
+  const resolvedModel = resolveEquipmentModelString(mergedEq);
+  const modelSpec = parseSwitchModel(resolvedModel || mergedEq.model);
+  const pepCatalog = matchPeplinkDevice(mergedEq);
+  const vendorInfo = getVendorInfo(draft.integrationVendor);
+  const isPeplink = draft.integrationVendor === "peplink";
+  const isStubVendor = vendorInfo?.comingSoon;
+
+  const runPeplinkTest = async () => {
+    setTestingPeplink(true);
+    try {
+      const res = await testPeplinkConnection(draft.equipmentId, draft);
+      if (res.success) {
+        toast.success(
+          `Peplink OK — ${res.portCount} interface(s) via ${res.source}${res.online === false ? " (offline)" : ""}`
+        );
+      } else {
+        toast.error(res.error || "Peplink test failed");
+      }
+    } catch (err) {
+      toast.error(err.message || "Peplink test failed");
+    } finally {
+      setTestingPeplink(false);
+    }
+  };
 
   return (
     <div className="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-background border-l border-border shadow-2xl flex flex-col">
       <div className="flex items-center justify-between p-4 border-b border-border">
         <h3 className="font-semibold text-foreground flex items-center gap-2">
-          <Settings size={16} /> Switch configuration
+          <Settings size={16} /> Device configuration
         </h3>
         <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground">
           <X size={18} />
@@ -40,19 +132,222 @@ export default function SnmpSwitchSettingsDrawer({
           <span className="text-sm text-foreground">Include in scheduled / fleet polls</span>
         </label>
 
-        {equipment?.model && (
-          <div className="rounded-lg border border-border bg-secondary/20 px-3 py-2.5 text-sm">
-            <p className="text-xs text-muted-foreground">Equipment model (chassis)</p>
-            <p className="font-mono font-medium text-foreground mt-0.5">{equipment.model}</p>
+        <div className="rounded-lg border border-border bg-secondary/20 p-3 space-y-3">
+          <p className="text-xs font-semibold text-foreground uppercase tracking-wide">
+            Integration
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs text-muted-foreground">
+              Vendor
+              <select
+                value={draft.integrationVendor || "snmp"}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    integrationVendor: e.target.value,
+                    pollMethod: e.target.value === "peplink" ? "peplink_hybrid" : "snmp",
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-2 py-1.5 text-sm"
+              >
+                {INTEGRATION_VENDORS.map((v) => {
+                  const info = VENDOR_REGISTRY[v];
+                  return (
+                    <option key={v} value={v}>
+                      {info?.label || v}
+                      {info?.comingSoon ? " (preview)" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Device role
+              <select
+                value={draft.deviceRole || "switch"}
+                onChange={(e) => setDraft((d) => ({ ...d, deviceRole: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-2 py-1.5 text-sm"
+              >
+                {DEVICE_ROLES.map((r) => (
+                  <option key={r} value={r}>
+                    {DEVICE_ROLE_LABELS[r] || r}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Poll method
+              <select
+                value={draft.pollMethod || "snmp"}
+                onChange={(e) => setDraft((d) => ({ ...d, pollMethod: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-2 py-1.5 text-sm"
+              >
+                {POLL_METHODS.map((pm) => (
+                  <option key={pm} value={pm}>
+                    {pm === "peplink_hybrid" ? "Peplink hybrid (SNMP + REST)" : "SNMP only"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              SNMP version
+              <select
+                value={draft.snmpVersion || "2c"}
+                onChange={(e) => setDraft((d) => ({ ...d, snmpVersion: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-2 py-1.5 text-sm"
+              >
+                <option value="2c">v2c</option>
+                <option value="3">v3</option>
+              </select>
+            </label>
+          </div>
+          {isStubVendor && (
+            <p className="text-xs text-amber-400/90">
+              {vendorInfo?.label} support is in preview — SNMP polling works, REST adapter coming in Phase 2.
+            </p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-border p-4 space-y-3">
+          <p className="text-xs font-semibold text-foreground uppercase tracking-wide">Equipment</p>
+          <label className="block text-xs text-muted-foreground">
+            Name
+            <input
+              value={eqDraft.name}
+              onChange={(e) => setEqDraft((d) => ({ ...d, name: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs text-muted-foreground">
+              Make / vendor
+              <input
+                value={eqDraft.make}
+                onChange={(e) => setEqDraft((d) => ({ ...d, make: e.target.value }))}
+                placeholder="Peplink"
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Model (SKU)
+              <input
+                value={eqDraft.model}
+                onChange={(e) => setEqDraft((d) => ({ ...d, model: e.target.value }))}
+                placeholder="Balance 2500 EC"
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground col-span-2">
+              IP address
+              <input
+                value={eqDraft.ip}
+                onChange={(e) => {
+                  const ip = e.target.value;
+                  setEqDraft((d) => ({ ...d, ip }));
+                  setDraft((p) => ({
+                    ...p,
+                    browserLogin: {
+                      ...p.browserLogin,
+                      loginUrl: ip ? `https://${ip.replace(/^https?:\/\//, "")}/` : p.browserLogin?.loginUrl,
+                    },
+                  }));
+                }}
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              MAC
+              <input
+                value={eqDraft.mac}
+                onChange={(e) => setEqDraft((d) => ({ ...d, mac: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Serial
+              <input
+                value={eqDraft.serial}
+                onChange={(e) => setEqDraft((d) => ({ ...d, serial: e.target.value }))}
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </label>
+          </div>
+          <div className="rounded-lg border border-border bg-secondary/20 px-3 py-2 text-xs">
             {chassis ? (
-              <p className="text-xs text-muted-foreground mt-1">{chassis.label}</p>
+              <>
+                <p className="text-muted-foreground">Recognized chassis</p>
+                <p className="font-medium text-foreground mt-0.5">{chassis.label}</p>
+                {pepCatalog && (
+                  <p className="text-primary/90 mt-1">Peplink catalog · SKU {pepCatalog.sku}</p>
+                )}
+              </>
             ) : (
-              <p className="text-xs text-amber-400/90 mt-1">
-                Model not in catalog — use Cisco SKU format (e.g. C9300L-24P-4X-E) or set port override below.
+              <p className="text-amber-400/90">
+                Model not in catalog — use Peplink Balance 2500 EC, MAX BR1 Pro, or MAX BR2 Pro.
               </p>
             )}
           </div>
-        )}
+        </div>
+
+        <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 space-y-3">
+          <p className="text-xs font-semibold text-foreground uppercase tracking-wide">
+            Browser login (saved to credentials vault)
+          </p>
+          <label className="block text-xs text-muted-foreground">
+            Login URL
+            <input
+              value={draft.browserLogin?.loginUrl || ""}
+              onChange={(e) =>
+                setDraft((d) => ({
+                  ...d,
+                  browserLogin: { ...d.browserLogin, loginUrl: e.target.value },
+                }))
+              }
+              placeholder="https://192.168.1.1/"
+              className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+            />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block text-xs text-muted-foreground">
+              Username
+              <input
+                value={draft.browserLogin?.username || ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    browserLogin: { ...d.browserLogin, username: e.target.value },
+                  }))
+                }
+                placeholder="admin"
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </label>
+            <label className="block text-xs text-muted-foreground">
+              Password
+              <input
+                type="password"
+                value={draft.browserLogin?.password || ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    browserLogin: { ...d.browserLogin, password: e.target.value },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </label>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Peplink default: username <code className="text-foreground">admin</code>, blank password until
+            first-login wizard. Also editable in Settings → Login credentials.
+          </p>
+          <Link
+            to="/settings?section=credentials"
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <ExternalLink size={12} /> Open credentials vault
+          </Link>
+        </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -87,6 +382,106 @@ export default function SnmpSwitchSettingsDrawer({
             />
           </div>
         </div>
+
+        {isPeplink && (
+          <div className="rounded-xl border border-primary/25 bg-primary/5 p-4 space-y-3">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Radio size={12} className="text-primary" /> Peplink API
+            </p>
+            <div>
+              <label className="text-xs text-muted-foreground">Connection mode</label>
+              <select
+                value={draft.peplink?.mode || "auto"}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    peplink: { ...d.peplink, mode: e.target.value },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm"
+              >
+                <option value="auto">Auto (local then InControl)</option>
+                <option value="local">On-device REST API</option>
+                <option value="incontrol">InControl 2 only</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">InControl organization ID</label>
+              <input
+                value={draft.peplink?.incontrolOrgId || ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    peplink: { ...d.peplink, incontrolOrgId: e.target.value },
+                  }))
+                }
+                placeholder="Org ID from InControl"
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">InControl device ID</label>
+              <input
+                value={draft.peplink?.deviceId || ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    peplink: { ...d.peplink, deviceId: e.target.value },
+                  }))
+                }
+                placeholder="Device ID in InControl"
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Local API client ID</label>
+              <input
+                value={draft.peplink?.localClientId || ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    peplink: { ...d.peplink, localClientId: e.target.value },
+                  }))
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Local API client secret</label>
+              <input
+                type="password"
+                value={draft.peplink?.localClientSecret || ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    peplink: {
+                      ...d.peplink,
+                      localClientSecret: e.target.value,
+                      localClientSecretConfigured: !!e.target.value,
+                    },
+                  }))
+                }
+                placeholder={
+                  draft.peplink?.localClientSecretConfigured ? "•••••••• (configured)" : "From device API settings"
+                }
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              InControl API keys are stored in platform settings (mock-server). Enable SNMP on the device for
+              hybrid interface polling.
+            </p>
+            <button
+              type="button"
+              onClick={runPeplinkTest}
+              disabled={testingPeplink}
+              className="w-full flex items-center justify-center gap-2 text-sm border border-border rounded-lg px-3 py-2 hover:bg-secondary/40 disabled:opacity-50"
+            >
+              {testingPeplink ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
+              Test Peplink connection
+            </button>
+          </div>
+        )}
 
         <div>
           <p className="text-xs text-muted-foreground mb-2">Location</p>
@@ -130,7 +525,7 @@ export default function SnmpSwitchSettingsDrawer({
             onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
             rows={3}
             className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm resize-none"
-            placeholder="Rack position, maintenance window, STP root, etc."
+            placeholder="Rack position, WAN provider, cellular SIM, etc."
           />
         </div>
 
@@ -151,7 +546,7 @@ export default function SnmpSwitchSettingsDrawer({
         </button>
         <button
           type="button"
-          onClick={() => onSave(draft)}
+          onClick={() => onSave({ profile: draft, equipmentPatch: eqDraft })}
           className="flex-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
         >
           Save

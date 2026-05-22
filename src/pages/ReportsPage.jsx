@@ -67,7 +67,7 @@ const REPORT_TYPES = [
     label: "Events Log",
     description: "Full event history including cleared events — severity, module, timestamps, and cleared status.",
     icon: Clock,
-    color: "text-slate-400",
+    color: "text-muted-foreground",
     bg: "bg-slate-500/10 border-slate-500/20",
   },
 ];
@@ -109,16 +109,16 @@ export default function ReportsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#060912] p-4 md:p-6 space-y-6">
+    <div className="min-h-screen bg-background p-4 md:p-6 space-y-6">
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
         <div className="flex items-center gap-3 mb-1">
           <div className="w-8 h-8 rounded-xl bg-cyan-500/12 flex items-center justify-center ring-1 ring-cyan-500/20">
             <FileText size={14} className="text-cyan-400" />
           </div>
-          <h1 className="text-xl font-bold text-white">Reports</h1>
+          <h1 className="text-xl font-bold text-foreground">Reports</h1>
         </div>
-        <p className="text-sm text-slate-500 ml-11">
+        <p className="text-sm text-muted-foreground ml-11">
           Generate and download reports with real data from your equipment, alarms, and monitoring history.
         </p>
       </motion.div>
@@ -142,7 +142,7 @@ export default function ReportsPage() {
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.04 }}
-              className="rounded-2xl border border-white/8 bg-gradient-to-br from-[#0d1321] to-[#080c14] p-5 flex flex-col gap-4"
+              className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-4"
             >
               {/* Icon + title */}
               <div className="flex items-start gap-3">
@@ -150,8 +150,8 @@ export default function ReportsPage() {
                   <report.icon size={16} className={report.color} />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-white leading-tight">{report.label}</p>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">{report.description}</p>
+                  <p className="text-sm font-semibold text-foreground leading-tight">{report.label}</p>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{report.description}</p>
                 </div>
               </div>
 
@@ -170,7 +170,7 @@ export default function ReportsPage() {
                       className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-medium py-2 rounded-xl border transition-all disabled:opacity-50 ${
                         isDone
                           ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                          : "border-white/10 text-slate-400 hover:text-white hover:border-white/20"
+                          : "border-border text-muted-foreground hover:text-foreground hover:border-border"
                       }`}
                     >
                       {isThisGenerating ? (
@@ -195,9 +195,9 @@ export default function ReportsPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.35 }}
-        className="rounded-2xl border border-white/8 bg-gradient-to-br from-[#0d1321] to-[#080c14] p-5"
+        className="rounded-2xl border border-border bg-card p-5"
       >
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
           <FileDown size={14} className="text-cyan-400" />
           Recent reports
         </h3>
@@ -205,7 +205,7 @@ export default function ReportsPage() {
           {recent.map(r => (
             <div
               key={r.id}
-              className="flex items-center justify-between gap-4 text-xs py-2 border-b border-white/4 last:border-0"
+              className="flex items-center justify-between gap-4 text-xs py-2 border-b border-border last:border-0"
             >
               <div className="flex items-center gap-3 min-w-0">
                 <span className={`px-2 py-0.5 rounded-md font-mono font-semibold text-[10px] border ${
@@ -215,9 +215,9 @@ export default function ReportsPage() {
                 }`}>
                   {r.format}
                 </span>
-                <span className="text-slate-200 font-medium truncate">{r.label}</span>
+                <span className="text-foreground font-medium truncate">{r.label}</span>
               </div>
-              <div className="flex items-center gap-4 flex-shrink-0 text-slate-500">
+              <div className="flex items-center gap-4 flex-shrink-0 text-muted-foreground">
                 <span>{r.size}</span>
                 <span>{r.generatedAt}</span>
                 <button className="text-cyan-400 hover:text-cyan-300 transition-colors">

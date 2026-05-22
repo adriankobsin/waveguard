@@ -16,6 +16,7 @@ import {
   Unplug,
   Clock,
   Server,
+  Trash2,
 } from "lucide-react";
 import { buildConnectionsFleetView } from "@/lib/snmp/connectionMapView";
 
@@ -86,7 +87,7 @@ function PortBadge({ port, onClick }) {
   );
 }
 
-function SwitchCard({ sw, onPortClick }) {
+function SwitchCard({ sw, onPortClick, onRemoveDevice }) {
   const [open, setOpen] = useState(true);
   const downWithDevice = sw.ports.filter(
     (p) => !p.slotEmpty && p.ifOperStatus === "down" && p.connectedDevice
@@ -144,11 +145,26 @@ function SwitchCard({ sw, onPortClick }) {
             )}
           </div>
         </div>
-        {open ? (
-          <ChevronDown size={14} className="text-muted-foreground flex-shrink-0" />
-        ) : (
-          <ChevronRight size={14} className="text-muted-foreground flex-shrink-0" />
-        )}
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {onRemoveDevice && (
+            <button
+              type="button"
+              title="Remove from fleet"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRemoveDevice(sw.id);
+              }}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+          {open ? (
+            <ChevronDown size={14} className="text-muted-foreground" />
+          ) : (
+            <ChevronRight size={14} className="text-muted-foreground" />
+          )}
+        </div>
       </button>
 
       <AnimatePresence initial={false}>
@@ -266,6 +282,7 @@ export default function SnmpPortMapPanel({
   pollMeta: pollMetaProp = null,
   discoverySnmpEnabled = true,
   onPortClick = null,
+  onRemoveDevice = null,
 }) {
   const isStandalone = enrichedProp === undefined;
   const [standaloneEnriched, setStandaloneEnriched] = useState([]);
@@ -400,13 +417,13 @@ export default function SnmpPortMapPanel({
           <Network size={32} className="text-muted-foreground mb-3 opacity-50" />
           <p className="text-sm text-foreground font-medium">No switches registered</p>
           <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-            Register switches from Equipment on the Switches tab, then return here to map connections.
+            Register devices from Equipment on the Fleet tab, then return here to map connections.
           </p>
         </div>
       ) : (
         <div className="space-y-3">
           {fleet.switches.map((sw) => (
-            <SwitchCard key={sw.id} sw={sw} onPortClick={onPortClick} />
+            <SwitchCard key={sw.id} sw={sw} onPortClick={onPortClick} onRemoveDevice={onRemoveDevice} />
           ))}
         </div>
       )}

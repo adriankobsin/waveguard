@@ -7,6 +7,7 @@ export {
   DEFAULT_FLOOR_MAP,
 } from "./schemas.js";
 export { detectSheetType } from "./detectSheetType.js";
+export { stripVesselEquipmentName } from "./equipmentName.js";
 
 import { parseWorkbook } from "./parseWorkbook.js";
 import { buildImportPayload } from "./linkRows.js";

@@ -58,21 +58,21 @@ export default function RackPlacementModal({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="bg-[#0a0f1c] border border-white/10 max-w-md">
+      <DialogContent className="bg-secondary border border-border max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-white">Edit rack placement</DialogTitle>
-          <p className="text-xs text-slate-500">{item.name}</p>
+          <DialogTitle className="text-foreground">Edit rack placement</DialogTitle>
+          <p className="text-xs text-muted-foreground">{item.name}</p>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div className="space-y-2">
-            <Label className="text-slate-300">Rack</Label>
+            <Label className="text-secondary-foreground">Rack</Label>
             <Select value={rackId} onValueChange={setRackId}>
-              <SelectTrigger className="bg-white/5 border-white/10 text-white">
+              <SelectTrigger className="bg-secondary border-border text-foreground">
                 <SelectValue placeholder="Select rack" />
               </SelectTrigger>
-              <SelectContent className="bg-[#0a0f1c] border border-white/10">
+              <SelectContent className="bg-secondary border border-border">
                 {racks.map((r) => (
-                  <SelectItem key={r.id} value={r.id} className="text-white">
+                  <SelectItem key={r.id} value={r.id} className="text-foreground">
                     {r.name} ({r.units}U)
                   </SelectItem>
                 ))}
@@ -81,31 +81,31 @@ export default function RackPlacementModal({
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-slate-300">Start U</Label>
+              <Label className="text-secondary-foreground">Start U</Label>
               <Input
                 type="number"
                 min={1}
                 max={totalUnits}
                 value={ruStart}
                 onChange={(e) => setRuStart(e.target.value)}
-                className="bg-white/5 border-white/10 text-white"
+                className="bg-secondary border-border text-foreground"
               />
             </div>
             <div>
-              <Label className="text-slate-300">Height (U)</Label>
+              <Label className="text-secondary-foreground">Height (U)</Label>
               <Input
                 type="number"
                 min={1}
                 max={8}
                 value={ruHeight}
                 onChange={(e) => setRuHeight(e.target.value)}
-                className="bg-white/5 border-white/10 text-white"
+                className="bg-secondary border-border text-foreground"
               />
             </div>
           </div>
           <div className="flex flex-col gap-2 pt-2">
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1 border-white/10">
+              <Button variant="outline" onClick={() => onOpenChange(false)} className="flex-1 border-border">
                 Cancel
               </Button>
               <Button onClick={handleSubmit} className="flex-1 bg-cyan-500 hover:bg-cyan-600">

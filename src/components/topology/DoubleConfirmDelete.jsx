@@ -36,15 +36,15 @@ export default function DoubleConfirmDelete({
 
   return (
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogContent className="bg-[#0a0f1c] border border-white/10">
+      <AlertDialogContent className="bg-secondary border border-border">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-white">{title}</AlertDialogTitle>
-          <AlertDialogDescription className="text-slate-400">
+          <AlertDialogTitle className="text-foreground">{title}</AlertDialogTitle>
+          <AlertDialogDescription className="text-muted-foreground">
             {step === 1 ? step1Description : step2Description}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="border-white/10">Cancel</AlertDialogCancel>
+          <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
           {step === 1 ? (
             <AlertDialogAction
               onClick={(e) => {

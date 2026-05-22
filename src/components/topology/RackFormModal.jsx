@@ -16,12 +16,12 @@ import { findLocationIds } from "@/lib/siteLocations";
 function FormField({ label, value, onChange, placeholder }) {
   return (
     <div>
-      <Label className="text-slate-300">{label}</Label>
+      <Label className="text-secondary-foreground">{label}</Label>
       <Input
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="bg-white/5 border-white/10 text-white mt-1"
+        className="bg-secondary border-border text-foreground mt-1"
       />
     </div>
   );
@@ -69,9 +69,9 @@ export default function RackFormModal({ open, onOpenChange, rack, onSubmit }) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-[#0a0f1c] border border-white/10 max-w-md">
+      <DialogContent className="bg-secondary border border-border max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-white">{rack ? "Edit rack" : "Add rack"}</DialogTitle>
+          <DialogTitle className="text-foreground">{rack ? "Edit rack" : "Add rack"}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <FormField label="Name" value={name} onChange={setName} placeholder="Bridge Rack" />
@@ -86,14 +86,14 @@ export default function RackFormModal({ open, onOpenChange, rack, onSubmit }) {
             }}
           />
           <div>
-            <Label className="text-slate-300">Rack units (1–48)</Label>
+            <Label className="text-secondary-foreground">Rack units (1–48)</Label>
             <Input
               type="number"
               min={1}
               max={48}
               value={units}
               onChange={(e) => setUnits(e.target.value)}
-              className="bg-white/5 border-white/10 text-white mt-1"
+              className="bg-secondary border-border text-foreground mt-1"
             />
           </div>
           <DialogFooter>

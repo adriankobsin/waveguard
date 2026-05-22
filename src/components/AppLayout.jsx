@@ -3,16 +3,19 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
   Wifi, Menu, X, Search, Bell, Share2, Zap,
-  BookOpen, Bot, Cable, Package, FileText, Lightbulb, Radar, HelpCircle
+  BookOpen, Bot, Cable, Package, FileText, Lightbulb, Radar, HelpCircle,
+  Sun, Moon, FlaskConical,
 } from "lucide-react";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
+import { useTheme } from "@/contexts/ThemeContext";
+import { usePlatformMode } from "@/contexts/PlatformModeContext";
 import { SystemDataProvider, useSystemDataOptional } from "@/contexts/SystemDataContext";
 import { getDiagnosisCounts } from "@/lib/systemData/generateDiagnoses";
 
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/topology", icon: Share2, label: "Topology" },
-  { to: "/snmp", icon: Network, label: "Switches" },
+  { to: "/snmp", icon: Network, label: "Core Network" },
   { to: "/discovery", icon: Radar, label: "Discovery" },
   { to: "/diagnoses", icon: Activity, label: "Diagnoses" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
@@ -31,11 +34,19 @@ function AppLayoutContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
   const { branding } = useBranding();
+  const { theme, setTheme, saveTheme } = useTheme();
+  const { isDemo } = usePlatformMode();
   const b = branding ?? DEFAULT_BRANDING;
   const systemData = useSystemDataOptional();
   const diagCounts = systemData ? getDiagnosisCounts(systemData.diagnoses) : { active: 0, critical: 0 };
   const maintenanceOverdue = systemData?.snapshot?.maintenance?.overdue ?? 0;
   const monitoredCount = systemData?.snapshot?.monitoredCount;
+
+  const toggleTheme = () => {
+    const next = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    saveTheme(next);
+  };
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -145,6 +156,25 @@ function AppLayoutContent() {
             />
           </div>
           <div className="flex items-center gap-2 ml-auto">
+            {isDemo && (
+              <NavLink
+                to="/settings"
+                title="Demo mode is active — click to manage in Settings"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-purple-500/15 border border-purple-500/30 text-[11px] font-semibold text-purple-300 hover:bg-purple-500/25 transition-colors"
+              >
+                <FlaskConical size={12} />
+                Demo mode
+              </NavLink>
+            )}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+            >
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
             <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
               <Bell size={15} />
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />

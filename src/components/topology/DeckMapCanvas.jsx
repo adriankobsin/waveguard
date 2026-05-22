@@ -163,12 +163,12 @@ export default function DeckMapCanvas({
                 className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap pointer-events-none"
                 style={{ zIndex: 30 }}
               >
-                <div className="px-2.5 py-1.5 rounded-lg bg-[#0a0f1c]/95 border border-white/15 text-xs text-white shadow-xl">
+                <div className="px-2.5 py-1.5 rounded-lg bg-secondary/95 border border-border text-xs text-foreground shadow-xl">
                   <p className="font-semibold">{device.name}</p>
-                  <p className="text-slate-400">{device.model || device.category}</p>
+                  <p className="text-muted-foreground">{device.model || device.category}</p>
                   <p className="text-[10px] mt-0.5" style={{ color: colors.dot }}>● {status}</p>
                 </div>
-                <div className="w-2 h-2 bg-[#0a0f1c] border-r border-b border-white/15 rotate-45 mx-auto -mt-1" />
+                <div className="w-2 h-2 bg-secondary border-r border-b border-border rotate-45 mx-auto -mt-1" />
               </div>
             )}
 

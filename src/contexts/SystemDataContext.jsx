@@ -13,6 +13,8 @@ import {
 import { generateSnmpDiagnoses } from "@/lib/snmp/generateSnmpDiagnoses";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
 import { SNMP_SWITCHES_CHANGED_EVENT } from "@/lib/snmp/snmpSwitchProfiles";
+import { WAN_MANAGEMENT_CHANGED_EVENT } from "@/lib/wan/wanManagementSettings";
+import { PLATFORM_MODE_CHANGED_EVENT } from "@/lib/platformMode";
 
 const SystemDataContext = createContext(null);
 
@@ -46,11 +48,16 @@ export function SystemDataProvider({ children }) {
 
   useEffect(() => {
     const onChange = () => load({ silent: true });
+    const onModeChange = () => load({ silent: false });
     window.addEventListener(EQUIPMENT_CHANGED_EVENT, onChange);
     window.addEventListener(SNMP_SWITCHES_CHANGED_EVENT, onChange);
+    window.addEventListener(WAN_MANAGEMENT_CHANGED_EVENT, onChange);
+    window.addEventListener(PLATFORM_MODE_CHANGED_EVENT, onModeChange);
     return () => {
       window.removeEventListener(EQUIPMENT_CHANGED_EVENT, onChange);
       window.removeEventListener(SNMP_SWITCHES_CHANGED_EVENT, onChange);
+      window.removeEventListener(WAN_MANAGEMENT_CHANGED_EVENT, onChange);
+      window.removeEventListener(PLATFORM_MODE_CHANGED_EVENT, onModeChange);
     };
   }, [load]);
 
@@ -61,7 +68,17 @@ export function SystemDataProvider({ children }) {
   }, []);
 
   const snapshot = useMemo(
-    () => (sources ? buildSystemSnapshot(sources) : null),
+    () =>
+      sources
+        ? buildSystemSnapshot({
+            equipment: sources.equipment,
+            tasks: sources.tasks,
+            logs: sources.logs,
+            rules: sources.rules,
+            snmpSwitches: sources.snmpSwitches,
+            wanManagement: sources.wanManagement,
+          })
+        : null,
     [sources]
   );
 

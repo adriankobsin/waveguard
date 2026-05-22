@@ -40,7 +40,7 @@ const STATUS_CONFIG = {
   online: { label: "Online", color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/30", dot: "bg-emerald-400" },
   offline: { label: "Offline", color: "text-red-400", bg: "bg-red-500/15 border-red-500/30", dot: "bg-red-400" },
   warning: { label: "Warning", color: "text-amber-400", bg: "bg-amber-500/15 border-amber-500/30", dot: "bg-amber-400" },
-  unknown: { label: "Unknown", color: "text-slate-400", bg: "bg-slate-500/15 border-slate-500/30", dot: "bg-slate-400" },
+  unknown: { label: "Unknown", color: "text-muted-foreground", bg: "bg-slate-500/15 border-slate-500/30", dot: "bg-slate-400" },
 };
 
 function findPath(sourceId, targetId, connections) {
@@ -90,22 +90,22 @@ function DetailPanel({ node, onClose, onScan, onEdit }) {
   };
 
   return (
-    <div className="w-80 flex-shrink-0 border-l border-white/10 bg-[#0a0f1c] flex flex-col overflow-y-auto">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+    <div className="w-80 flex-shrink-0 border-l border-border bg-secondary flex flex-col overflow-y-auto">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2.5 min-w-0">
           <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-          <p className="text-sm font-semibold text-white leading-tight truncate">{node.name}</p>
+          <p className="text-sm font-semibold text-foreground leading-tight truncate">{node.name}</p>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           {onEdit && (
             <button
               onClick={onEdit}
-              className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white"
+              className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground"
             >
               <Pencil size={12} />
             </button>
           )}
-          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white">
+          <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground">
             <X size={12} />
           </button>
         </div>
@@ -115,7 +115,7 @@ function DetailPanel({ node, onClose, onScan, onEdit }) {
           <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
           {cfg.label}
         </span>
-        <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border border-white/10 text-slate-400">
+        <span className="inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-full border border-border text-muted-foreground">
           {node.category}
         </span>
       </div>
@@ -128,20 +128,20 @@ function DetailPanel({ node, onClose, onScan, onEdit }) {
         {node.serial && <Row icon={Hash} label="Serial" value={node.serial} mono />}
         {node.uptime && <Row icon={Activity} label="Uptime" value={node.uptime} />}
         {node.notes && (
-          <div className="pt-1 border-t border-white/6">
-            <p className="text-xs text-slate-500 mb-1 flex items-center gap-1"><FileText size={10} /> Notes</p>
-            <p className="text-xs text-slate-300 leading-relaxed">{node.notes}</p>
+          <div className="pt-1 border-t border-border">
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1"><FileText size={10} /> Notes</p>
+            <p className="text-xs text-secondary-foreground leading-relaxed">{node.notes}</p>
           </div>
         )}
         {connections.length > 0 && (
-          <div className="pt-2 border-t border-white/6">
-            <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide flex items-center gap-1.5">
+          <div className="pt-2 border-t border-border">
+            <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wide flex items-center gap-1.5">
               <Cable size={10} /> Connections ({connections.length})
             </p>
             <div className="space-y-2 max-h-40 overflow-y-auto">
               {connections.map((conn, idx) => (
                 <div key={idx} className="flex items-center justify-between text-xs gap-2">
-                  <span className="text-slate-300 truncate">{conn.targetName || conn.target}</span>
+                  <span className="text-secondary-foreground truncate">{conn.targetName || conn.target}</span>
                   {conn.port && <span className="text-cyan-400/70 font-mono text-[10px]">Port {conn.port}</span>}
                 </div>
               ))}
@@ -149,7 +149,7 @@ function DetailPanel({ node, onClose, onScan, onEdit }) {
           </div>
         )}
       </div>
-      <div className="px-4 pb-4 border-t border-white/6 pt-3">
+      <div className="px-4 pb-4 border-t border-border pt-3">
         <button
           type="button"
           onClick={handleScan}
@@ -167,8 +167,8 @@ function DetailPanel({ node, onClose, onScan, onEdit }) {
 function Row({ icon: Icon, label, value, mono }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-xs text-slate-500 flex items-center gap-1 flex-shrink-0"><Icon size={10} />{label}</span>
-      <span className={`text-xs text-slate-200 truncate text-right ${mono ? "font-mono" : ""}`}>{value}</span>
+      <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0"><Icon size={10} />{label}</span>
+      <span className={`text-xs text-foreground truncate text-right ${mono ? "font-mono" : ""}`}>{value}</span>
     </div>
   );
 }
@@ -182,10 +182,10 @@ function PathPanel({ path, deviceMap, onClose }) {
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <GitBranch size={13} className="text-orange-400" />
-          <p className="text-xs font-semibold text-white">Signal Path</p>
-          <span className="text-xs text-slate-500">{hops.length - 1} hop{hops.length !== 2 ? "s" : ""}</span>
+          <p className="text-xs font-semibold text-foreground">Signal Path</p>
+          <span className="text-xs text-muted-foreground">{hops.length - 1} hop{hops.length !== 2 ? "s" : ""}</span>
         </div>
-        <button onClick={onClose} className="w-5 h-5 rounded hover:bg-white/10 text-slate-500 hover:text-white">
+        <button onClick={onClose} className="w-5 h-5 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
           <X size={11} />
         </button>
       </div>
@@ -195,11 +195,11 @@ function PathPanel({ path, deviceMap, onClose }) {
             <div className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-medium ${
               i === 0 || i === hops.length - 1
                 ? "border-orange-500/40 bg-orange-500/15 text-orange-300"
-                : "border-white/10 bg-white/4 text-slate-300"
+                : "border-border bg-muted text-secondary-foreground"
             }`}>
               {deviceMap[nodeId]?.name || nodeId}
             </div>
-            {i < hops.length - 1 && <ArrowRight size={10} className="text-slate-600" />}
+            {i < hops.length - 1 && <ArrowRight size={10} className="text-muted-foreground" />}
           </div>
         ))}
       </div>
@@ -213,7 +213,7 @@ function FilterChip({ label, active, color, onClick }) {
       type="button"
       onClick={onClick}
       className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-        active ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300" : "border-white/10 text-slate-400 hover:text-white"
+        active ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300" : "border-border text-muted-foreground hover:text-foreground"
       }`}
     >
       {color && <span className="w-2 h-2 rounded-full" style={{ background: color }} />}
@@ -418,24 +418,24 @@ export default function NetworkMapTab({
   }, [editingDevice, onPatchDevice]);
 
   return (
-    <div className="h-full flex flex-col bg-[#060912]">
+    <div className="h-full flex flex-col bg-background">
       {/* Toolbar */}
-      <div className="flex-shrink-0 px-4 py-3 border-b border-white/10 space-y-3">
+      <div className="flex-shrink-0 px-4 py-3 border-b border-border space-y-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2 bg-[#0a0f1c] border border-white/10 rounded-xl px-3 py-2 flex-1 min-w-[200px] max-w-md">
-            <Search size={14} className="text-slate-500" />
+          <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2 flex-1 min-w-[200px] max-w-md">
+            <Search size={14} className="text-muted-foreground" />
             <input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search devices..."
-              className="bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none flex-1"
+              className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none flex-1"
             />
           </div>
           <button
             type="button"
             onClick={onFullRefresh}
             disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c] text-slate-400 hover:text-white text-xs font-medium disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground text-xs font-medium disabled:opacity-50"
           >
             <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
             {refreshing ? "Scanning…" : "Refresh"}
@@ -443,7 +443,7 @@ export default function NetworkMapTab({
           <button
             type="button"
             onClick={() => setShowSnmpPanel(true)}
-            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-[#0a0f1c] text-slate-400 hover:text-white text-xs font-medium"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground text-xs font-medium"
           >
             <Network size={12} />
             SNMP Map
@@ -453,18 +453,18 @@ export default function NetworkMapTab({
               type="button"
               onClick={() => setToolsOpen((o) => !o)}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium ${
-                pathMode ? "border-orange-500/40 bg-orange-500/15 text-orange-300" : "border-white/10 bg-[#0a0f1c] text-slate-400 hover:text-white"
+                pathMode ? "border-orange-500/40 bg-orange-500/15 text-orange-300" : "border-border bg-secondary text-muted-foreground hover:text-foreground"
               }`}
             >
               <Wrench size={12} />
               Tools
             </button>
             {toolsOpen && (
-              <div className="absolute top-full right-0 mt-1 min-w-[200px] rounded-xl border border-white/10 bg-[#0a0f1c] shadow-xl py-1 z-30">
+              <div className="absolute top-full right-0 mt-1 min-w-[200px] rounded-xl border border-border bg-secondary shadow-xl py-1 z-30">
                 <button
                   type="button"
                   onClick={() => { togglePathMode(); setToolsOpen(false); }}
-                  className="w-full text-left px-3 py-2 text-xs hover:bg-white/5 flex items-center gap-2 text-slate-300"
+                  className="w-full text-left px-3 py-2 text-xs hover:bg-secondary flex items-center gap-2 text-secondary-foreground"
                 >
                   <GitBranch size={12} />
                   {pathMode ? "Cancel path trace" : "Trace path"}
@@ -473,7 +473,7 @@ export default function NetworkMapTab({
                   <button
                     type="button"
                     onClick={() => { setShowImportModal(true); setToolsOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-xs text-secondary-foreground hover:bg-secondary flex items-center gap-2"
                   >
                     <Upload size={12} />
                     Import CSV
@@ -483,7 +483,7 @@ export default function NetworkMapTab({
                   <button
                     type="button"
                     onClick={() => { setShowGroupManager(true); setToolsOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 text-xs text-secondary-foreground hover:bg-secondary flex items-center gap-2"
                   >
                     <Users size={12} />
                     Manage groups
@@ -492,14 +492,14 @@ export default function NetworkMapTab({
               </div>
             )}
           </div>
-          <span className="text-xs text-slate-500 ml-auto">
+          <span className="text-xs text-muted-foreground ml-auto">
             {listDevices.length} device{listDevices.length !== 1 ? "s" : ""}
           </span>
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider mr-1">Category</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider mr-1">Category</span>
           {Object.entries(CATEGORY_COLORS).map(([cat, color]) => (
             <FilterChip
               key={cat}
@@ -509,7 +509,7 @@ export default function NetworkMapTab({
               onClick={() => setCategoryFilter(f => (f === cat ? null : cat))}
             />
           ))}
-          <span className="text-[10px] text-slate-500 uppercase tracking-wider mx-2">Status</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider mx-2">Status</span>
           {Object.entries(STATUS_COLORS).map(([s, color]) => (
             <FilterChip
               key={s}
@@ -523,7 +523,7 @@ export default function NetworkMapTab({
             <select
               value={groupFilter || ""}
               onChange={(e) => setGroupFilter(e.target.value || null)}
-              className="ml-2 px-2 py-1 rounded-lg border border-white/10 bg-[#0a0f1c] text-xs text-slate-300"
+              className="ml-2 px-2 py-1 rounded-lg border border-border bg-secondary text-xs text-secondary-foreground"
             >
               <option value="">All groups</option>
               {groups.map(g => (
@@ -537,13 +537,13 @@ export default function NetworkMapTab({
           <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-cyan-500/10 border border-cyan-500/30">
             <Cable size={13} className="text-cyan-400" />
             <div className="text-xs flex-1 min-w-0">
-              <span className="text-slate-400">Cable path: </span>
+              <span className="text-muted-foreground">Cable path: </span>
               <span className="text-cyan-300 font-mono">{cableBanner.label || "cable"}</span>
               {cableBanner.from && cableBanner.to && (
-                <span className="text-slate-400"> · {cableBanner.from} → {cableBanner.to}</span>
+                <span className="text-muted-foreground"> · {cableBanner.from} → {cableBanner.to}</span>
               )}
             </div>
-            <button onClick={() => { setCableBanner(null); clearPath(); }} className="text-slate-500 hover:text-white">
+            <button onClick={() => { setCableBanner(null); clearPath(); }} className="text-muted-foreground hover:text-foreground">
               <X size={12} />
             </button>
           </div>
@@ -635,15 +635,15 @@ export default function NetworkMapTab({
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 320 }}
-              className="relative w-full max-w-lg h-full bg-[#0a0f1c] border-l border-white/10 shadow-2xl flex flex-col"
+              className="relative w-full max-w-lg h-full bg-secondary border-l border-border shadow-2xl flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                   <Network size={14} className="text-cyan-400" />
                   SNMP Port Map
                 </h3>
-                <button onClick={() => setShowSnmpPanel(false)} className="text-slate-500 hover:text-white">
+                <button onClick={() => setShowSnmpPanel(false)} className="text-muted-foreground hover:text-foreground">
                   <X size={16} />
                 </button>
               </div>

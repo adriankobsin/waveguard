@@ -230,15 +230,15 @@ export default function NetworkDiscoveryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#060912] flex flex-col">
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/6 bg-[#070b13]/90 backdrop-blur-xl flex-shrink-0">
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-card/90 backdrop-blur-xl flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-cyan-500/12 flex items-center justify-center ring-1 ring-cyan-500/20">
             <Radar size={16} className="text-cyan-400" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white leading-none">Network Discovery</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <h1 className="text-sm font-bold text-foreground leading-none">Network Discovery</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
               {scannerHealth?.ok
                 ? `Scanner: ${scannerHealth.scanInterface || "ready"}`
                 : "Live scan via WaveGuard scanner agent"}
@@ -249,7 +249,7 @@ export default function NetworkDiscoveryPage() {
           {scanResult && (
             <button
               onClick={exportCSV}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
             >
               <Download size={12} /> Export CSV
             </button>
@@ -259,7 +259,7 @@ export default function NetworkDiscoveryPage() {
             className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
               showConfig
                 ? "border-cyan-500/40 bg-cyan-500/12 text-cyan-400"
-                : "border-white/10 text-slate-400 hover:text-white"
+                : "border-border text-muted-foreground hover:text-foreground"
             }`}
           >
             <Settings size={12} /> Configure
@@ -281,7 +281,7 @@ export default function NetworkDiscoveryPage() {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden border-b border-white/6 bg-[#070b13]/60"
+            className="overflow-hidden border-b border-border bg-card/60"
           >
             <DiscoverySubnetConfig
               subnets={subnets}
@@ -303,16 +303,16 @@ export default function NetworkDiscoveryPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="px-5 py-3 border-b border-white/6 bg-[#070b13]/50"
+            className="px-5 py-3 border-b border-border bg-card/50"
           >
             <div className="flex items-center justify-between text-xs mb-2">
               <span className="text-cyan-400 flex items-center gap-2">
                 <Loader2 size={11} className="animate-spin" />
                 Scanning {subnets.join(", ")} — {scanType.toUpperCase()} probe
               </span>
-              <span className="text-slate-500">{Math.round(progress)}%</span>
+              <span className="text-muted-foreground">{Math.round(progress)}%</span>
             </div>
-            <div className="h-1.5 bg-white/6 rounded-full overflow-hidden">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
               <motion.div
                 className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full"
                 animate={{ width: `${progress}%` }}
@@ -335,17 +335,17 @@ export default function NetworkDiscoveryPage() {
             <Radar size={36} className="text-cyan-400/60" />
           </div>
           <div>
-            <p className="text-base font-semibold text-white mb-1">Ready to scan</p>
-            <p className="text-sm text-slate-500 max-w-md">
+            <p className="text-base font-semibold text-foreground mb-1">Ready to scan</p>
+            <p className="text-sm text-muted-foreground max-w-md">
               Detect your local subnets, then run a live ping/ARP scan. Start the scanner with{" "}
-              <span className="font-mono text-slate-400">npm run dev:all</span> (or{" "}
-              <span className="font-mono text-slate-400">npm run mock</span>) on this PC or on your deployment server.
+              <span className="font-mono text-muted-foreground">npm run dev:all</span> (or{" "}
+              <span className="font-mono text-muted-foreground">npm run mock</span>) on this PC or on your deployment server.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setShowConfig(true)}
-              className="px-4 py-2 rounded-xl border border-white/10 text-sm text-slate-400 hover:text-white transition-colors"
+              className="px-4 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Configure subnets
             </button>
@@ -374,14 +374,14 @@ export default function NetworkDiscoveryPage() {
               )
             }
           />
-          <div className="flex items-center gap-3 px-5 py-2.5 border-b border-white/6 bg-[#070b13]/40 flex-shrink-0 flex-wrap gap-y-2">
+          <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border bg-card/40 flex-shrink-0 flex-wrap gap-y-2">
             <div className="relative flex-1 min-w-40 max-w-64">
-              <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search IP, hostname, vendor…"
-                className="w-full bg-white/5 border border-white/10 rounded-xl pl-7 pr-3 py-1.5 text-xs text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-cyan-500/40"
+                className="w-full bg-secondary border border-border rounded-xl pl-7 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-cyan-500/40"
               />
             </div>
             <div className="flex items-center gap-1">
@@ -392,7 +392,7 @@ export default function NetworkDiscoveryPage() {
                   className={`text-xs px-2.5 py-1.5 rounded-lg border capitalize transition-colors ${
                     categoryFilter === c
                       ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-400"
-                      : "border-white/8 text-slate-500 hover:text-slate-300"
+                      : "border-border text-muted-foreground hover:text-secondary-foreground"
                   }`}
                 >
                   {c}
@@ -409,13 +409,13 @@ export default function NetworkDiscoveryPage() {
                       ? c === "monitored"
                         ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
                         : c === "ignored"
-                          ? "border-slate-500/40 bg-slate-500/15 text-slate-300"
+                          ? "border-slate-500/40 bg-slate-500/15 text-secondary-foreground"
                           : c === "inventory"
                             ? "border-blue-500/40 bg-blue-500/15 text-blue-400"
                             : c === "unclassified"
                               ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
                               : "border-cyan-500/40 bg-cyan-500/15 text-cyan-400"
-                      : "border-white/8 text-slate-500 hover:text-slate-300"
+                      : "border-border text-muted-foreground hover:text-secondary-foreground"
                   }`}
                 >
                   {c}
@@ -434,7 +434,7 @@ export default function NetworkDiscoveryPage() {
       )}
 
       {scanResult && devices.length === 0 && !scanning && (
-        <div className="flex-1 flex items-center justify-center text-sm text-slate-500">
+        <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
           No devices responded on {subnets.join(", ")}. Try Full scan or add another subnet.
         </div>
       )}

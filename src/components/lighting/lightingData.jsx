@@ -133,7 +133,7 @@ export const SCENES = [
     name: "All Off",
     icon: "zap",
     description: "Cut all non-essential lighting",
-    color: "border-slate-500/30 bg-slate-500/10 text-slate-400",
+    color: "border-slate-500/30 bg-slate-500/10 text-muted-foreground",
     activeBg: "bg-slate-500/20 border-slate-500/40",
     zones: Object.fromEntries(
       Array.from({ length: 22 }, (_, i) => [`z${String(i + 1).padStart(2, "0")}`, { on: false, level: 0 }])

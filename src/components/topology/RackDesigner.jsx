@@ -52,9 +52,9 @@ function RuSlot({ ru }) {
   return (
     <div
       style={{ height: RU_PX }}
-      className="flex items-center border-b border-white/4 pointer-events-none"
+      className="flex items-center border-b border-border pointer-events-none"
     >
-      <span className="w-8 text-right pr-2 text-[10px] font-mono text-slate-700 select-none flex-shrink-0">{ru}U</span>
+      <span className="w-8 text-right pr-2 text-[10px] font-mono text-muted-foreground select-none flex-shrink-0">{ru}U</span>
     </div>
   );
 }
@@ -105,8 +105,8 @@ function RackItem({ item, ruStart, canEdit, isDragActive, onDragStart, onDragEnd
           <Icon size={11} style={{ color: item.color }} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-[11px] font-semibold text-white truncate">{item.name}</p>
-          {item.ruHeight > 1 && <p className="text-[9px] text-slate-500 truncate">{item.model}</p>}
+          <p className="text-[11px] font-semibold text-foreground truncate">{item.name}</p>
+          {item.ruHeight > 1 && <p className="text-[9px] text-muted-foreground truncate">{item.model}</p>}
         </div>
         <span className="text-[9px] font-mono text-amber-400/70">{item.watts}W</span>
         {canEdit && (
@@ -118,7 +118,7 @@ function RackItem({ item, ruStart, canEdit, isDragActive, onDragStart, onDragEnd
                 e.stopPropagation();
                 onEdit(item);
               }}
-              className="p-0.5 rounded hover:bg-white/15 text-slate-400 hover:text-white"
+              className="p-0.5 rounded hover:bg-muted/305 text-muted-foreground hover:text-foreground"
             >
               <Pencil size={10} />
             </button>
@@ -129,7 +129,7 @@ function RackItem({ item, ruStart, canEdit, isDragActive, onDragStart, onDragEnd
                 e.stopPropagation();
                 onRemove(item.id);
               }}
-              className="p-0.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400"
+              className="p-0.5 rounded hover:bg-red-500/20 text-muted-foreground hover:text-red-400"
             >
               <Trash2 size={10} />
             </button>
@@ -210,18 +210,18 @@ function RackColumn({
 
   return (
     <div className="flex flex-col w-56 flex-shrink-0">
-      <div className="rounded-t-xl border border-b-0 border-white/10 bg-[#0d1220] px-3 py-2.5">
+      <div className="rounded-t-xl border border-b-0 border-border bg-card px-3 py-2.5">
         <div className="flex items-center justify-between mb-1.5">
-          <p className="text-xs font-bold text-white">{rack.name}</p>
-          <span className="text-[10px] text-slate-500 font-mono">{totalUnits}U</span>
+          <p className="text-xs font-bold text-foreground">{rack.name}</p>
+          <span className="text-[10px] text-muted-foreground font-mono">{totalUnits}U</span>
         </div>
-        <p className="text-[10px] text-slate-500 mb-2">{rack.location}</p>
+        <p className="text-[10px] text-muted-foreground mb-2">{rack.location}</p>
         <div className="mb-1.5">
           <div className="flex justify-between text-[10px] mb-0.5">
             <span className="flex items-center gap-1 text-amber-400/80"><Zap size={8} />{usedW}W</span>
-            <span className="text-slate-600">{wPct}%</span>
+            <span className="text-muted-foreground">{wPct}%</span>
           </div>
-          <div className="h-1 bg-white/6 rounded-full overflow-hidden">
+          <div className="h-1 bg-muted rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${wPct}%`, background: wPct > 85 ? "#ef4444" : "#22c55e" }} />
           </div>
         </div>
@@ -230,7 +230,7 @@ function RackColumn({
             <span className="flex items-center gap-1"><Thermometer size={8} />{rack.tempC}°C</span>
             {rack.tempC >= 50 && <AlertTriangle size={9} className="text-red-400" />}
           </div>
-          <div className="h-1 bg-white/6 rounded-full overflow-hidden">
+          <div className="h-1 bg-muted rounded-full overflow-hidden">
             <div className="h-full rounded-full" style={{ width: `${tPct}%`, background: tc.bar }} />
           </div>
         </div>
@@ -240,7 +240,7 @@ function RackColumn({
         onDragOver={handleDragOver}
         onDragLeave={() => setPreviewRu(null)}
         onDrop={handleDrop}
-        className={`relative border border-white/10 bg-[#070b12] rounded-b-xl overflow-hidden ${isDragging && canEdit ? "ring-1 ring-cyan-500/30" : ""}`}
+        className={`relative border border-border bg-secondary rounded-b-xl overflow-hidden ${isDragging && canEdit ? "ring-1 ring-cyan-500/30" : ""}`}
         style={{ height: totalUnits * RU_PX }}
       >
         {Array.from({ length: totalUnits }, (_, i) => i + 1).map((ru) => (
@@ -276,18 +276,18 @@ function ItemPanel({ item, canEdit, onClose, onEditPlacement, onEditDevice, onRe
       exit={{ opacity: 0, y: 12 }}
       className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-96 pointer-events-auto"
     >
-      <div className="rounded-2xl border border-white/10 bg-[#0a0f1c]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+      <div className="rounded-2xl border border-border bg-secondary/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: item.color + "22" }}>
               <Icon size={13} style={{ color: item.color }} />
             </div>
             <div>
-              <p className="text-sm font-semibold text-white">{item.name}</p>
-              <p className="text-xs text-slate-500">{item.model}</p>
+              <p className="text-sm font-semibold text-foreground">{item.name}</p>
+              <p className="text-xs text-muted-foreground">{item.model}</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400">
+          <button type="button" onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground">
             <X size={12} />
           </button>
         </div>
@@ -300,18 +300,18 @@ function ItemPanel({ item, canEdit, onClose, onEditPlacement, onEditDevice, onRe
           <Row label="Height" value={`${item.ruHeight}U @ ${item.ruStart}U`} />
         </div>
         {canEdit && (
-          <div className="px-4 pb-3 flex flex-wrap gap-2 border-t border-white/8 pt-3">
+          <div className="px-4 pb-3 flex flex-wrap gap-2 border-t border-border pt-3">
             <button
               type="button"
               onClick={() => onEditPlacement(item)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:text-white"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs text-secondary-foreground hover:text-foreground"
             >
               <Pencil size={11} /> Edit placement
             </button>
             <button
               type="button"
               onClick={() => onEditDevice(item)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-white/10 text-xs text-slate-300 hover:text-white"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-border text-xs text-secondary-foreground hover:text-foreground"
             >
               <Server size={11} /> Edit device
             </button>
@@ -331,9 +331,9 @@ function ItemPanel({ item, canEdit, onClose, onEditPlacement, onEditDevice, onRe
 
 function Row({ label, value }) {
   return (
-    <div className="p-2 rounded-lg bg-white/4 border border-white/6">
-      <p className="text-slate-500 text-[10px]">{label}</p>
-      <p className="text-white font-medium">{value}</p>
+    <div className="p-2 rounded-lg bg-muted border border-border">
+      <p className="text-muted-foreground text-[10px]">{label}</p>
+      <p className="text-foreground font-medium">{value}</p>
     </div>
   );
 }
@@ -513,7 +513,7 @@ export default function RackDesigner({ topologyDevices = [], onRefresh }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full text-slate-400 gap-2">
+      <div className="flex items-center justify-center h-full text-muted-foreground gap-2">
         <Loader2 className="animate-spin" size={18} />
         <span className="text-sm">Loading rack layout…</span>
       </div>
@@ -523,7 +523,7 @@ export default function RackDesigner({ topologyDevices = [], onRefresh }) {
   const totalWatts = racksDisplay.reduce((s, r) => s + (r.usedWatts || r.items?.reduce((a, i) => a + i.watts, 0) || 0), 0);
 
   return (
-    <div className="flex h-full bg-[#060912] overflow-hidden" onDragEnd={clearDrag}>
+    <div className="flex h-full bg-background overflow-hidden" onDragEnd={clearDrag}>
       <RackEquipmentPalette
         devices={devices}
         placedIds={placedIds}
@@ -532,19 +532,19 @@ export default function RackDesigner({ topologyDevices = [], onRefresh }) {
       />
 
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-white/6 flex-shrink-0 flex-wrap">
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-border flex-shrink-0 flex-wrap">
           {loadError && (
             <div className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
               <span>{loadError}</span>
-              <button type="button" onClick={reload} className="underline hover:text-white">Retry</button>
+              <button type="button" onClick={reload} className="underline hover:text-foreground">Retry</button>
             </div>
           )}
-          <span className="text-xs text-slate-400 flex items-center gap-1"><Server size={11} className="text-cyan-400" />{racksDisplay.length} racks</span>
+          <span className="text-xs text-muted-foreground flex items-center gap-1"><Server size={11} className="text-cyan-400" />{racksDisplay.length} racks</span>
           <span className="text-xs text-amber-400 flex items-center gap-1"><Zap size={11} />{totalWatts}W</span>
-          {!canEdit && <span className="text-[10px] text-slate-600 ml-auto">Read-only</span>}
+          {!canEdit && <span className="text-[10px] text-muted-foreground ml-auto">Read-only</span>}
           {canEdit && (
             <div className="ml-auto flex items-center gap-2">
-              <button type="button" onClick={() => setRackModal({ open: true, rack: null })} className="flex items-center gap-1 px-2 py-1 rounded-lg border border-white/10 text-xs text-slate-300 hover:text-white">
+              <button type="button" onClick={() => setRackModal({ open: true, rack: null })} className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border text-xs text-secondary-foreground hover:text-foreground">
                 <Plus size={12} /> Add rack
               </button>
               <button type="button" onClick={handleSave} disabled={saving} className="flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-500/20 border border-cyan-500/30 text-xs text-cyan-300">
@@ -561,8 +561,8 @@ export default function RackDesigner({ topologyDevices = [], onRefresh }) {
               <div key={rack.id} className="relative">
                 {canEdit && (
                   <div className="flex gap-1 mb-1 justify-end">
-                    <button type="button" onClick={() => setRackModal({ open: true, rack })} className="p-1 rounded text-slate-500 hover:text-white"><Pencil size={11} /></button>
-                    <button type="button" onClick={() => setDeleteRack(rack)} className="p-1 rounded text-slate-500 hover:text-red-400"><Trash2 size={11} /></button>
+                    <button type="button" onClick={() => setRackModal({ open: true, rack })} className="p-1 rounded text-muted-foreground hover:text-foreground"><Pencil size={11} /></button>
+                    <button type="button" onClick={() => setDeleteRack(rack)} className="p-1 rounded text-muted-foreground hover:text-red-400"><Trash2 size={11} /></button>
                   </div>
                 )}
                 <RackColumn

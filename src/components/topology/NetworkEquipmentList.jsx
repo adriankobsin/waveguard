@@ -19,7 +19,7 @@ export default function NetworkEquipmentList({
 }) {
   if (!devices.length) {
     return (
-      <div className="flex items-center justify-center h-48 text-sm text-slate-500">
+      <div className="flex items-center justify-center h-48 text-sm text-muted-foreground">
         No devices match the current filters.
       </div>
     );
@@ -28,8 +28,8 @@ export default function NetworkEquipmentList({
   return (
     <div className="overflow-auto flex-1 min-h-0">
       <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-[#0a0f1c] z-10 border-b border-white/10">
-          <tr className="text-left text-[10px] text-slate-500 uppercase tracking-wider">
+        <thead className="sticky top-0 bg-secondary z-10 border-b border-border">
+          <tr className="text-left text-[10px] text-muted-foreground uppercase tracking-wider">
             <th className="px-3 py-2 w-8" />
             <th className="px-3 py-2">Name</th>
             <th className="px-3 py-2 hidden lg:table-cell">IP</th>
@@ -54,49 +54,49 @@ export default function NetworkEquipmentList({
               <tr
                 key={device.id}
                 onClick={() => onRowClick(device)}
-                className={`border-b border-white/5 cursor-pointer transition-colors ${
+                className={`border-b border-border cursor-pointer transition-colors ${
                   isPathSource || isPathTarget
                     ? "bg-orange-500/10"
                     : isSelected
                       ? "bg-cyan-500/10"
-                      : "hover:bg-white/[0.03]"
+                      : "hover:bg-muted/50"
                 }`}
               >
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   <span className={`inline-block w-2 h-2 rounded-full ${STATUS_DOT[status] || STATUS_DOT.unknown}`} />
                 </td>
                 <td className="px-3 py-2">
-                  <p className="font-medium text-white truncate max-w-[200px]">{device.name}</p>
+                  <p className="font-medium text-foreground truncate max-w-[200px]">{device.name}</p>
                   {pathMode && (isPathSource || isPathTarget) && (
                     <span className="text-[10px] text-orange-400">
                       {isPathSource ? "Source" : "Target"}
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-2 hidden lg:table-cell font-mono text-xs text-slate-400">
+                <td className="px-3 py-2 hidden lg:table-cell font-mono text-xs text-muted-foreground">
                   {device.ip || "—"}
                 </td>
-                <td className="px-3 py-2 hidden xl:table-cell font-mono text-xs text-slate-500 truncate max-w-[120px]">
+                <td className="px-3 py-2 hidden xl:table-cell font-mono text-xs text-muted-foreground truncate max-w-[120px]">
                   {device.mac || "—"}
                 </td>
-                <td className="px-3 py-2 text-xs text-slate-400">{device.category || "—"}</td>
+                <td className="px-3 py-2 text-xs text-muted-foreground">{device.category || "—"}</td>
                 <td className="px-3 py-2">
-                  <span className="text-xs capitalize text-slate-400">{status}</span>
+                  <span className="text-xs capitalize text-muted-foreground">{status}</span>
                 </td>
-                <td className="px-3 py-2 hidden md:table-cell text-xs text-slate-500 truncate max-w-[140px]">
+                <td className="px-3 py-2 hidden md:table-cell text-xs text-muted-foreground truncate max-w-[140px]">
                   {device.location || "—"}
                 </td>
-                <td className="px-3 py-2 hidden lg:table-cell text-xs text-slate-500 truncate max-w-[120px]">
+                <td className="px-3 py-2 hidden lg:table-cell text-xs text-muted-foreground truncate max-w-[120px]">
                   {device.model || "—"}
                 </td>
-                <td className="px-3 py-2 text-center text-xs text-slate-500">{connCount}</td>
+                <td className="px-3 py-2 text-center text-xs text-muted-foreground">{connCount}</td>
                 <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                   <div className="flex gap-0.5 justify-end">
                     <button
                       type="button"
                       title="Scan device"
                       onClick={() => onScan?.(device)}
-                      className="p-1.5 rounded hover:bg-white/10 text-slate-500 hover:text-cyan-400"
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-cyan-400"
                     >
                       <ScanLine size={13} />
                     </button>
@@ -104,7 +104,7 @@ export default function NetworkEquipmentList({
                       type="button"
                       title="Edit device"
                       onClick={() => onEdit?.(device)}
-                      className="p-1.5 rounded hover:bg-white/10 text-slate-500 hover:text-white"
+                      className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
                     >
                       <Pencil size={13} />
                     </button>

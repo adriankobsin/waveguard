@@ -7,6 +7,7 @@ import {
   Zap,
   ArrowDownUp,
   Server,
+  Trash2,
 } from "lucide-react";
 import { formatSpeedMbps } from "@/lib/snmp/snmpAnalytics";
 
@@ -35,7 +36,7 @@ const HEALTH_DOT = {
   unknown: "bg-slate-500",
 };
 
-export default function SnmpFleetOverview({ summary, enriched, onSelectSwitch }) {
+export default function SnmpFleetOverview({ summary, enriched, onSelectSwitch, onRemoveDevice }) {
   const sorted = [...(enriched || [])].sort((a, b) => {
     const order = { critical: 0, warning: 1, unknown: 2, healthy: 3, disabled: 4 };
     return (order[a.health?.status] ?? 5) - (order[b.health?.status] ?? 5);
@@ -82,19 +83,37 @@ export default function SnmpFleetOverview({ summary, enriched, onSelectSwitch })
               <p className="text-sm text-muted-foreground">No switches registered</p>
             ) : (
               sorted.map((sw) => (
-                <button
+                <div
                   key={sw.id}
-                  type="button"
-                  onClick={() => onSelectSwitch?.(sw.id)}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-secondary/50 text-left"
+                  className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-secondary/50 group"
                 >
-                  <span className={`w-2 h-2 rounded-full ${HEALTH_DOT[sw.health?.status] || HEALTH_DOT.unknown}`} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{sw.displayName}</p>
-                    <p className="text-xs text-muted-foreground font-mono">{sw.ip || "No IP"}</p>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{sw.health?.label}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => onSelectSwitch?.(sw.id)}
+                    className="flex-1 flex items-center gap-3 text-left min-w-0 py-1"
+                  >
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${HEALTH_DOT[sw.health?.status] || HEALTH_DOT.unknown}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{sw.displayName}</p>
+                      <p className="text-xs text-muted-foreground font-mono truncate">
+                        {sw.ip || "No IP"}
+                        {sw.model ? ` · ${sw.model}` : ""}
+                        {sw.location ? ` · ${sw.location}` : ""}
+                      </p>
+                    </div>
+                    <span className="text-xs text-muted-foreground shrink-0">{sw.health?.label}</span>
+                  </button>
+                  {onRemoveDevice && (
+                    <button
+                      type="button"
+                      title="Remove from fleet"
+                      onClick={() => onRemoveDevice(sw.id)}
+                      className="p-1.5 rounded opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 transition-opacity"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
               ))
             )}
           </div>

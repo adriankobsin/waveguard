@@ -101,22 +101,22 @@ export function GroupManager({ devices, onGroupChange }) {
           <DialogTrigger asChild>
             <Button
               size="sm"
-              className="gap-2 bg-[#0a0f1c]/90 border border-white/10 hover:bg-white/10"
+              className="gap-2 bg-secondary/90 border border-border hover:bg-muted"
             >
               <Users size={14} />
               Manage Groups
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-[#0a0f1c] border border-white/10 max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="bg-secondary border border-border max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="text-white flex items-center gap-2">
+              <DialogTitle className="text-foreground flex items-center gap-2">
                 <Users size={16} />
                 Device Groups
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
               <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   {groups.length} group{groups.length !== 1 ? "s" : ""} · {devices.filter(d => groups.some(g => g.device_ids?.includes(d.id))).length} devices grouped
                 </p>
                 <CreateGroupButton
@@ -127,9 +127,9 @@ export function GroupManager({ devices, onGroupChange }) {
               </div>
 
               {isLoading ? (
-                <p className="text-sm text-slate-500">Loading groups...</p>
+                <p className="text-sm text-muted-foreground">Loading groups...</p>
               ) : groups.length === 0 ? (
-                <p className="text-sm text-slate-500">No groups yet. Create your first group to organize devices.</p>
+                <p className="text-sm text-muted-foreground">No groups yet. Create your first group to organize devices.</p>
               ) : (
                 <div className="space-y-2">
                   {groups.map(group => {
@@ -138,14 +138,14 @@ export function GroupManager({ devices, onGroupChange }) {
                     return (
                       <div
                         key={group.id}
-                        className={`rounded-xl border ${color.border} bg-white/3 p-3`}
+                        className={`rounded-xl border ${color.border} bg-muted p-3`}
                       >
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-2">
                             <div className={`w-3 h-3 rounded-full ${color.class}`} />
-                            <p className="text-sm font-semibold text-white">{group.name}</p>
+                            <p className="text-sm font-semibold text-foreground">{group.name}</p>
                             {group.description && (
-                              <span className="text-xs text-slate-500">· {group.description}</span>
+                              <span className="text-xs text-muted-foreground">· {group.description}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1">
@@ -181,7 +181,7 @@ export function GroupManager({ devices, onGroupChange }) {
                               <Badge
                                 key={device.id}
                                 variant="outline"
-                                className="gap-1 bg-white/5 border-white/10"
+                                className="gap-1 bg-secondary border-border"
                               >
                                 {device.name}
                                 <button
@@ -195,7 +195,7 @@ export function GroupManager({ devices, onGroupChange }) {
                           </div>
                         )}
                         {!group.collapsed && groupedDevices.length === 0 && (
-                          <p className="text-xs text-slate-500 mt-2">No devices in this group</p>
+                          <p className="text-xs text-muted-foreground mt-2">No devices in this group</p>
                         )}
                       </div>
                     );
@@ -255,31 +255,31 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
           New Group
         </Button>
       </DialogTrigger>
-      <DialogContent className="bg-[#0a0f1c] border border-white/10">
+      <DialogContent className="bg-secondary border border-border">
         <DialogHeader>
-          <DialogTitle className="text-white">Create Device Group</DialogTitle>
+          <DialogTitle className="text-foreground">Create Device Group</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div>
-            <Label className="text-slate-300">Group Name</Label>
+            <Label className="text-secondary-foreground">Group Name</Label>
             <Input
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="e.g., Bridge Devices"
-              className="bg-white/5 border-white/10 text-white"
+              className="bg-secondary border-border text-foreground"
             />
           </div>
           <div>
-            <Label className="text-slate-300">Description</Label>
+            <Label className="text-secondary-foreground">Description</Label>
             <Input
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Optional description"
-              className="bg-white/5 border-white/10 text-white"
+              className="bg-secondary border-border text-foreground"
             />
           </div>
           <div>
-            <Label className="text-slate-300">Color</Label>
+            <Label className="text-secondary-foreground">Color</Label>
             <div className="flex items-center gap-2 mt-1">
               {COLORS.map(color => (
                 <button
@@ -293,12 +293,12 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
             </div>
           </div>
           <div>
-            <Label className="text-slate-300">Devices</Label>
+            <Label className="text-secondary-foreground">Devices</Label>
             <div className="max-h-32 overflow-y-auto space-y-1 mt-1">
               {ungroupedDevices.map(device => (
                 <label
                   key={device.id}
-                  className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:bg-white/5 p-1 rounded"
+                  className="flex items-center gap-2 text-sm text-secondary-foreground cursor-pointer hover:bg-secondary p-1 rounded"
                 >
                   <input
                     type="checkbox"
@@ -316,13 +316,13 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
                         });
                       }
                     }}
-                    className="rounded border-white/20"
+                    className="rounded border-border"
                   />
                   {device.name}
                 </label>
               ))}
               {ungroupedDevices.length === 0 && (
-                <p className="text-xs text-slate-500">All devices are already grouped</p>
+                <p className="text-xs text-muted-foreground">All devices are already grouped</p>
               )}
             </div>
           </div>
@@ -356,29 +356,29 @@ function EditGroupModal({ group, devices, groups, onSubmit, onClose }) {
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
-      <DialogContent className="bg-[#0a0f1c] border border-white/10">
+      <DialogContent className="bg-secondary border border-border">
         <DialogHeader>
-          <DialogTitle className="text-white">Edit Group</DialogTitle>
+          <DialogTitle className="text-foreground">Edit Group</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 mt-2">
           <div>
-            <Label className="text-slate-300">Group Name</Label>
+            <Label className="text-secondary-foreground">Group Name</Label>
             <Input
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="bg-white/5 border-white/10 text-white"
+              className="bg-secondary border-border text-foreground"
             />
           </div>
           <div>
-            <Label className="text-slate-300">Description</Label>
+            <Label className="text-secondary-foreground">Description</Label>
             <Input
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="bg-white/5 border-white/10 text-white"
+              className="bg-secondary border-border text-foreground"
             />
           </div>
           <div>
-            <Label className="text-slate-300">Color</Label>
+            <Label className="text-secondary-foreground">Color</Label>
             <div className="flex items-center gap-2 mt-1">
               {COLORS.map(color => (
                 <button
@@ -392,12 +392,12 @@ function EditGroupModal({ group, devices, groups, onSubmit, onClose }) {
             </div>
           </div>
           <div>
-            <Label className="text-slate-300">Devices</Label>
+            <Label className="text-secondary-foreground">Devices</Label>
             <div className="max-h-32 overflow-y-auto space-y-1 mt-1">
               {devices.map(device => (
                 <label
                   key={device.id}
-                  className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer hover:bg-white/5 p-1 rounded"
+                  className="flex items-center gap-2 text-sm text-secondary-foreground cursor-pointer hover:bg-secondary p-1 rounded"
                 >
                   <input
                     type="checkbox"
@@ -415,7 +415,7 @@ function EditGroupModal({ group, devices, groups, onSubmit, onClose }) {
                         });
                       }
                     }}
-                    className="rounded border-white/20"
+                    className="rounded border-border"
                   />
                   {device.name}
                 </label>
@@ -423,7 +423,7 @@ function EditGroupModal({ group, devices, groups, onSubmit, onClose }) {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose} className="flex-1 border-white/10">
+            <Button variant="outline" onClick={onClose} className="flex-1 border-border">
               Cancel
             </Button>
             <Button onClick={handleSubmit} className="flex-1 bg-cyan-500 hover:bg-cyan-600">

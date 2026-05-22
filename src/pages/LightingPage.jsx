@@ -46,16 +46,16 @@ export default function LightingPage() {
   const faultZones = zones.filter(z => z.fault).length;
 
   return (
-    <div className="h-full bg-[#060912] flex flex-col">
+    <div className="h-full bg-background flex flex-col">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/6 bg-[#070b13]/90 backdrop-blur-xl flex-shrink-0">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border bg-card/90 backdrop-blur-xl flex-shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-amber-500/12 flex items-center justify-center ring-1 ring-amber-500/20">
             <Lightbulb size={16} className="text-amber-400" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white leading-none">Lighting Control</h1>
-            <p className="text-xs text-slate-500 mt-0.5">DMX · DALI · KNX · Lutron — deck-by-deck zone management</p>
+            <h1 className="text-sm font-bold text-foreground leading-none">Lighting Control</h1>
+            <p className="text-xs text-muted-foreground mt-0.5">DMX · DALI · KNX · Lutron — deck-by-deck zone management</p>
           </div>
         </div>
 
@@ -77,7 +77,7 @@ export default function LightingPage() {
 
           {/* View toggle — only shown on control tab */}
           {activePageTab === "control" && (
-            <div className="flex items-center gap-1 bg-white/5 border border-white/8 rounded-xl p-1">
+            <div className="flex items-center gap-1 bg-secondary border border-border rounded-xl p-1">
               {[
                 { key: "map",  icon: Map,        label: "Map"  },
                 { key: "list", icon: LayoutGrid,  label: "List" },
@@ -88,7 +88,7 @@ export default function LightingPage() {
                   className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     viewMode === v.key
                       ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-                      : "text-slate-500 hover:text-slate-300"
+                      : "text-muted-foreground hover:text-secondary-foreground"
                   }`}
                 >
                   <v.icon size={12} />{v.label}
@@ -100,7 +100,7 @@ export default function LightingPage() {
       </div>
 
       {/* ── Page tab bar ── */}
-      <div className="flex items-center gap-1 px-5 py-2 border-b border-white/6 bg-[#070b13]/60 flex-shrink-0">
+      <div className="flex items-center gap-1 px-5 py-2 border-b border-border bg-card/60 flex-shrink-0">
         {PAGE_TABS.map(tab => (
           <button
             key={tab.key}
@@ -108,7 +108,7 @@ export default function LightingPage() {
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap border ${
               activePageTab === tab.key
                 ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                : "text-slate-500 hover:text-slate-200 hover:bg-white/4 border-transparent"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted border-transparent"
             }`}
           >
             <tab.icon size={12} />
@@ -127,7 +127,7 @@ export default function LightingPage() {
       {/* ── Control tab ── */}
       {activePageTab === "control" && <div className="flex flex-1 overflow-hidden">
         {/* ── Left: Scene panel + System status ── */}
-        <div className="w-64 flex-shrink-0 border-r border-white/6 bg-[#070b13]/70 flex flex-col overflow-y-auto">
+        <div className="w-64 flex-shrink-0 border-r border-border bg-card/70 flex flex-col overflow-y-auto">
           <LightingScenePanel
             scenes={SCENES}
             activeScene={activeScene}
@@ -140,7 +140,7 @@ export default function LightingPage() {
         {/* ── Center: Deck selector + main view ── */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Deck tabs */}
-          <div className="flex items-center gap-1 px-4 py-2.5 border-b border-white/6 bg-[#070b13]/50 flex-shrink-0 overflow-x-auto">
+          <div className="flex items-center gap-1 px-4 py-2.5 border-b border-border bg-card/50 flex-shrink-0 overflow-x-auto">
             {DECKS.map(deck => {
               const deckZoneCount = zones.filter(z => z.deck === deck.id).length;
               const deckOnCount = zones.filter(z => z.deck === deck.id && z.on).length;
@@ -152,13 +152,13 @@ export default function LightingPage() {
                   className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium transition-all whitespace-nowrap border ${
                     activeDeck === deck.id
                       ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
-                      : "text-slate-500 hover:text-slate-200 hover:bg-white/4 border-transparent"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted border-transparent"
                   }`}
                 >
                   <Layers size={11} />
                   {deck.label}
                   <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                    activeDeck === deck.id ? "bg-amber-500/20 text-amber-300" : "bg-white/6 text-slate-500"
+                    activeDeck === deck.id ? "bg-amber-500/20 text-amber-300" : "bg-muted text-muted-foreground"
                   }`}>
                     {deckOnCount}/{deckZoneCount}
                   </span>
@@ -231,7 +231,7 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
     DALI: "text-blue-400 bg-blue-500/12 border-blue-500/25",
     KNX:  "text-orange-400 bg-orange-500/12 border-orange-500/25",
     Lutron: "text-cyan-400 bg-cyan-500/12 border-cyan-500/25",
-  }[zone.protocol] || "text-slate-400 bg-slate-500/12 border-slate-500/25";
+  }[zone.protocol] || "text-muted-foreground bg-slate-500/12 border-slate-500/25";
 
   return (
     <motion.div
@@ -239,10 +239,10 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
       animate={{ x: 0, opacity: 1 }}
       exit={{ x: "100%", opacity: 0 }}
       transition={{ type: "spring", damping: 28, stiffness: 260 }}
-      className="w-72 flex-shrink-0 border-l border-white/8 bg-[#070b13]/98 flex flex-col shadow-2xl"
+      className="w-72 flex-shrink-0 border-l border-border bg-card/98 flex flex-col shadow-2xl"
     >
       {/* Header */}
-      <div className="flex items-start justify-between px-5 py-4 border-b border-white/8">
+      <div className="flex items-start justify-between px-5 py-4 border-b border-border">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${protocolColor}`}>
@@ -254,10 +254,10 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
               </span>
             )}
           </div>
-          <p className="text-sm font-bold text-white">{zone.name}</p>
-          <p className="text-xs text-slate-500">{zone.location}</p>
+          <p className="text-sm font-bold text-foreground">{zone.name}</p>
+          <p className="text-xs text-muted-foreground">{zone.location}</p>
         </div>
-        <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors ml-2 flex-shrink-0">
+        <button onClick={onClose} className="w-7 h-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors ml-2 flex-shrink-0">
           <ChevronDown size={14} className="rotate-[-90deg]" />
         </button>
       </div>
@@ -266,12 +266,12 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
         {/* Power toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-white">Power</p>
-            <p className="text-xs text-slate-500">{zone.on ? "Zone is active" : "Zone is off"}</p>
+            <p className="text-sm font-semibold text-foreground">Power</p>
+            <p className="text-xs text-muted-foreground">{zone.on ? "Zone is active" : "Zone is off"}</p>
           </div>
           <button
             onClick={() => onUpdate(zone.id, { on: !zone.on })}
-            className={`relative w-12 h-6 rounded-full transition-colors ${zone.on ? "bg-amber-500" : "bg-white/10"}`}
+            className={`relative w-12 h-6 rounded-full transition-colors ${zone.on ? "bg-amber-500" : "bg-muted"}`}
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${zone.on ? "translate-x-6" : "translate-x-0"}`} />
           </button>
@@ -280,7 +280,7 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
         {/* Dimmer */}
         <div>
           <div className="flex justify-between mb-2">
-            <p className="text-sm font-semibold text-white">Dim Level</p>
+            <p className="text-sm font-semibold text-foreground">Dim Level</p>
             <p className="text-sm font-bold text-amber-400">{zone.level}%</p>
           </div>
           <input
@@ -289,7 +289,7 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
             className="w-full accent-amber-400 cursor-pointer"
             style={{ accentColor: "#f59e0b" }}
           />
-          <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+          <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
             <span>Off</span><span>Full</span>
           </div>
         </div>
@@ -298,7 +298,7 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
         {zone.colorTemp && (
           <div>
             <div className="flex justify-between mb-2">
-              <p className="text-sm font-semibold text-white">Color Temp</p>
+              <p className="text-sm font-semibold text-foreground">Color Temp</p>
               <p className="text-xs font-bold text-amber-300">{zone.colorTemp}K</p>
             </div>
             <input
@@ -307,7 +307,7 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
               className="w-full cursor-pointer"
               style={{ accentColor: "#fde68a" }}
             />
-            <div className="flex justify-between text-[10px] text-slate-600 mt-1">
+            <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
               <span>Warm 2700K</span><span>Cool 6500K</span>
             </div>
           </div>
@@ -315,7 +315,7 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
 
         {/* Quick levels */}
         <div>
-          <p className="text-xs text-slate-500 mb-2 uppercase tracking-widest">Quick Set</p>
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-widest">Quick Set</p>
           <div className="grid grid-cols-4 gap-2">
             {[0, 25, 50, 75, 100].map(lvl => (
               <button
@@ -324,7 +324,7 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
                 className={`py-1.5 rounded-lg text-xs font-semibold border transition-all ${
                   zone.level === lvl
                     ? "bg-amber-500/20 border-amber-500/40 text-amber-400"
-                    : "border-white/8 text-slate-400 hover:border-white/20 hover:text-white"
+                    : "border-border text-muted-foreground hover:border-border hover:text-foreground"
                 }`}
               >
                 {lvl === 0 ? "Off" : `${lvl}%`}
@@ -334,8 +334,8 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
         </div>
 
         {/* Channel info */}
-        <div className="rounded-xl bg-white/3 border border-white/7 p-3 space-y-2">
-          <p className="text-[10px] uppercase tracking-widest text-slate-600 mb-2">Hardware</p>
+        <div className="rounded-xl bg-muted border border-border p-3 space-y-2">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Hardware</p>
           {[
             { label: "Protocol",  value: zone.protocol },
             { label: "Universe",  value: zone.universe ?? "—" },
@@ -344,8 +344,8 @@ function ZoneDetailPanel({ zone, onClose, onUpdate }) {
             { label: "Fixtures",  value: zone.fixtures },
           ].map(r => (
             <div key={r.label} className="flex justify-between text-xs">
-              <span className="text-slate-500">{r.label}</span>
-              <span className="text-slate-200 font-medium">{r.value}</span>
+              <span className="text-muted-foreground">{r.label}</span>
+              <span className="text-foreground font-medium">{r.value}</span>
             </div>
           ))}
         </div>

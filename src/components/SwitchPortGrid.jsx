@@ -22,12 +22,19 @@ function portTooltip(port) {
   return parts.join(" · ");
 }
 
+const ROLE_RING = {
+  wan: "ring-1 ring-amber-500/40",
+  cellular: "ring-1 ring-violet-500/40",
+  lan: "",
+};
+
 function PortCell({ port, selected, onClick, compact = false }) {
   const style = PORT_STATUS_STYLES[port.status] ?? PORT_STATUS_STYLES.unknown;
   const hasTraffic = port.status === "up" && (port.inMbps > 0 || port.outMbps > 0);
   const hasPoe = port.poeWatts != null && port.poeWatts > 0;
+  const role = port.portRole || port.meta?.type;
   const w = compact ? "w-8" : "w-9";
-  const h = compact ? "h-10" : port.isUplink ? "h-10 w-8" : "h-12";
+  const h = compact ? "h-10" : port.isUplink || role === "wan" ? "h-10 w-8" : "h-12";
 
   return (
     <button
@@ -38,6 +45,7 @@ function PortCell({ port, selected, onClick, compact = false }) {
         relative ${w} ${h} rounded-md transition-all duration-150 cursor-pointer
         ${style}
         ${port.isUplink ? "ring-1 ring-cyan-500/30" : ""}
+        ${ROLE_RING[role] || ""}
         ${selected ? "ring-2 ring-primary ring-offset-1 ring-offset-background scale-110 z-10" : ""}
       `}
     >
@@ -82,7 +90,59 @@ function PortRow({ ports, selectedPort, onSelectPort, label }) {
   );
 }
 
+function layoutNetworkDevice(ports, chassis) {
+  const slots = chassis.portSlots || [];
+  const wan = ports.filter((p) => p.portRole === "wan" || p.meta?.type === "wan");
+  const cellular = ports.filter((p) => p.portRole === "cellular" || p.meta?.type === "cellular");
+  const lan = ports.filter(
+    (p) => p.portRole === "lan" || p.meta?.type === "lan" || (!p.portRole && !p.isUplink && !wan.includes(p) && !cellular.includes(p))
+  );
+  const uplink = ports.filter((p) => p.isUplink && !wan.includes(p) && p.portRole !== "wan");
+
+  const bySlot = (role) =>
+    slots.length
+      ? ports.filter((p) => slots.find((s) => s.index === p.index && s.role === role))
+      : [];
+
+  if (chassis.layout === "cellular-router") {
+    return {
+      type: "cellular-router",
+      rows: [
+        { label: "WAN", ports: bySlot("wan").length ? bySlot("wan") : wan },
+        { label: "Cellular", ports: bySlot("cellular").length ? bySlot("cellular") : cellular },
+        { label: "LAN", ports: bySlot("lan").length ? bySlot("lan") : lan },
+      ],
+      uplinks: uplink,
+    };
+  }
+  if (chassis.layout === "dual-wan-cellular") {
+    return {
+      type: "dual-wan-cellular",
+      rows: [
+        { label: "WAN", ports: bySlot("wan").length ? bySlot("wan") : wan },
+        { label: "Cellular", ports: bySlot("cellular").length ? bySlot("cellular") : cellular },
+        { label: "LAN", ports: bySlot("lan").length ? bySlot("lan") : lan },
+      ],
+      uplinks: uplink,
+    };
+  }
+  if (chassis.layout === "wan-router") {
+    return {
+      type: "wan-router",
+      rows: [
+        { label: "WAN", ports: bySlot("wan").length ? bySlot("wan") : wan },
+        { label: "LAN", ports: bySlot("lan").length ? bySlot("lan") : lan },
+      ],
+      uplinks: uplink.length ? uplink : ports.filter((p) => p.portRole === "uplink" || p.name?.match(/sfp/i)),
+    };
+  }
+  return null;
+}
+
 function layoutPortGroups(ports, chassis) {
+  const networkLayout = chassis?.portSlots?.length ? layoutNetworkDevice(ports, chassis) : null;
+  if (networkLayout) return networkLayout;
+
   const copper = chassis?.copperPorts || ports.filter((p) => !p.isUplink).length;
   const uplink = chassis?.uplinkPorts || 0;
   const copperPorts = ports.filter((p) => !p.isUplink && p.index <= copper);
@@ -154,7 +214,7 @@ export default function SwitchPortGrid({ ports, chassis, selectedPort, onSelectP
 
       <div
         className={
-          layout.type === "access-uplink"
+          layout.type === "access-uplink" || layout.type === "wan-router"
             ? "flex flex-col lg:flex-row gap-4 lg:items-start"
             : "space-y-2"
         }

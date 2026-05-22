@@ -1,3 +1,5 @@
+import { parseNetworkDeviceModel } from "./networkDeviceCatalog.js";
+
 /**
  * Resolve switch chassis layout from Equipment model numbers
  * (e.g. C9300L-24P-4X-E, CBS350-24P, SG350-28).
@@ -78,6 +80,9 @@ function buildSpec(model, partial) {
  */
 export function parseSwitchModel(model) {
   if (!model || !String(model).trim()) return null;
+
+  const network = parseNetworkDeviceModel(model);
+  if (network) return network;
 
   const raw = String(model).trim();
   const key = raw.toUpperCase().replace(/\s+/g, "");

@@ -1,4 +1,6 @@
 import { useRef, useEffect, useMemo, useState, useCallback } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { readThemeColors } from "@/lib/appearanceSettingsStorage";
 
 const LAYER_ORDER = { encoder: 0, dsp: 1, matrix: 1, decoder: 2, display: 3, none: 1 };
 
@@ -11,6 +13,7 @@ export default function SignalFlowCanvas({
   colorForNode,
   dimensions,
 }) {
+  const { theme } = useTheme();
   const canvasRef = useRef();
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -60,7 +63,8 @@ export default function SignalFlowCanvas({
     canvas.width = width;
     canvas.height = height;
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#060912";
+    const colors = readThemeColors();
+    ctx.fillStyle = colors.background || "#060912";
     ctx.fillRect(0, 0, width, height);
 
     ctx.save();
@@ -82,7 +86,7 @@ export default function SignalFlowCanvas({
       ctx.lineWidth = 2;
       ctx.stroke();
       if (edge.label) {
-        ctx.fillStyle = "rgba(148,163,184,0.9)";
+        ctx.fillStyle = colors.mutedForeground || "rgba(148,163,184,0.9)";
         ctx.font = "10px Inter, sans-serif";
         ctx.fillText(edge.label, midX, midY - 4);
       }
@@ -99,7 +103,7 @@ export default function SignalFlowCanvas({
       ctx.strokeStyle = selected ? "#fff" : color;
       ctx.lineWidth = selected ? 2.5 : 1.5;
       ctx.stroke();
-      ctx.fillStyle = "#fff";
+      ctx.fillStyle = colors.foreground || "#fff";
       ctx.font = "600 11px Inter, sans-serif";
       ctx.textAlign = "center";
       const label = (node.label || node.name || "").slice(0, 16);
@@ -107,7 +111,7 @@ export default function SignalFlowCanvas({
     });
 
     ctx.restore();
-  }, [nodePositions, edges, width, height, pan, zoom, selectedNodeId, colorForNode, centerX, centerY]);
+  }, [nodePositions, edges, width, height, pan, zoom, selectedNodeId, colorForNode, centerX, centerY, theme]);
 
   const screenToWorld = useCallback(
     (clientX, clientY) => {

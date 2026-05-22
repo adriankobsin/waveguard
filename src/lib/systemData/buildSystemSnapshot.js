@@ -1,5 +1,6 @@
 import { formatRelativeTime } from "./formatRelativeTime";
 import { buildSnmpFleetSnapshot } from "@/lib/snmp/snmpAnalytics";
+import { buildWanSnapshot } from "@/lib/wan/buildWanSnapshot";
 
 function countByStatus(devices) {
   const total = devices.length;
@@ -155,6 +156,7 @@ export function buildSystemSnapshot({
   logs = [],
   rules = [],
   snmpSwitches = { profiles: [], global: {} },
+  wanManagement = null,
 }) {
   const devices = equipment.map((eq) => {
     const status = eq.status || "online";
@@ -194,6 +196,7 @@ export function buildSystemSnapshot({
   ].slice(0, 8);
 
   const wanDevice = findWanDevice(devices);
+  const wanFromNetwork = buildWanSnapshot(snmpSwitches, equipment, null, wanManagement);
   const upsList = findUpsDevices(devices);
   const mainUps = upsList[0];
 
@@ -207,7 +210,7 @@ export function buildSystemSnapshot({
   return {
     monitoredCount: devices.length,
     categories: {
-      network: { label: "Switches & routers", ...network },
+      network: { label: "Core network", ...network },
       av: { label: "AV systems", ...av },
       control: { label: "Control processors", ...control },
       lighting: { label: "Lighting zones", ...lighting },
@@ -219,20 +222,34 @@ export function buildSystemSnapshot({
     offlineDevices: offline.map((d) => ({ name: d.name, ip: d.ip || "—", id: d.id })),
     recentEvents: sortedLogs.slice(0, 8).map(formatLogEvent),
     recommendations: buildRecommendations(devices, tasks),
-    wan: {
-      status: wanDevice?.status === "online" ? "online" : wanDevice?.status === "offline" ? "offline" : "warning",
-      name: wanDevice?.name || "WAN",
-      downloadMbps:
-        wanDevice?.responseTimeMs != null
-          ? Math.round((120 - Math.min(wanDevice.responseTimeMs, 100)) * 0.5 * 10) / 10
-          : wanDevice?.status === "online"
-            ? 24.3
-            : 0,
-      uploadMbps:
-        wanDevice?.status === "online"
-          ? Math.round((wanDevice?.responseTimeMs != null ? 18 : 12) * 10) / 10
-          : 0,
-    },
+    wan: wanFromNetwork.configured
+      ? {
+          ...wanFromNetwork,
+          status: wanFromNetwork.selected?.status || "offline",
+          name: wanFromNetwork.selected?.name || "WAN",
+          downloadMbps: wanFromNetwork.selected?.downloadMbps ?? 0,
+          uploadMbps: wanFromNetwork.selected?.uploadMbps ?? 0,
+          isp: wanFromNetwork.selected?.isp,
+          publicIp: wanFromNetwork.selected?.publicIp,
+        }
+      : {
+          configured: false,
+          availableRouters: wanFromNetwork.availableRouters,
+          ports: [],
+          selected: null,
+          status: wanDevice?.status === "online" ? "online" : wanDevice?.status === "offline" ? "offline" : "warning",
+          name: wanDevice?.name || "WAN",
+          downloadMbps:
+            wanDevice?.responseTimeMs != null
+              ? Math.round((120 - Math.min(wanDevice.responseTimeMs, 100)) * 0.5 * 10) / 10
+              : wanDevice?.status === "online"
+                ? 24.3
+                : 0,
+          uploadMbps:
+            wanDevice?.status === "online"
+              ? Math.round((wanDevice?.responseTimeMs != null ? 18 : 12) * 10) / 10
+              : 0,
+        },
     ups: mainUps
       ? {
           name: mainUps.name,

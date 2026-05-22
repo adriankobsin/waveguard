@@ -62,8 +62,10 @@ export default function SnmpSwitchWorkspace({
           {sw.chassis && (
             <p className="text-xs text-muted-foreground">{sw.chassis.label}</p>
           )}
-          {!sw.chassis && sw.model && (
-            <p className="text-xs text-amber-400/90">Model not recognized — set a standard SKU (e.g. C9300L-24P-4X-E)</p>
+          {!sw.chassis && (
+            <p className="text-xs text-amber-400/90">
+              Model not recognized — set SKU to Peplink Balance 2500 EC, MAX BR1 Pro, MAX BR2 Pro, or a Cisco model.
+            </p>
           )}
           {sw.location && <p className="text-xs text-muted-foreground">{sw.location}</p>}
         </div>

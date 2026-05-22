@@ -155,7 +155,7 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onAcknowledge, onA
                   to="/snmp"
                   className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
                 >
-                  <Network size={12} /> Open in Switch Management
+                  <Network size={12} /> Open in Core Network
                 </Link>
               )}
 

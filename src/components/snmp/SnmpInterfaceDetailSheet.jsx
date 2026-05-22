@@ -114,7 +114,28 @@ export default function SnmpInterfaceDetailSheet({
               <DetailRow label="Out octets" value={String(port.outOctets)} mono />
             )}
             <DetailRow label="PoE" value={poeLabel} />
+            {port.portRole && <DetailRow label="Port role" value={port.portRole} />}
           </Section>
+
+          {port.meta && (
+            <Section title="WAN / cellular" icon={Server}>
+              <DetailRow label="Type" value={port.meta.type} />
+              <DetailRow label="Public IP" value={port.meta.publicIp} mono />
+              <DetailRow
+                label="Signal"
+                value={
+                  port.meta.signalDbm != null ? `${port.meta.signalDbm} dBm` : null
+                }
+              />
+              <DetailRow label="Carrier" value={port.meta.carrier} />
+              <DetailRow
+                label="VPN"
+                value={
+                  port.meta.vpnUp == null ? null : port.meta.vpnUp ? "Connected" : "Down"
+                }
+              />
+            </Section>
+          )}
 
           <Section title="L2 neighbour" icon={Server}>
             <DetailRow label="Detected name" value={port.connectedDevice} />

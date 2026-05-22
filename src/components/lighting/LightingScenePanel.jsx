@@ -12,9 +12,9 @@ const SCENE_ICONS = {
 
 export default function LightingScenePanel({ scenes, activeScene, loading, onTrigger }) {
   return (
-    <div className="border-b border-white/6 pb-2">
+    <div className="border-b border-border pb-2">
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Preset Scenes</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Preset Scenes</p>
         {loading && <Loader2 size={12} className="text-amber-400 animate-spin" />}
       </div>
       <div className="px-3 space-y-1.5">
@@ -30,21 +30,21 @@ export default function LightingScenePanel({ scenes, activeScene, loading, onTri
               onClick={() => onTrigger(scene)}
               disabled={loading}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left transition-all disabled:opacity-60 ${
-                isActive ? scene.activeBg : `hover:bg-white/4 border-transparent hover:border-white/8 ${scene.color}`
+                isActive ? scene.activeBg : `hover:bg-muted border-transparent hover:border-border ${scene.color}`
               } ${isActive ? scene.color : ""}`}
             >
-              <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? "bg-white/15" : "bg-white/6"}`}>
+              <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${isActive ? "bg-muted/305" : "bg-muted"}`}>
                 {loading && isActive
                   ? <Loader2 size={13} className="animate-spin" />
                   : <Icon size={13} />
                 }
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xs font-semibold text-white leading-none">{scene.name}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 truncate">{scene.description}</p>
+                <p className="text-xs font-semibold text-foreground leading-none">{scene.name}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{scene.description}</p>
               </div>
               {isActive && !loading && (
-                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-white/15 flex-shrink-0">ACTIVE</span>
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted/305 flex-shrink-0">ACTIVE</span>
               )}
             </motion.button>
           );

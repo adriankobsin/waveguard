@@ -18,11 +18,23 @@ import {
 } from "../scanner/index.js";
 import {
   SNMP_SWITCHES_SETTINGS_KEY,
+  PEPLINK_CREDENTIALS_KEY,
   normalizeSnmpSwitchesState,
+  normalizeSnmpSwitchProfile,
   mergePollIntoProfile,
   buildConnectionMap,
   portCountFromModel,
+  buildDefaultProfileFields,
+  profileIdForEquipment,
+  normalizeSnmpPort,
 } from "../src/lib/snmp/snmpSwitchProfiles.js";
+import {
+  CREDENTIALS_VAULT_KEY,
+  normalizeCredentialsVault,
+} from "../src/lib/credentials/credentialsVault.js";
+import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
+import { fetchPeplinkStatus, testPeplinkConnection } from "../scanner/integrations/peplinkPoll.js";
+import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -261,7 +273,7 @@ function generateMockEquipment(count) {
   const items = [
     { name: "SW-Bridge", model: "Cisco CBS350-24P", category: "Network", ip: "192.168.10.2", location: "Bridge Rack", serial: "FOC2241X0AB", condition: "Excellent" },
     { name: "SW-CCTV", model: "Cisco CBS350-8P", category: "Network", ip: "192.168.10.3", location: "Bridge Rack", serial: "FOC2241X0AC", condition: "Good" },
-    { name: "Router-WAN", model: "Cisco ISR 1100", category: "Network", ip: "10.0.0.1", location: "Bridge Rack", serial: "ISR1100-001", condition: "Excellent" },
+    { name: "Router-WAN", make: "Peplink", model: "Balance 2500 EC", category: "Network", ip: "10.0.0.1", location: "Bridge Rack", serial: "PPL-B2500-001", condition: "Excellent", notes: "Primary WAN router — Starlink + 4G failover" },
     { name: "UPS-Main", model: "APC SRT 3000", category: "Power", ip: "192.168.10.100", location: "Engine Room", serial: "APC-SRT-001", condition: "Good" },
     { name: "Cam-Bow-01", model: "Dahua IPC-HFW2831T", category: "Camera", ip: "192.168.20.10", location: "Bow - External", serial: "DAHUA-001", condition: "Fair" },
     { name: "Cam-Stern-01", model: "Dahua IPC-HFW2831T", category: "Camera", ip: "192.168.20.11", location: "Stern - External", serial: "DAHUA-002", condition: "Excellent" },
@@ -817,6 +829,63 @@ function getSnmpSwitchesState() {
   return normalizeSnmpSwitchesState(raw || { profiles: [] });
 }
 
+/** Ensure Router-WAN is registered in Core Network with polled Peplink WAN ports. */
+function ensureDefaultWanRouterProfile() {
+  const routerEq = db.equipment.find((e) => /router-wan/i.test(e.name || ""));
+  if (!routerEq) return;
+
+  const state = getSnmpSwitchesState();
+  let profile = state.profiles.find((p) => p.equipmentId === routerEq.id);
+  if (!profile) {
+    const defaults = buildDefaultProfileFields(routerEq);
+    profile = normalizeSnmpSwitchProfile({
+      equipmentId: routerEq.id,
+      location: routerEq.location || "",
+      ...defaults,
+      enabled: true,
+    });
+    state.profiles.push(profile);
+  }
+
+  const hasWanPorts = (profile.lastPoll?.ports || []).some(
+    (p) => p.meta?.type === "wan" || p.meta?.type === "cellular" || /wan|cell/i.test(p.name || "")
+  );
+  if (!hasWanPorts) {
+    const ip = equipmentIp(routerEq);
+    const pep = buildMockPeplinkPoll(routerEq.model, ip);
+    const poll = {
+      ...pep,
+      sysName: routerEq.name,
+      ports: (pep.ports || []).map((p) => normalizeSnmpPort(p)).filter(Boolean),
+    };
+    const updated = mergePollIntoProfile(profile, poll, { equipment: routerEq });
+    const idx = state.profiles.findIndex((p) => p.id === updated.id);
+    if (idx >= 0) state.profiles[idx] = updated;
+    else state.profiles.push(updated);
+    saveSnmpSwitchesState(state);
+  }
+}
+
+function resolveWanProfile(profileId) {
+  const state = getSnmpSwitchesState();
+  let profile = state.profiles.find((p) => p.id === profileId);
+  if (profile) return { profile, state };
+
+  const equipmentId = String(profileId || "").replace(/^snmp-sw-/, "");
+  const eq = db.equipment.find((e) => e.id === equipmentId);
+  if (!eq) return { profile: null, state };
+
+  const defaults = buildDefaultProfileFields(eq);
+  profile = normalizeSnmpSwitchProfile({
+    id: profileIdForEquipment(eq.id),
+    equipmentId: eq.id,
+    location: eq.location || "",
+    ...defaults,
+    enabled: true,
+  });
+  return { profile, state };
+}
+
 function saveSnmpSwitchesState(state) {
   const normalized = normalizeSnmpSwitchesState(state);
   const row = db.systemSettings.find((s) => s.key === SNMP_SWITCHES_SETTINGS_KEY);
@@ -861,13 +930,64 @@ function resolveProfilePollOpts(profile) {
   };
 }
 
+function getPeplinkCredentials() {
+  const row = db.systemSettings.find((s) => s.key === PEPLINK_CREDENTIALS_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return raw || {
+    incontrolClientId: process.env.PEPLINK_INCONTROL_CLIENT_ID || "",
+    incontrolClientSecret: process.env.PEPLINK_INCONTROL_CLIENT_SECRET || "",
+    incontrolOrgId: process.env.PEPLINK_INCONTROL_ORG_ID || "",
+  };
+}
+
+function savePeplinkCredentials(creds) {
+  const row = db.systemSettings.find((s) => s.key === PEPLINK_CREDENTIALS_KEY);
+  if (row) row.value = creds;
+  else {
+    db.systemSettings.push({
+      id: `setting-peplink-${Date.now()}`,
+      key: PEPLINK_CREDENTIALS_KEY,
+      value: creds,
+    });
+  }
+  return creds;
+}
+
 async function pollProfileAndSave(profile) {
   const opts = resolveProfilePollOpts(profile);
   if (!opts.ip) {
-    return { profile, error: "Switch has no IP address in Equipment" };
+    return { profile, poll: null, error: "Device has no IP address in Equipment" };
   }
   const eq = db.equipment.find((e) => e.id === profile.equipmentId);
-  const poll = await pollSwitchPorts(opts.ip, opts);
+  const disc = getDiscoverySettings();
+  let poll = await pollSwitchPorts(opts.ip, opts);
+
+  const usePeplink =
+    profile.pollMethod === "peplink_hybrid" || profile.integrationVendor === "peplink";
+  if (usePeplink) {
+    try {
+      const pep = await fetchPeplinkStatus(profile, {
+        ip: opts.ip,
+        equipment: eq,
+        forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
+        globalPeplinkCreds: getPeplinkCredentials(),
+      });
+      poll = mergePeplinkIntoPoll(poll, pep);
+    } catch (err) {
+      console.warn("[pollProfileAndSave] Peplink enrich failed:", err.message);
+      if (!poll?.ports?.length) {
+        poll = { ...poll, error: err.message };
+      }
+    }
+  }
+
   const global = getSnmpSwitchesState().global;
   const updated = mergePollIntoProfile(profile, poll, {
     trafficHistorySamples: global?.trafficHistorySamples,
@@ -922,19 +1042,22 @@ app.post("/api/apps/:appId/functions/snmpPollAll", async (_req, res) => {
     const enabled = state.profiles.filter((p) => p.enabled !== false);
     const pollResults = [];
     for (const profile of enabled) {
-      const { profile: updated, poll } = await pollProfileAndSave(profile);
+      const { profile: updated, poll, error } = await pollProfileAndSave(profile);
       const idx = state.profiles.findIndex((p) => p.id === updated.id);
       if (idx >= 0) state.profiles[idx] = updated;
       const eq = db.equipment.find((e) => e.id === profile.equipmentId);
-      pollResults.push({
-        ...poll,
-        ip: poll.ip || equipmentIp(eq),
-        name: poll.name || eq?.name,
-        location: updated.location || eq?.location,
-        deckId: updated.deckId,
-        roomId: updated.roomId,
-        equipmentId: profile.equipmentId,
-      });
+      if (poll) {
+        pollResults.push({
+          ...poll,
+          ip: poll.ip || equipmentIp(eq),
+          name: poll.name || eq?.name,
+          location: updated.location || eq?.location,
+          deckId: updated.deckId,
+          roomId: updated.roomId,
+          equipmentId: profile.equipmentId,
+          error: error || poll.error,
+        });
+      }
     }
     saveSnmpSwitchesState(state);
     const aggregate = buildPollAllResponse(pollResults);
@@ -945,6 +1068,110 @@ app.post("/api/apps/:appId/functions/snmpPollAll", async (_req, res) => {
     });
   } catch (err) {
     console.error("[snmpPollAll]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+function getCredentialsVault() {
+  const row = db.systemSettings.find((s) => s.key === CREDENTIALS_VAULT_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeCredentialsVault(raw || []);
+}
+
+function saveCredentialsVault(credentials) {
+  const normalized = normalizeCredentialsVault(credentials);
+  const row = db.systemSettings.find((s) => s.key === CREDENTIALS_VAULT_KEY);
+  if (row) row.value = normalized;
+  else {
+    db.systemSettings.push({
+      id: `setting-cred-vault-${Date.now()}`,
+      key: CREDENTIALS_VAULT_KEY,
+      value: normalized,
+    });
+  }
+  return normalized;
+}
+
+app.get("/api/apps/:appId/credentials/vault", (_req, res) => {
+  res.json(getCredentialsVault());
+});
+
+app.put("/api/apps/:appId/credentials/vault", (req, res) => {
+  const saved = saveCredentialsVault(req.body);
+  res.json(saved);
+});
+
+app.get("/api/apps/:appId/peplink/credentials", (_req, res) => {
+  const creds = getPeplinkCredentials();
+  res.json({
+    incontrolOrgId: creds.incontrolOrgId || "",
+    incontrolClientId: creds.incontrolClientId ? "••••••••" : "",
+    hasClientSecret: !!creds.incontrolClientSecret,
+  });
+});
+
+app.put("/api/apps/:appId/peplink/credentials", (req, res) => {
+  const existing = getPeplinkCredentials();
+  const body = req.body || {};
+  savePeplinkCredentials({
+    incontrolOrgId: body.incontrolOrgId ?? existing.incontrolOrgId,
+    incontrolClientId: body.incontrolClientId || existing.incontrolClientId,
+    incontrolClientSecret:
+      body.incontrolClientSecret || existing.incontrolClientSecret,
+  });
+  res.json({ success: true });
+});
+
+app.post("/api/apps/:appId/functions/peplinkTestConnection", async (req, res) => {
+  try {
+    const { equipmentId, profile: draft } = req.body || {};
+    const state = getSnmpSwitchesState();
+    let profile = state.profiles.find((p) => p.equipmentId === equipmentId);
+    if (draft?.equipmentId) profile = { ...profile, ...draft };
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "Managed device profile not found" });
+    }
+    const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+    const disc = getDiscoverySettings();
+    const result = await testPeplinkConnection(profile, {
+      ip: equipmentIp(eq),
+      equipment: eq,
+      forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
+      globalPeplinkCreds: getPeplinkCredentials(),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[peplinkTestConnection]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wanSpeedTest", async (req, res) => {
+  try {
+    const { profileId, portIndex, portName } = req.body || {};
+    const { profile } = resolveWanProfile(profileId);
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "WAN management router not found" });
+    }
+    const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+    const disc = getDiscoverySettings();
+    const result = await runWanSpeedTest(profile, {
+      ip: equipmentIp(eq),
+      equipment: eq,
+      wanIndex: Number(portIndex) || 1,
+      portName: portName || "",
+      forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
+    });
+    res.json({ ...result, profileId: profile.id, portIndex: Number(portIndex) || 1 });
+  } catch (err) {
+    console.error("[wanSpeedTest]", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -1897,6 +2124,8 @@ app.delete("/api/apps/:appId/users/:id", (req, res) => {
 });
 
 // ---- Start ----
+ensureDefaultWanRouterProfile();
+
 app.listen(PORT, () => {
   console.log(`[mock-base44] Server running at http://localhost:${PORT}`);
   console.log(`[mock-base44] App ID: ${APP_ID}`);

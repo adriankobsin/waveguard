@@ -13,7 +13,7 @@ export default function LightingZoneList({ zones, selectedZone, onSelectZone, on
     <div className="space-y-2 max-w-3xl mx-auto">
       {zones.map((zone, i) => {
         const isSelected = selectedZone === zone.id;
-        const pcls = PROTOCOL_COLORS[zone.protocol] || "text-slate-400 bg-slate-500/10 border-slate-500/20";
+        const pcls = PROTOCOL_COLORS[zone.protocol] || "text-muted-foreground bg-slate-500/10 border-slate-500/20";
 
         return (
           <motion.div
@@ -27,23 +27,23 @@ export default function LightingZoneList({ zones, selectedZone, onSelectZone, on
                 ? "border-amber-500/40 bg-amber-500/8"
                 : zone.fault
                 ? "border-red-500/25 bg-red-500/5 hover:bg-red-500/8"
-                : "border-white/6 bg-white/2 hover:bg-white/5 hover:border-white/12"
+                : "border-border bg-muted/50 hover:bg-secondary hover:border-border"
             }`}
           >
             {/* Status indicator */}
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              zone.fault ? "bg-red-500/15" : zone.on ? "bg-amber-500/15" : "bg-white/5"
+              zone.fault ? "bg-red-500/15" : zone.on ? "bg-amber-500/15" : "bg-secondary"
             }`}>
               {zone.fault
                 ? <AlertTriangle size={16} className="text-red-400" />
-                : <Lightbulb size={16} className={zone.on ? "text-amber-400" : "text-slate-600"} />
+                : <Lightbulb size={16} className={zone.on ? "text-amber-400" : "text-muted-foreground"} />
               }
             </div>
 
             {/* Name + location */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-0.5">
-                <p className="text-sm font-semibold text-white truncate">{zone.name}</p>
+                <p className="text-sm font-semibold text-foreground truncate">{zone.name}</p>
                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${pcls}`}>
                   {zone.protocol}
                 </span>
@@ -53,14 +53,14 @@ export default function LightingZoneList({ zones, selectedZone, onSelectZone, on
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-500 truncate">{zone.location} · {zone.fixtures} fixtures · Ch {zone.channel}</p>
+              <p className="text-xs text-muted-foreground truncate">{zone.location} · {zone.fixtures} fixtures · Ch {zone.channel}</p>
             </div>
 
             {/* Dimmer slider */}
             <div className="w-32 flex-shrink-0 hidden sm:block" onClick={e => e.stopPropagation()}>
               <div className="flex justify-between text-[10px] mb-1">
-                <span className="text-slate-600">Level</span>
-                <span className={zone.on ? "text-amber-400 font-bold" : "text-slate-600"}>{zone.on ? `${zone.level}%` : "Off"}</span>
+                <span className="text-muted-foreground">Level</span>
+                <span className={zone.on ? "text-amber-400 font-bold" : "text-muted-foreground"}>{zone.on ? `${zone.level}%` : "Off"}</span>
               </div>
               <input
                 type="range" min={0} max={100} value={zone.level}
@@ -73,7 +73,7 @@ export default function LightingZoneList({ zones, selectedZone, onSelectZone, on
             {/* Toggle */}
             <button
               onClick={e => { e.stopPropagation(); onUpdateZone(zone.id, { on: !zone.on }); }}
-              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${zone.on ? "bg-amber-500" : "bg-white/10"}`}
+              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${zone.on ? "bg-amber-500" : "bg-muted"}`}
             >
               <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${zone.on ? "translate-x-5" : "translate-x-0"}`} />
             </button>

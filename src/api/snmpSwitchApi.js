@@ -12,8 +12,13 @@ import {
   buildConnectionMap,
 } from "@/lib/snmp/snmpSwitchProfiles";
 import { buildMockPollResult } from "@/lib/snmp/snmpMockPoll";
+import {
+  buildMockPeplinkPoll,
+  mergePeplinkIntoPoll,
+} from "@/lib/integrations/peplink/peplinkAdapter";
 import { portCountFromModel } from "@/lib/snmp/switchModelCatalog";
 import { listEquipment, updateEquipment } from "@/api/equipmentApi";
+import { isDemoModeActive } from "@/lib/platformMode";
 
 async function postSnmpFunction(functionName, body) {
   const base = getMockAppApiBase();
@@ -32,6 +37,10 @@ async function postSnmpFunction(functionName, body) {
 }
 
 async function loadFromSystemSettings() {
+  if (isDemoModeActive()) {
+    const demo = await import("@/lib/demo/demoSystemSnapshot");
+    return normalizeSnmpSwitchesState(demo.getDemoSnmpSwitches());
+  }
   try {
     const records = await base44.entities.SystemSettings.filter({ key: SNMP_SWITCHES_SETTINGS_KEY });
     if (records.length > 0 && records[0].value != null) {
@@ -46,6 +55,9 @@ async function loadFromSystemSettings() {
 
 async function persistToSystemSettings(state) {
   const normalized = normalizeSnmpSwitchesState(state);
+  if (isDemoModeActive()) {
+    return normalized;
+  }
   saveSnmpSwitchesLocal(normalized);
   try {
     const records = await base44.entities.SystemSettings.filter({ key: SNMP_SWITCHES_SETTINGS_KEY });
@@ -67,6 +79,7 @@ async function persistToSystemSettings(state) {
 }
 
 async function syncEquipmentLocations(profiles) {
+  if (isDemoModeActive()) return;
   for (const p of profiles || []) {
     if (!p.equipmentId) continue;
     try {
@@ -93,15 +106,21 @@ async function clientPollSwitch(equipmentId) {
   const stateFull = await loadFromSystemSettings();
   const portCount =
     portCountFromModel(eq?.model, profile.portCount) || profile.portCount || 12;
-  const poll = buildMockPollResult(ip, eq?.name || profile.id, portCount);
+  let poll = buildMockPollResult(ip, eq?.name || profile.id, portCount);
+  if (profile.pollMethod === "peplink_hybrid" || profile.integrationVendor === "peplink") {
+    const pep = buildMockPeplinkPoll(eq?.model, ip);
+    poll = mergePeplinkIntoPoll(poll, pep);
+  }
   const updated = mergePollIntoProfile(profile, poll, {
     trafficHistorySamples: stateFull.global?.trafficHistorySamples,
     equipment: eq,
   });
-  const nextState = {
-    profiles: state.profiles.map((p) => (p.id === updated.id ? updated : p)),
-  };
-  await persistToSystemSettings(nextState);
+  if (!isDemoModeActive()) {
+    const nextState = {
+      profiles: state.profiles.map((p) => (p.id === updated.id ? updated : p)),
+    };
+    await persistToSystemSettings(nextState);
+  }
   return {
     success: true,
     profile: updated,
@@ -174,6 +193,9 @@ export async function saveManagedSwitches(state) {
 }
 
 export async function pollSwitch(equipmentId) {
+  if (isDemoModeActive()) {
+    return clientPollSwitch(equipmentId);
+  }
   if (isMockServer) {
     const server = await postSnmpFunction("snmpPollSwitch", { equipmentId });
     if (server) return server;
@@ -184,9 +206,11 @@ export async function pollSwitch(equipmentId) {
 }
 
 export async function pollAll() {
-  if (isMockServer) {
-    const server = await postSnmpFunction("snmpPollAll", {});
-    if (server) return server;
+  if (isDemoModeActive() || isMockServer) {
+    if (!isDemoModeActive()) {
+      const server = await postSnmpFunction("snmpPollAll", {});
+      if (server) return server;
+    }
     const state = await loadFromSystemSettings();
     const enabled = state.profiles.filter((p) => p.enabled !== false);
     const profiles = [];
@@ -202,6 +226,13 @@ export async function pollAll() {
 }
 
 export async function testInterface(equipmentId, ifIndex) {
+  if (isDemoModeActive()) {
+    const poll = await clientPollSwitch(equipmentId);
+    const port = poll.profile?.lastPoll?.ports?.find((p) => p.index === Number(ifIndex));
+    return port
+      ? { success: true, port, polledAt: new Date().toISOString(), source: "mock" }
+      : { success: false, message: `Interface ${ifIndex} not found` };
+  }
   if (isMockServer) {
     const server = await postSnmpFunction("snmpTestInterface", { equipmentId, ifIndex });
     if (server) return server;
@@ -212,6 +243,22 @@ export async function testInterface(equipmentId, ifIndex) {
       : { success: false, message: `Interface ${ifIndex} not found` };
   }
   const res = await base44.functions.invoke("snmpTestInterface", { equipmentId, ifIndex });
+  return res.data;
+}
+
+export async function testPeplinkConnection(equipmentId, profileDraft = null) {
+  if (isMockServer) {
+    const server = await postSnmpFunction("peplinkTestConnection", {
+      equipmentId,
+      profile: profileDraft,
+    });
+    if (server) return server;
+    return { success: true, source: "peplink-mock", portCount: 5, online: true };
+  }
+  const res = await base44.functions.invoke("peplinkTestConnection", {
+    equipmentId,
+    profile: profileDraft,
+  });
   return res.data;
 }
 

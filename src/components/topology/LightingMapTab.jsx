@@ -87,11 +87,11 @@ function ZoneMarker({ zone, selected, onClick }) {
 
       {/* Status dot */}
       {zone.status !== "ok" && (
-        <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#060912] ${sc.dot}`} />
+        <span className={`absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${sc.dot}`} />
       )}
 
       {/* Label tooltip */}
-      <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] font-medium text-slate-400 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-[#060912]/90 px-1.5 py-0.5 rounded">
+      <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] font-medium text-muted-foreground whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none bg-background/90 px-1.5 py-0.5 rounded">
         {zone.name}
       </span>
     </motion.button>
@@ -113,14 +113,14 @@ function ZonePanel({ zone, onClose, onUpdate }) {
         transition={{ duration: 0.18 }}
         className="absolute top-4 right-4 w-72 z-20 pointer-events-auto"
       >
-        <div className="rounded-2xl border border-white/10 bg-[#0a0f1c]/95 backdrop-blur-xl shadow-2xl overflow-hidden">
+        <div className="rounded-2xl border border-border bg-secondary/95 backdrop-blur-xl shadow-2xl overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/8">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
             <div className="flex items-center gap-2.5">
               <Lightbulb size={14} style={{ color: zone.active ? zone.color : "#475569" }} />
-              <p className="text-sm font-semibold text-white truncate">{zone.name}</p>
+              <p className="text-sm font-semibold text-foreground truncate">{zone.name}</p>
             </div>
-            <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            <button onClick={onClose} className="w-6 h-6 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
               <X size={12} />
             </button>
           </div>
@@ -130,7 +130,7 @@ function ZonePanel({ zone, onClose, onUpdate }) {
             <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${pc.bg} ${pc.text} ${pc.border}`}>
               {zone.protocol}
             </span>
-            <span className="text-xs font-medium px-2.5 py-1 rounded-full border border-white/10 text-slate-400">
+            <span className="text-xs font-medium px-2.5 py-1 rounded-full border border-border text-muted-foreground">
               {zone.deck}
             </span>
             <span className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full border ${zone.status === "ok" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-red-500/30 bg-red-500/10 text-red-400"}`}>
@@ -141,15 +141,15 @@ function ZonePanel({ zone, onClose, onUpdate }) {
 
           {/* Address */}
           <div className="px-4 pt-2 pb-3 flex justify-between text-xs">
-            <span className="text-slate-500">Address</span>
-            <span className="font-mono text-slate-300">{zone.address}</span>
+            <span className="text-muted-foreground">Address</span>
+            <span className="font-mono text-secondary-foreground">{zone.address}</span>
           </div>
 
           {/* Power toggle */}
-          <div className="px-4 py-3 border-t border-white/6 flex items-center justify-between">
+          <div className="px-4 py-3 border-t border-border flex items-center justify-between">
             <div>
-              <p className="text-sm text-white font-medium">{zone.active ? "On" : "Off"}</p>
-              <p className="text-xs text-slate-500">Quick toggle</p>
+              <p className="text-sm text-foreground font-medium">{zone.active ? "On" : "Off"}</p>
+              <p className="text-xs text-muted-foreground">Quick toggle</p>
             </div>
             <button
               onClick={() => onUpdate(zone.id, { active: !zone.active })}
@@ -160,9 +160,9 @@ function ZonePanel({ zone, onClose, onUpdate }) {
           </div>
 
           {/* Level slider */}
-          <div className="px-4 pb-4 border-t border-white/6 pt-3">
+          <div className="px-4 pb-4 border-t border-border pt-3">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-slate-500 flex items-center gap-1"><Sliders size={10} /> Dim level</p>
+              <p className="text-xs text-muted-foreground flex items-center gap-1"><Sliders size={10} /> Dim level</p>
               <p className="text-xs font-bold" style={{ color: zone.active ? zone.color : "#475569" }}>{zone.level}%</p>
             </div>
             <input
@@ -183,7 +183,7 @@ function ZonePanel({ zone, onClose, onUpdate }) {
                   className={`flex-1 text-[10px] py-1 rounded-lg border transition-colors disabled:opacity-30 ${
                     zone.level === v
                       ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
-                      : "border-white/8 text-slate-500 hover:border-white/20 hover:text-slate-300"
+                      : "border-border text-muted-foreground hover:border-border hover:text-secondary-foreground"
                   }`}
                 >
                   {v === 0 ? "Off" : v === 100 ? "Full" : `${v}%`}
@@ -203,7 +203,7 @@ function ZoneRow({ zone, selected, onClick, onToggle, onLevel }) {
   return (
     <div
       className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors ${
-        selected ? "bg-white/8 border border-white/12" : "hover:bg-white/4 border border-transparent"
+        selected ? "bg-muted border border-border" : "hover:bg-muted border border-transparent"
       }`}
       onClick={onClick}
     >
@@ -214,11 +214,11 @@ function ZoneRow({ zone, selected, onClick, onToggle, onLevel }) {
       </div>
 
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-slate-200 truncate">{zone.name}</p>
+        <p className="text-xs font-medium text-foreground truncate">{zone.name}</p>
         <div className="flex items-center gap-2 mt-0.5">
           <span className={`text-[10px] ${pc.text}`}>{zone.protocol}</span>
-          <span className="text-[10px] text-slate-600">·</span>
-          <span className="text-[10px] text-slate-500">{zone.deck}</span>
+          <span className="text-[10px] text-muted-foreground">·</span>
+          <span className="text-[10px] text-muted-foreground">{zone.deck}</span>
           {zone.status !== "ok" && <span className="text-[10px] text-red-400">⚠ Fault</span>}
         </div>
       </div>
@@ -226,7 +226,7 @@ function ZoneRow({ zone, selected, onClick, onToggle, onLevel }) {
       {/* Level bar */}
       <div className="w-10 flex flex-col items-end gap-0.5">
         <span className="text-[10px] font-mono" style={{ color: zone.active ? zone.color : "#475569" }}>{zone.level}%</span>
-        <div className="w-10 h-1 bg-white/8 rounded-full overflow-hidden">
+        <div className="w-10 h-1 bg-muted rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all" style={{ width: `${zone.level}%`, background: zone.active ? zone.color : "#334155" }} />
         </div>
       </div>
@@ -238,7 +238,7 @@ function ZoneRow({ zone, selected, onClick, onToggle, onLevel }) {
       >
         {zone.active
           ? <ToggleRight size={18} style={{ color: zone.color }} />
-          : <ToggleLeft size={18} className="text-slate-600" />}
+          : <ToggleLeft size={18} className="text-muted-foreground" />}
       </button>
     </div>
   );
@@ -294,17 +294,17 @@ export default function LightingMapTab() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* ── Left: floor plan ─────────────────────────────────────────────── */}
-      <div className="flex-1 relative bg-[#060912] overflow-hidden">
+      <div className="flex-1 relative bg-background overflow-hidden">
 
         {/* Toolbar */}
         <div className="absolute top-3 left-3 right-3 z-10 flex items-center gap-2 flex-wrap">
           {/* Deck filter */}
-          <div className="flex items-center gap-1 bg-[#0a0f1c]/90 border border-white/10 rounded-xl px-2 py-1.5 backdrop-blur">
+          <div className="flex items-center gap-1 bg-secondary/90 border border-border rounded-xl px-2 py-1.5 backdrop-blur">
             {DECKS.map(d => (
               <button
                 key={d}
                 onClick={() => setDeckFilter(d)}
-                className={`text-[10px] px-2 py-0.5 rounded-lg transition-colors ${deckFilter === d ? "bg-amber-500/25 text-amber-400" : "text-slate-500 hover:text-slate-300"}`}
+                className={`text-[10px] px-2 py-0.5 rounded-lg transition-colors ${deckFilter === d ? "bg-amber-500/25 text-amber-400" : "text-muted-foreground hover:text-secondary-foreground"}`}
               >
                 {d}
               </button>
@@ -312,14 +312,14 @@ export default function LightingMapTab() {
           </div>
 
           {/* Protocol filter */}
-          <div className="flex items-center gap-1 bg-[#0a0f1c]/90 border border-white/10 rounded-xl px-2 py-1.5 backdrop-blur">
+          <div className="flex items-center gap-1 bg-secondary/90 border border-border rounded-xl px-2 py-1.5 backdrop-blur">
             {["All", ...PROTOCOLS].map(p => {
               const pc = PROTOCOL_COLORS[p];
               return (
                 <button
                   key={p}
                   onClick={() => setProtoFilter(p)}
-                  className={`text-[10px] px-2 py-0.5 rounded-lg transition-colors ${protoFilter === p ? (pc ? `${pc.bg} ${pc.text}` : "bg-white/10 text-white") : "text-slate-500 hover:text-slate-300"}`}
+                  className={`text-[10px] px-2 py-0.5 rounded-lg transition-colors ${protoFilter === p ? (pc ? `${pc.bg} ${pc.text}` : "bg-muted text-foreground") : "text-muted-foreground hover:text-secondary-foreground"}`}
                 >
                   {p}
                 </button>
@@ -329,10 +329,10 @@ export default function LightingMapTab() {
 
           <div className="flex items-center gap-1.5 ml-auto">
             <button onClick={allOn}  className="text-[10px] px-2.5 py-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors flex items-center gap-1"><SunMedium size={10} />All on</button>
-            <button onClick={allOff} className="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-600/40 bg-slate-500/10 text-slate-400 hover:bg-slate-500/20 transition-colors flex items-center gap-1"><Moon size={10} />All off</button>
+            <button onClick={allOff} className="text-[10px] px-2.5 py-1.5 rounded-lg border border-slate-600/40 bg-slate-500/10 text-muted-foreground hover:bg-slate-500/20 transition-colors flex items-center gap-1"><Moon size={10} />All off</button>
             <button
               onClick={() => setAddMode(m => !m)}
-              className={`text-[10px] px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${addMode ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-400" : "border-white/10 text-slate-400 hover:text-slate-200"}`}
+              className={`text-[10px] px-2.5 py-1.5 rounded-lg border transition-colors flex items-center gap-1 ${addMode ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-400" : "border-border text-muted-foreground hover:text-foreground"}`}
             >
               <Plus size={10} /> {addMode ? "Click to place…" : "Add zone"}
             </button>
@@ -393,12 +393,12 @@ export default function LightingMapTab() {
         </div>
 
         {/* Stats strip */}
-        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-3 bg-[#0a0f1c]/90 border border-white/8 rounded-xl px-3 py-2 backdrop-blur text-xs">
+        <div className="absolute bottom-3 left-3 z-10 flex items-center gap-3 bg-secondary/90 border border-border rounded-xl px-3 py-2 backdrop-blur text-xs">
           <span className="flex items-center gap-1.5 text-amber-400"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{activeCt} on</span>
-          <span className="flex items-center gap-1.5 text-slate-500"><span className="w-1.5 h-1.5 rounded-full bg-slate-600" />{zones.length - activeCt} off</span>
+          <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-1.5 h-1.5 rounded-full bg-slate-600" />{zones.length - activeCt} off</span>
           {faultCt > 0 && <span className="flex items-center gap-1.5 text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-400" />{faultCt} fault</span>}
-          <span className="text-slate-600">·</span>
-          <span className="text-slate-500">{zones.length} zones</span>
+          <span className="text-muted-foreground">·</span>
+          <span className="text-muted-foreground">{zones.length} zones</span>
         </div>
 
         {/* Selected zone detail panel */}
@@ -412,11 +412,11 @@ export default function LightingMapTab() {
       </div>
 
       {/* ── Right: zone list ──────────────────────────────────────────────── */}
-      <div className="w-64 flex flex-col border-l border-white/6 bg-[#070b13]/80 overflow-hidden flex-shrink-0">
+      <div className="w-64 flex flex-col border-l border-border bg-card/80 overflow-hidden flex-shrink-0">
         {/* List header */}
         <button
           onClick={() => setListExpanded(e => !e)}
-          className="flex items-center justify-between px-4 py-3 border-b border-white/6 text-xs font-semibold text-slate-300 hover:bg-white/4 transition-colors"
+          className="flex items-center justify-between px-4 py-3 border-b border-border text-xs font-semibold text-secondary-foreground hover:bg-muted transition-colors"
         >
           <span className="flex items-center gap-2">
             <Lightbulb size={12} className="text-amber-400" />
@@ -426,7 +426,7 @@ export default function LightingMapTab() {
         </button>
 
         {/* Protocol legend */}
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-white/4">
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-border">
           {PROTOCOLS.map(p => {
             const pc = PROTOCOL_COLORS[p];
             return (
@@ -442,7 +442,7 @@ export default function LightingMapTab() {
         {listExpanded && (
           <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
             {filteredZones.length === 0 ? (
-              <div className="text-center py-8 text-xs text-slate-600">No zones match filters</div>
+              <div className="text-center py-8 text-xs text-muted-foreground">No zones match filters</div>
             ) : (
               filteredZones.map(zone => (
                 <ZoneRow

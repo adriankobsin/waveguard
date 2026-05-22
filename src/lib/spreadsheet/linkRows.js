@@ -9,6 +9,7 @@ import {
   vlansToDiscoverySubnets,
   racksToLayout,
 } from "./normalize.js";
+import { stripVesselEquipmentName } from "./equipmentName.js";
 
 function equipmentKey(eq) {
   return (eq.name || "").trim().toLowerCase();
@@ -58,9 +59,10 @@ export function buildImportPayload(parsed, options = {}) {
       for (const row of sheet.ports || []) {
         const cable = switchPortToCable(row);
         if (cable) cables.push(cable);
-        if (row.endDevice && !equipmentByName.has(equipmentKey({ name: row.endDevice }))) {
+        const endName = stripVesselEquipmentName(row.endDevice || "");
+        if (endName && !equipmentByName.has(equipmentKey({ name: endName }))) {
           addEquipment({
-            name: row.endDevice,
+            name: endName,
             model: "",
             category: "Other",
             location: row.location || "",

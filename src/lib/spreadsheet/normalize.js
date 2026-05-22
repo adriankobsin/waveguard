@@ -1,4 +1,5 @@
 import { DEFAULT_FLOOR_MAP, SHEET_GROUPS } from "./schemas.js";
+import { stripVesselEquipmentName } from "./equipmentName.js";
 
 const SYSTEM_TO_CATEGORY = {
   IT: "Network",
@@ -40,8 +41,9 @@ export function mapSystemToCategory(system, type) {
 }
 
 function baseEquipment(fields) {
+  const name = fields.name != null ? stripVesselEquipmentName(fields.name) : "";
   return {
-    name: "",
+    name,
     model: "",
     category: "Other",
     ip: "",
@@ -61,6 +63,7 @@ function baseEquipment(fields) {
     waveguardClassification: "inventory",
     importSource: null,
     ...fields,
+    name,
   };
 }
 
@@ -115,15 +118,17 @@ export function applianceToEquipment(row) {
 }
 
 export function patchToCable(row, floorMap) {
-  const label = row.cableNo || `${row.patchPanel}-P${row.port}`;
-  const fromEq = row.patchPanel ? `${row.patchPanel} P${row.port}` : "";
+  const panel = stripVesselEquipmentName(row.patchPanel || "");
+  const endDevice = stripVesselEquipmentName(row.endDevice || "");
+  const label = row.cableNo || `${panel || row.patchPanel}-P${row.port}`;
+  const fromEq = panel ? `${panel} P${row.port}` : row.patchPanel ? `${row.patchPanel} P${row.port}` : "";
   const notes = [row.notes, row.testedLength].filter(Boolean).join("; ");
   return {
     label,
     type: row.type || "",
     system_category: row.system || "",
     from_equipment: fromEq,
-    to_equipment: row.endDevice || "",
+    to_equipment: endDevice,
     length: "",
     deck: floorToDeckName(row.floor, floorMap) || row.floor || "",
     status: "installed",
@@ -133,11 +138,12 @@ export function patchToCable(row, floorMap) {
 }
 
 export function switchPortToCable(row) {
-  const fromEq = `${row.switchHostname} ${row.interface}`;
-  const toEq = row.endDevice || row.patchPanel || "";
+  const switchName = stripVesselEquipmentName(row.switchHostname || "");
+  const toEq = stripVesselEquipmentName(row.endDevice || row.patchPanel || "");
   if (!toEq) return null;
+  const fromEq = `${switchName} ${row.interface}`.trim();
   return {
-    label: `${row.switchHostname}-${row.interface}`,
+    label: `${switchName}-${row.interface}`,
     type: "Patch",
     system_category: "Network",
     from_equipment: fromEq,
@@ -210,7 +216,7 @@ export function racksToLayout(sheets) {
       placements[`${rackId}-${p.uPosition}`] = {
         rackId,
         u: parseInt(p.uPosition, 10) || 0,
-        label: p.equipment,
+        label: stripVesselEquipmentName(p.equipment),
       };
     }
   }
