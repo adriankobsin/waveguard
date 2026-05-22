@@ -15,10 +15,11 @@ Local-first monitoring, documentation, troubleshooting, and AI-assisted support 
 | **Inventory** | Equipment database with grid/list views, **vessel spreadsheet import** (Albatros-style multi-sheet `.xlsx`), bulk edit/delete |
 | **Maintenance** | Scheduled task management with priority levels, status tracking, and due-date alerts |
 | **Automation** | Rule engine for event-triggered and scheduled actions with execution logs |
+| **Lighting Control** | Multi-system lighting management — Lutron (integration report + load schedule CSV), KNX, DALI, DMX. Area-based load monitoring, per-zone sliders, scene activation, shade/blind open/close/stop, load schedule table, offline mock engine |
 | **AI Assistant** | LLM-powered chat for AV/IT troubleshooting, document search, and system queries |
-| **Diagnostics** | System health checks, port scanning, and equipment diagnostics |
+| **Diagnostics** | System health checks, port scanning, equipment diagnostics, lighting processor connection testing (Telnet/LEAP/KNX/DALI/DMX port probing) |
 | **Documents** | Technical document management and search |
-| **Reports** | Generated reports with PDF download |
+| **Reports** | Generated reports with PDF download, lighting integration report parser, load schedule CSV import |
 | **User Management** | Role-based access control with invite system |
 
 ## Tech Stack
@@ -28,6 +29,7 @@ Local-first monitoring, documentation, troubleshooting, and AI-assisted support 
 - **Charts:** Recharts
 - **Data:** TanStack React Query, SheetJS (`xlsx`), jsPDF, html2canvas
 - **Network scanner:** Node.js (`scanner/`) — ping, ARP, port probe, optional SNMP
+- **Lighting integrations:** Lutron Telnet/LEAP, KNXnet/IP, DALI-IP, DMX Art-Net/sACN (mock engines + live clients)
 - **Backend:** Base44 platform (production) or local mock server (development)
 
 ## Getting Started
@@ -111,6 +113,74 @@ Then `npm run dev`. The app connects to your live Base44 backend — no mock ser
 
 Configure default subnets and SNMP options under **Settings → Discovery**.
 
+## Lighting Control
+
+WaveGuard supports four lighting system types through a common adapter interface:
+
+| System | Protocol | Live Client | Mock Engine |
+|---|---|---|---|
+| **Lutron** | Telnet (port 23), LEAP (port 8081) | TCP telnet client | In-memory zone/scene/button state |
+| **KNX** | KNXnet/IP tunnelling (UDP 3671) | UDP KNX client | In-memory group address state |
+| **DALI** | DALI-IP bridge (TCP 5582) | TCP DALI client | In-memory ballast state |
+| **DMX** | Art-Net (UDP 6454), sACN (UDP 5568) | UDP Art-Net/sACN client | In-memory channel state |
+
+### Importing data
+
+1. **Open Lighting → Import report**
+2. Pick the **Integration Report PDF** exported from Lutron Designer (zones, areas, scenes, keypads)
+3. Optionally pick the **Load Schedule CSV** (panel assignments, load types, wattages)
+4. Both files are parsed and merged into a single lighting house
+
+The load schedule CSV uses area sections with columns: Zone Name, Zone Description, Load #, Load Type, Assigned To, Total Wattage. The `Assigned To` column contains hierarchical paths (`Floor\Panel\Module\Output`) that link integration report zones to physical wiring.
+
+### Browsing loads
+
+- **Loads by Area** tab — hierarchical floor/area view with per-zone sliders, shade Open/Close/Stop buttons, and scene activation
+- **Area Control** tab — per-floor zone map or list view with scenes sidebar
+- **Lighting Map** tab — whole-house topology with zone-level controls
+- **Schedule** button (visible after CSV import) — collapsible table with search/filter, panel grouping, load type icons, and wattage display
+
+### Shade / blind zones
+
+Zones identified as shade, blind, or blackout (by `kind` field or name keywords) show Open/Close/Stop buttons instead of light sliders. Supported keywords: shade, blind, blackout, venetian, roman, curtain.
+
+### Live processor connection
+
+Configure the processor address and credentials under **Settings → Lighting** or via the **key icon** in the Lighting page header. When enabled, the app routes commands through the live protocol instead of the local mock engine. Connection testing probes ports and provides setup recommendations.
+
+### Architecture
+
+```
+┌──────────────────────┐
+│  React Lighting UI   │
+│  (zone controls,     │
+│   scene activation,  │
+│   schedule table)    │
+└──────────┬───────────┘
+           │
+┌──────────▼───────────┐
+│  lightingApi.js      │
+│  (generic HTTP API)  │
+└──────────┬───────────┘
+           │ HTTP /api
+┌──────────▼───────────┐
+│  Mock Server         │
+│  (server.js)         │
+│                      │
+│  ┌─ Lutron engine    │
+│  ├─ KNX engine       │
+│  ├─ DALI engine      │
+│  └─ DMX engine       │
+│                      │
+│  ┌─ Lutron client ──►│  TCP telnet
+│  ├─ KNX client ────► │  UDP KNXnet/IP
+│  ├─ DALI client ───► │  TCP DALI-IP
+│  └─ DMX client ───►  │  UDP Art-Net/sACN
+└──────────────────────┘
+```
+
+Each system type follows the `lightingSystemTemplate.js` interface. Adapters are registered in `lightingRegistry.js` and can run in **mock mode** (in-memory engine for offline/demo) or **live mode** (connects to a real controller via its native protocol).
+
 ## Vessel spreadsheet import
 
 **Inventory → Import spreadsheet** accepts multi-sheet `.xlsx` workbooks (e.g. Albatros vessel network spreadsheets):
@@ -140,6 +210,11 @@ Configure default subnets and SNMP options under **Settings → Discovery**.
 └────────────────────────┘          │         │                  │
                                     │         ▼                  │
                                     │  scanner/ (ping/arp/snmp)  │
+                                    │  scanner/integrations/     │
+                                    │    ├─ lutron/lutronClient  │
+                                    │    ├─ knx/knxClient        │
+                                    │    ├─ dali/daliClient      │
+                                    │    └─ dmx/dmxClient        │
                                     └────────────────────────────┘
 ```
 
@@ -149,25 +224,38 @@ On `localhost`, API calls route to the mock server unless `VITE_BASE44_APP_BASE_
 
 ```
 src/
-├── api/                    # SDK client, equipment API, vessel import API
+├── api/                    # SDK client, equipment API, vessel import API, lighting API
 ├── components/
 │   ├── ui/                 # Radix UI primitives
 │   ├── dashboard/
 │   ├── discovery/          # Network discovery UI
-│   ├── topology/           # Network list, deck map, racks, signal flows
+│   ├── topology/           # Network list, deck map, racks, signal flows, lighting map tab
 │   ├── inventory/          # Vessel spreadsheet import modal
+│   ├── lighting/           # Lighting zone controls, import modal, connection modal,
+│   │                       # scene panel, system status, load schedule table
 │   ├── shared/             # Bulk action bar, bulk edit modal
 │   ├── snmp/
 │   └── automation/
 ├── hooks/                  # useBulkSelection, useRackLayout, etc.
 ├── lib/
+│   ├── integrations/       # Lighting system adapters (lutron, knx, dali, dmx),
+│   │                       # lighting registry, system template, peplink adapter
+│   ├── lighting/           # Settings, integration report parser, load schedule CSV
+│   │                       # parser, PDF text extractor, lighting hierarchy builder
 │   ├── spreadsheet/        # Vessel .xlsx parse, normalize, commit
 │   ├── topology/           # Sync, persist, session cache
 │   ├── discoveryApi.js
 │   └── discoveryRegistration.js
-└── pages/
+└── pages/                  # LightingPage, settings, dashboard, etc.
 scanner/                    # LAN discovery (ping, ARP, ports, SNMP, topology graph)
-mock-server/                # Express mock API + entity store
+scanner/integrations/
+├── lutron/lutronClient.js  # Live Lutron Telnet client
+├── knx/knxClient.js        # Live KNXnet/IP client
+├── dali/daliClient.js      # Live DALI-IP bridge client
+├── dmx/dmxClient.js        # Live DMX Art-Net/sACN client
+├── peplinkPoll.js
+└── wanSpeedTest.js
+mock-server/                # Express mock API + entity store + lighting mock engines
 base44/functions/           # Serverless function entry points (production)
 ```
 
@@ -175,7 +263,8 @@ base44/functions/           # Serverless function entry points (production)
 
 - **Equipment** is the source of truth for device metadata (name, IP, notes, location). Topology scans merge into this store on refresh; edits and per-device scans write back immediately.
 - **Session cache** (`src/lib/topology/topologySessionCache.js`) keeps the topology view when switching sidebar routes — no rescan on return.
-- Mock server data is in-memory; restart clears unless you rely on imported equipment persisted during the session.
+- **Lighting**: The lighting house (parsed integration report + load schedule) is persisted under the `lighting-house` settings key with a localStorage cache. Per-zone live state is kept separately under `lighting-zone-state`.
+- **Mock server** data is in-memory; restart clears unless you rely on imported equipment persisted during the session.
 
 ## License
 
