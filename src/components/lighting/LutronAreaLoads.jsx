@@ -5,6 +5,7 @@ import {
   Sun,
   Moon,
   ChevronDown,
+  ChevronUp,
   ChevronRight,
   Power,
   PlayCircle,
@@ -12,7 +13,9 @@ import {
   Building2,
   MapPin,
   Wand2,
+  Square,
 } from "lucide-react";
+import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
 const KIND_META = {
   light: {
@@ -56,12 +59,13 @@ function kindMeta(kind) {
   return KIND_META[kind] || KIND_META.load;
 }
 
-function ZoneRow({ zone, state, pending, onLevelChange, onToggle }) {
+function ZoneRow({ zone, state, pending, onLevelChange, onToggle, onStopShade }) {
   const meta = kindMeta(zone.kind);
   const Icon = meta.icon;
   const level = state?.level ?? 0;
   const isOn = state?.on ?? false;
   const isBusy = !!pending;
+  const shade = isShadeZone(zone);
   return (
     <motion.div
       layout
@@ -94,41 +98,74 @@ function ZoneRow({ zone, state, pending, onLevelChange, onToggle }) {
         </p>
       </div>
 
-      <div className="hidden sm:block w-36 flex-shrink-0">
-        <div className="flex justify-between text-[10px] mb-0.5">
-          <span className="text-muted-foreground">Level</span>
-          <span
-            className={isOn ? "text-amber-400 font-bold" : "text-muted-foreground"}
+      {shade ? (
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => onLevelChange(zone, 100)}
+            disabled={isBusy}
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+            title="Open"
           >
-            {isOn ? `${level}%` : "Off"}
-          </span>
+            <ChevronUp size={14} className="text-sky-400" />
+          </button>
+          <button
+            onClick={() => onLevelChange(zone, 0)}
+            disabled={isBusy}
+            className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+            title="Close"
+          >
+            <ChevronDown size={14} className="text-sky-400" />
+          </button>
+          {onStopShade && (
+            <button
+              onClick={() => onStopShade(zone)}
+              disabled={isBusy}
+              className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+              title="Stop"
+            >
+              <Square size={12} className="text-muted-foreground" />
+            </button>
+          )}
         </div>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={level}
-          disabled={isBusy}
-          onChange={(e) => onLevelChange(zone, Number(e.target.value))}
-          className="w-full h-1.5 cursor-pointer disabled:opacity-50"
-          style={{ accentColor: "#f59e0b" }}
-        />
-      </div>
+      ) : (
+        <>
+          <div className="hidden sm:block w-36 flex-shrink-0">
+            <div className="flex justify-between text-[10px] mb-0.5">
+              <span className="text-muted-foreground">Level</span>
+              <span
+                className={isOn ? "text-amber-400 font-bold" : "text-muted-foreground"}
+              >
+                {isOn ? `${level}%` : "Off"}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={level}
+              disabled={isBusy}
+              onChange={(e) => onLevelChange(zone, Number(e.target.value))}
+              className="w-full h-1.5 cursor-pointer disabled:opacity-50"
+              style={{ accentColor: "#f59e0b" }}
+            />
+          </div>
 
-      <button
-        onClick={() => onToggle(zone, !isOn)}
-        disabled={isBusy}
-        className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
-          isOn ? "bg-amber-500" : "bg-muted"
-        }`}
-        title={isOn ? "Turn off" : "Turn on"}
-      >
-        <span
-          className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-            isOn ? "translate-x-5" : "translate-x-0"
-          }`}
-        />
-      </button>
+          <button
+            onClick={() => onToggle(zone, !isOn)}
+            disabled={isBusy}
+            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+              isOn ? "bg-amber-500" : "bg-muted"
+            }`}
+            title={isOn ? "Turn off" : "Turn on"}
+          >
+            <span
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                isOn ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </>
+      )}
 
       {isBusy && (
         <Loader2 size={12} className="text-amber-400 animate-spin flex-shrink-0" />
@@ -143,6 +180,7 @@ function AreaCard({
   pending,
   onZoneLevel,
   onZoneToggle,
+  onStopShade,
   onActivateScene,
   pendingScene,
   expanded,
@@ -255,6 +293,7 @@ function AreaCard({
                       pending={pending[z.href]}
                       onLevelChange={onZoneLevel}
                       onToggle={onZoneToggle}
+                      onStopShade={onStopShade}
                     />
                   ))}
                 </div>
@@ -267,10 +306,6 @@ function AreaCard({
   );
 }
 
-/**
- * Loads-by-area view. Renders the lighting hierarchy (floors → areas → zones)
- * with per-zone level/toggle controls and per-area scene buttons.
- */
 export default function LutronAreaLoads({
   hierarchy,
   zoneState,
@@ -278,6 +313,7 @@ export default function LutronAreaLoads({
   pendingScene,
   onZoneLevel,
   onZoneToggle,
+  onStopShade,
   onActivateScene,
   defaultFloor,
 }) {
@@ -396,6 +432,7 @@ export default function LutronAreaLoads({
                         pendingScene={pendingScene}
                         onZoneLevel={onZoneLevel}
                         onZoneToggle={onZoneToggle}
+                        onStopShade={onStopShade}
                         onActivateScene={onActivateScene}
                         expanded={openAreas.has(area.fullPath || area.id)}
                         onToggleExpanded={() =>

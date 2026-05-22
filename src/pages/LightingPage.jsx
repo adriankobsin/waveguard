@@ -45,12 +45,11 @@ import {
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
-  isShadeZone,
 } from "@/lib/lighting/lightingSettings";
 
 const PAGE_TABS = [
   { key: "loads", label: "Loads by Area", icon: Lightbulb },
-  { key: "control", label: "Deck Control", icon: LayoutGrid },
+  { key: "control", label: "Area Control", icon: LayoutGrid },
   { key: "topology", label: "Lighting Map", icon: GitBranch },
 ];
 
@@ -186,6 +185,20 @@ export default function LightingPage() {
       await handleZoneLevel(zone, next);
     },
     [zoneState, handleZoneLevel]
+  );
+
+  const handleStopShade = useCallback(
+    async (zone) => {
+      setPendingZone(zone.href, true);
+      try {
+        await stopShade({ zoneHref: zone.href });
+      } catch (err) {
+        reportLightingError(`Could not stop ${zone.name || "shade"}`, err);
+      } finally {
+        setPendingZone(zone.href, false);
+      }
+    },
+    [reportLightingError]
   );
 
   const handleActivateScene = useCallback(
@@ -494,6 +507,7 @@ export default function LightingPage() {
               pendingScene={pendingScene}
               onZoneLevel={handleZoneLevel}
               onZoneToggle={handleZoneToggle}
+              onStopShade={handleStopShade}
               onActivateScene={handleActivateScene}
             />
           )}
@@ -654,6 +668,7 @@ export default function LightingPage() {
                           onSelectZone={setSelectedZoneHref}
                           onZoneLevel={handleZoneLevel}
                           onZoneToggle={handleZoneToggle}
+                          onStopShade={handleStopShade}
                         />
                       </motion.div>
                     )}
@@ -676,6 +691,7 @@ export default function LightingPage() {
             pendingScene={pendingScene}
             onZoneLevel={handleZoneLevel}
             onZoneToggle={handleZoneToggle}
+            onStopShade={handleStopShade}
             onActivateScene={handleActivateScene}
           />
         </div>

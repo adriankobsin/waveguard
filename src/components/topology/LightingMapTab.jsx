@@ -15,18 +15,9 @@ import {
   Power,
   PlayCircle,
   Filter,
+  Square,
 } from "lucide-react";
-
-/**
- * Whole-house Lighting Map.
- *
- * Renders the imported Lutron house as a stack of floors → areas → zone
- * markers (no floor-plan coordinates are present in the Integration Report,
- * so areas are auto-laid-out as a grid per floor). All control is driven
- * through the same page-level handlers as the other lighting tabs so a
- * click here issues a live LEAP / Telnet command (or hits the local mock
- * engine when no processor is configured).
- */
+import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
 const KIND_ACCENT = {
   light:    { label: "Lights",    color: "#f59e0b", bg: "bg-amber-500/15",  text: "text-amber-400",   border: "border-amber-500/30" },
@@ -184,12 +175,14 @@ function ZonePanel({
   onClose,
   onZoneLevel,
   onZoneToggle,
+  onStopShade,
   onActivateScene,
 }) {
   const a = accent(zone.kind);
   const isOn = state?.on ?? false;
   const level = state?.level ?? 0;
   const busy = !!pending;
+  const shade = isShadeZone(zone);
   return (
     <motion.div
       key={zone.href}
@@ -239,67 +232,100 @@ function ZonePanel({
           </span>
         </div>
 
-        <div className="px-4 py-3 border-t border-border flex items-center justify-between">
-          <div>
-            <p className="text-sm text-foreground font-medium">
-              {isOn ? "On" : "Off"}
-            </p>
-            <p className="text-xs text-muted-foreground">Quick toggle</p>
-          </div>
-          <button
-            onClick={() => onZoneToggle(zone, !isOn)}
-            disabled={busy}
-            className={`relative w-12 h-6 rounded-full transition-all disabled:opacity-50 ${
-              isOn ? "bg-amber-500" : "bg-secondary border border-border"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                isOn ? "translate-x-6" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
-
-        <div className="px-4 pb-4 border-t border-border pt-3">
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs text-muted-foreground flex items-center gap-1">
-              <Sliders size={10} /> Level
-            </p>
-            <p
-              className="text-xs font-bold"
-              style={{ color: isOn ? a.color : "#64748b" }}
-            >
-              {level}%
-            </p>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={level}
-            disabled={busy}
-            onChange={(e) => onZoneLevel(zone, Number(e.target.value))}
-            className="w-full h-1.5 rounded-full appearance-none cursor-pointer disabled:opacity-40"
-            style={{ accentColor: a.color }}
-          />
-          <div className="flex justify-between mt-2 gap-1">
-            {[0, 25, 50, 75, 100].map((v) => (
+        {shade ? (
+          <div className="px-4 py-3 border-t border-border">
+            <p className="text-xs text-muted-foreground mb-2">Shade control</p>
+            <div className="flex items-center gap-2">
               <button
-                key={v}
-                onClick={() => onZoneLevel(zone, v)}
+                onClick={() => onZoneLevel(zone, 100)}
                 disabled={busy}
-                className={`flex-1 text-[10px] py-1 rounded-lg border transition-colors disabled:opacity-30 ${
-                  level === v
-                    ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
-                    : "border-border text-muted-foreground hover:text-secondary-foreground"
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-400 text-xs font-semibold hover:bg-sky-500/20 disabled:opacity-40 transition-colors"
+              >
+                <ChevronUp size={14} /> Open
+              </button>
+              <button
+                onClick={() => onZoneLevel(zone, 0)}
+                disabled={busy}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-muted text-muted-foreground text-xs font-semibold hover:bg-secondary disabled:opacity-40 transition-colors"
+              >
+                <ChevronDown size={14} /> Close
+              </button>
+              {onStopShade && (
+                <button
+                  onClick={() => onStopShade(zone)}
+                  disabled={busy}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-border bg-muted text-muted-foreground text-xs font-semibold hover:bg-secondary disabled:opacity-40 transition-colors"
+                >
+                  <Square size={12} /> Stop
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="px-4 py-3 border-t border-border flex items-center justify-between">
+              <div>
+                <p className="text-sm text-foreground font-medium">
+                  {isOn ? "On" : "Off"}
+                </p>
+                <p className="text-xs text-muted-foreground">Quick toggle</p>
+              </div>
+              <button
+                onClick={() => onZoneToggle(zone, !isOn)}
+                disabled={busy}
+                className={`relative w-12 h-6 rounded-full transition-all disabled:opacity-50 ${
+                  isOn ? "bg-amber-500" : "bg-secondary border border-border"
                 }`}
               >
-                {v === 0 ? "Off" : v === 100 ? "Full" : `${v}%`}
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    isOn ? "translate-x-6" : "translate-x-0"
+                  }`}
+                />
               </button>
-            ))}
-          </div>
-        </div>
+            </div>
+
+            <div className="px-4 pb-4 border-t border-border pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Sliders size={10} /> Level
+                </p>
+                <p
+                  className="text-xs font-bold"
+                  style={{ color: isOn ? a.color : "#64748b" }}
+                >
+                  {level}%
+                </p>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={level}
+                disabled={busy}
+                onChange={(e) => onZoneLevel(zone, Number(e.target.value))}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer disabled:opacity-40"
+                style={{ accentColor: a.color }}
+              />
+              <div className="flex justify-between mt-2 gap-1">
+                {[0, 25, 50, 75, 100].map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => onZoneLevel(zone, v)}
+                    disabled={busy}
+                    className={`flex-1 text-[10px] py-1 rounded-lg border transition-colors disabled:opacity-30 ${
+                      level === v
+                        ? "border-amber-500/40 bg-amber-500/15 text-amber-400"
+                        : "border-border text-muted-foreground hover:text-secondary-foreground"
+                    }`}
+                  >
+                    {v === 0 ? "Off" : v === 100 ? "Full" : `${v}%`}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
 
         {areaScenes && areaScenes.length > 0 && (
           <div className="px-4 pb-4 border-t border-border pt-3">
@@ -348,6 +374,7 @@ export default function LightingMapTab({
   pendingScene,
   onZoneLevel,
   onZoneToggle,
+  onStopShade,
   onActivateScene,
 }) {
   const [floorFilter, setFloorFilter] = useState("all");
@@ -561,6 +588,7 @@ export default function LightingMapTab({
               onClose={() => setSelectedHref(null)}
               onZoneLevel={onZoneLevel}
               onZoneToggle={onZoneToggle}
+              onStopShade={onStopShade}
               onActivateScene={onActivateScene}
             />
           )}
@@ -608,6 +636,7 @@ export default function LightingMapTab({
                 const level = state?.level ?? 0;
                 const isSel = selectedHref === z.href;
                 const a = accent(z.kind);
+                const shade = isShadeZone(z);
                 return (
                   <div
                     key={z.href}
@@ -658,7 +687,7 @@ export default function LightingMapTab({
                         className="text-[9px] font-mono"
                         style={{ color: isOn ? a.color : "#64748b" }}
                       >
-                        {level}%
+                        {shade ? (level >= 50 ? "Open" : "Closed") : level}
                       </span>
                       <div className="w-10 h-1 bg-muted rounded-full overflow-hidden">
                         <div

@@ -1,14 +1,6 @@
 import { motion } from "framer-motion";
 import { Lightbulb, Sun, Moon, MapPin, Loader2 } from "lucide-react";
-
-/**
- * Per-floor visual zone map.
- *
- * The Lutron Integration Report carries no floor-plan coordinates, so we
- * auto-layout each area as a card containing its zones as tiles. Each tile
- * reflects live state (`zoneState`) and exposes click → select → control
- * via the parent page.
- */
+import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
 const KIND_ACCENT = {
   light:    { color: "#f59e0b", tone: "amber" },
@@ -41,6 +33,7 @@ function ZoneTile({ zone, state, pending, selected, onSelect }) {
   const level = state?.level ?? 0;
   const isOn = state?.on ?? false;
   const busy = !!pending;
+  const shade = isShadeZone(zone);
   return (
     <motion.button
       onClick={(e) => {
@@ -77,18 +70,30 @@ function ZoneTile({ zone, state, pending, selected, onSelect }) {
         </span>
         <span
           className={
-            isOn ? "text-amber-400 font-bold" : "text-muted-foreground"
+            shade
+              ? level >= 50
+                ? "text-sky-400 font-bold"
+                : "text-muted-foreground"
+              : isOn
+              ? "text-amber-400 font-bold"
+              : "text-muted-foreground"
           }
         >
-          {isOn ? `${level}%` : "Off"}
+          {shade ? (level >= 50 ? "Open" : "Closed") : isOn ? `${level}%` : "Off"}
         </span>
       </div>
       <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
         <div
           className="h-full rounded-full transition-all"
           style={{
-            width: `${level}%`,
-            background: isOn ? a.color : "#334155",
+            width: shade ? "100%" : `${level}%`,
+            background: shade
+              ? level >= 50
+                ? a.color
+                : "#334155"
+              : isOn
+              ? a.color
+              : "#334155",
           }}
         />
       </div>

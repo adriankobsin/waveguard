@@ -1,13 +1,6 @@
 import { motion } from "framer-motion";
-import { Lightbulb, Sun, Moon, Loader2 } from "lucide-react";
-
-/**
- * Flat zone list for the selected floor in the Deck Control tab.
- *
- * Renders the live Lutron `zoneState` (level/on) and forwards level / toggle
- * actions back up to the page-level handlers which speak LEAP / Telnet
- * (or the local mock engine when no processor is configured).
- */
+import { Lightbulb, Sun, Moon, Loader2, ChevronUp, ChevronDown, Square } from "lucide-react";
+import { isShadeZone } from "@/lib/lighting/lightingSettings";
 
 const KIND_META = {
   light:    { label: "Light",    Icon: Lightbulb, tone: "amber" },
@@ -36,6 +29,7 @@ export default function LightingZoneList({
   onSelectZone,
   onZoneLevel,
   onZoneToggle,
+  onStopShade,
 }) {
   if (!zones || zones.length === 0) {
     return (
@@ -54,6 +48,7 @@ export default function LightingZoneList({
         const isOn = state?.on ?? false;
         const isBusy = !!pendingZones?.[zone.href];
         const isSelected = selectedHref === zone.href;
+        const shade = isShadeZone(zone);
         return (
           <motion.div
             key={zone.href}
@@ -100,52 +95,88 @@ export default function LightingZoneList({
               </p>
             </div>
 
-            <div
-              className="w-32 flex-shrink-0 hidden sm:block"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex justify-between text-[10px] mb-1">
-                <span className="text-muted-foreground">Level</span>
-                <span
-                  className={
-                    isOn
-                      ? "text-amber-400 font-bold"
-                      : "text-muted-foreground"
-                  }
+            {shade ? (
+              <div
+                className="flex items-center gap-1.5 flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => onZoneLevel(zone, 100)}
+                  disabled={isBusy}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+                  title="Open"
                 >
-                  {isOn ? `${level}%` : "Off"}
-                </span>
+                  <ChevronUp size={14} className="text-sky-400" />
+                </button>
+                <button
+                  onClick={() => onZoneLevel(zone, 0)}
+                  disabled={isBusy}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+                  title="Close"
+                >
+                  <ChevronDown size={14} className="text-sky-400" />
+                </button>
+                {onStopShade && (
+                  <button
+                    onClick={() => onStopShade(zone)}
+                    disabled={isBusy}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+                    title="Stop"
+                  >
+                    <Square size={12} className="text-muted-foreground" />
+                  </button>
+                )}
               </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={level}
-                disabled={isBusy}
-                onChange={(e) =>
-                  onZoneLevel(zone, Number(e.target.value))
-                }
-                className="w-full h-1.5 cursor-pointer disabled:opacity-50"
-                style={{ accentColor: "#f59e0b" }}
-              />
-            </div>
+            ) : (
+              <div
+                className="w-32 flex-shrink-0 hidden sm:block"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-muted-foreground">Level</span>
+                  <span
+                    className={
+                      isOn
+                        ? "text-amber-400 font-bold"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {isOn ? `${level}%` : "Off"}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={level}
+                  disabled={isBusy}
+                  onChange={(e) =>
+                    onZoneLevel(zone, Number(e.target.value))
+                  }
+                  className="w-full h-1.5 cursor-pointer disabled:opacity-50"
+                  style={{ accentColor: "#f59e0b" }}
+                />
+              </div>
+            )}
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onZoneToggle(zone, !isOn);
-              }}
-              disabled={isBusy}
-              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
-                isOn ? "bg-amber-500" : "bg-muted"
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  isOn ? "translate-x-5" : "translate-x-0"
+            {!shade && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onZoneToggle(zone, !isOn);
+                }}
+                disabled={isBusy}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+                  isOn ? "bg-amber-500" : "bg-muted"
                 }`}
-              />
-            </button>
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    isOn ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            )}
 
             {isBusy && (
               <Loader2
