@@ -1558,41 +1558,37 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
           }
 
           const telnetPort = availablePorts.find((p) => p.role === "telnet");
-          if (telnetPort && !telnetPort.open) {
-            return res.json(
-              buildResponse({
-                success: false,
-                mode: "live",
-                message:
-                  `TCP port 23 is closed on ${targetHost}. The processor is ` +
-                  `reachable but Telnet integration is not exposed.`,
-              })
-            );
-          }
+          const portProbeFailed = telnetPort && !telnetPort.open;
 
           if (liveClient) {
             try {
-            await liveClient.connect();
-            await liveClient.ping();
-            return res.json(
-              buildResponse({
-                success: true,
-                mode: "live",
-                authenticatedAs: effectiveUser,
-                product: "Lutron HomeWorks processor",
-                message: `Connected to ${target} and authenticated as ${effectiveUser}.`,
-              })
-            );
-          } catch (err) {
-            return res.json(
-              buildResponse({
-                success: false,
-                mode: "live",
-                message: err.message,
-              })
-            );
+              await liveClient.connect();
+              await liveClient.ping();
+              const msg = portProbeFailed
+                ? `Connected to ${target} (port probe showed closed — connection succeeded anyway).`
+                : `Connected to ${target} and authenticated as ${effectiveUser}.`;
+              return res.json(
+                buildResponse({
+                  success: true,
+                  mode: "live",
+                  authenticatedAs: effectiveUser,
+                  product: "Lutron HomeWorks processor",
+                  message: msg,
+                })
+              );
+            } catch (err) {
+              return res.json(
+                buildResponse({
+                  success: false,
+                  mode: "live",
+                  message: err.message,
+                  recommendation: portProbeFailed
+                    ? recommendation
+                    : `Telnet connection to ${target} failed: ${err.message}. Verify the processor IP, port 23 is open, and Telnet integration is enabled in Lutron Designer.`,
+                })
+              );
+            }
           }
-        }
       } // end if (systemType === "lutron")
 
       // KNX / DALI / DMX — probe ports and try live client

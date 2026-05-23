@@ -496,7 +496,7 @@ export function integrationIdFromHref(href) {
 }
 
 /** Open a TCP socket and resolve to true once it connects (or false on timeout/error). */
-function probeTcpPort(host, port, timeoutMs = 1800) {
+function probeTcpPort(host, port, timeoutMs = 3000) {
   return new Promise((resolve) => {
     const sock = net.createConnection({ host, port });
     let done = false;
