@@ -178,7 +178,7 @@ export default function LightingPage() {
     async (zone, level) => {
       setPendingZone(zone.href, true);
       try {
-        await setZoneLevel({ zoneHref: zone.href, level });
+        await setZoneLevel({ zoneHref: zone.href, level, zoneKind: zone.kind });
       } catch (err) {
         reportLightingError(`Could not set ${zone.name || "zone"}`, err);
       } finally {
@@ -200,7 +200,7 @@ export default function LightingPage() {
     async (zone) => {
       setPendingZone(zone.href, true);
       try {
-        await stopShade({ zoneHref: zone.href });
+        await stopShade({ zoneHref: zone.href, zoneKind: zone.kind });
       } catch (err) {
         reportLightingError(`Could not stop ${zone.name || "shade"}`, err);
       } finally {

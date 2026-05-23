@@ -1302,6 +1302,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
     const {
       op,
       zoneHref,
+      zoneKind,
       sceneHref,
       sceneName,
       sceneAreaId,
@@ -1380,7 +1381,12 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
               error: `Cannot extract Lutron integration ID from href ${zoneHref}`,
             });
           }
-          const result = await liveClient.setOutput(integrationId, level, fadeSeconds || 0);
+          const result = await liveClient.setOutput(
+            integrationId,
+            level,
+            fadeSeconds || 0,
+            zoneKind || null
+          );
           return res.json({
             success: true,
             mode: "live",
@@ -1389,6 +1395,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
               integrationId,
               level: result.level,
               on: result.on,
+              kind: result.kind,
               fade: fadeSeconds || 0,
               updatedAt: result.updatedAt,
             },
@@ -1412,7 +1419,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
               error: `Cannot extract Lutron integration ID from href ${zoneHref}`,
             });
           }
-          await liveClient.raiseLower(integrationId, action);
+          await liveClient.raiseLower(integrationId, action, zoneKind || null);
           return res.json({ success: true, mode: "live", href: zoneHref, action });
         }
         const zone = engine.raiseLower(zoneHref, action);
@@ -1446,12 +1453,18 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             const id = integrationIdFromHref(z.href);
             if (!id) continue;
             try {
-              const r = await liveClient.setOutput(id, z.level, z.fadeSeconds || 0);
+              const r = await liveClient.setOutput(
+                id,
+                z.level,
+                z.fadeSeconds || 0,
+                z.kind || null
+              );
               results.push({
                 href: z.href,
                 integrationId: id,
                 level: r.level,
                 on: r.on,
+                kind: r.kind,
                 updatedAt: r.updatedAt,
               });
             } catch (err) {

@@ -371,8 +371,16 @@ function shouldSurfaceLiveError(remote, liveEnabled) {
   return remote.success === false || remote.mode === "live";
 }
 
-/** Set a zone level (0-100). Returns the new commanded state. */
-export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0 }) {
+/**
+ * Set a zone level (0-100). Returns the new commanded state.
+ *
+ * `zoneKind` is the kind we parsed from the Integration Report
+ * ("shade", "blind", "blackout", "switched", "dimmed", ...). The LEAP
+ * client uses it to pick the correct CreateRequest shape on HomeWorks QSX
+ * (a shade rejected as a dimmer is a silent no-op on most firmwares), so
+ * always pass it from the UI when we know it.
+ */
+export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind = null }) {
   if (!zoneHref) throw new Error("zoneHref required");
   const clamped = Math.max(0, Math.min(100, Number(level) || 0));
 
@@ -387,6 +395,7 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0 }) {
 
   const remote = await callMockLutron("setZoneLevel", {
     zoneHref,
+    zoneKind,
     level: clamped,
     fadeSeconds,
   });
@@ -615,9 +624,10 @@ export function subscribeLutronEvents(onUpdate) {
 
 /**
  * Stop a moving shade/blind. Sends the raiseLowerStop command to halt
- * the shade at its current position.
+ * the shade at its current position. `zoneKind` is forwarded so the LEAP
+ * client can seed its kind cache without an extra ReadRequest probe.
  */
-export async function stopShade({ zoneHref }) {
+export async function stopShade({ zoneHref, zoneKind = "shade" } = {}) {
   if (!zoneHref) throw new Error("zoneHref required");
   if (isDemoModeActive() || !isMockServer) {
     return getLocalEngine().raiseLower(zoneHref, "stop");
@@ -625,10 +635,34 @@ export async function stopShade({ zoneHref }) {
 
   const remote = await callMockLutron("raiseLowerStop", {
     zoneHref,
+    zoneKind,
     action: "stop",
   });
   if (remote?.success) return remote;
   return getLocalEngine().raiseLower(zoneHref, "stop");
+}
+
+/**
+ * Continuous-direction shade/blind commands — start raising, lowering, or
+ * stop. Exposed as a separate function so the UI can implement press-and-
+ * hold style controls.
+ */
+export async function raiseLowerShade({ zoneHref, action = "stop", zoneKind = "shade" } = {}) {
+  if (!zoneHref) throw new Error("zoneHref required");
+  if (!["raise", "lower", "stop"].includes(action)) {
+    throw new Error(`raiseLowerShade: invalid action "${action}"`);
+  }
+  if (isDemoModeActive() || !isMockServer) {
+    return getLocalEngine().raiseLower(zoneHref, action);
+  }
+
+  const remote = await callMockLutron("raiseLowerStop", {
+    zoneHref,
+    zoneKind,
+    action,
+  });
+  if (remote?.success) return remote;
+  return getLocalEngine().raiseLower(zoneHref, action);
 }
 
 /**

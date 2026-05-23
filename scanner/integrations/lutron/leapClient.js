@@ -686,6 +686,20 @@ class LutronLeapClientWrapper extends EventEmitter {
     this.host = opts.host;
     this.port = Number(opts.port) || LEAP_PORT;
     this.lastLevels = new Map();
+    // Authoritative per-zone control type cache: "dimmed" | "switched" |
+    // "shade" | "tilt" | "shadeAndTilt". Populated by:
+    //   1. The zone-status subscription when a zone carries Lift/Tilt
+    //      payloads (shades + tilt-only).
+    //   2. A lazy ReadRequest /zone/<id> probe that asks the processor
+    //      what ControlType the zone has the moment we first need to send
+    //      it a command. Once known, setOutput / raiseLower can pick the
+    //      right CreateRequest shape without guessing.
+    //   3. An explicit `kindHint` passed by the API (the UI knows from the
+    //      parsed Integration Report which zones are shades / blinds).
+    this._kindByZone = new Map();
+    // In-flight probe promises, so concurrent setOutput calls for the
+    // same zone share a single ReadRequest.
+    this._kindProbes = new Map();
     this.disposed = false;
     this.state = "disconnected";
     this.client = null;
@@ -784,9 +798,101 @@ class LutronLeapClientWrapper extends EventEmitter {
     for (const entry of candidates) {
       const parsed = parseZoneStatusEntry(entry);
       if (!parsed) continue;
+      // Once we've learned the authoritative ControlType from a ReadRequest
+      // probe, prefer it over the subscription's best-guess: on most HWQS
+      // firmwares the live ZoneStatus for a shade still only carries
+      // `Level` (no `Lift`/`Tilt`), so the parser falls back to "dimmed"
+      // and we'd send the wrong CreateRequest. The probed kind is correct.
+      const learned = this._kindByZone.get(parsed.id);
+      if (learned) parsed.kind = learned;
+      else if (parsed.kind !== "dimmed") this._kindByZone.set(parsed.id, parsed.kind);
       this.lastLevels.set(parsed.id, parsed);
       this.emit("zoneLevel", parsed);
     }
+  }
+
+  /**
+   * Map a Lutron LEAP `ControlType` (Dimmed/Switched/Shade/LiftOnly/
+   * LiftAndTilt/TiltOnly/etc.) onto our internal kind tag.
+   */
+  _kindFromControlType(controlType) {
+    if (!controlType) return null;
+    const c = String(controlType).toLowerCase();
+    if (c === "dimmed") return "dimmed";
+    if (c === "switched" || c === "relay") return "switched";
+    if (c === "tiltonly" || c === "tilt") return "tilt";
+    if (c === "liftandtilt" || c === "shadeandtilt") return "shadeAndTilt";
+    if (c === "shade" || c === "liftonly" || c === "lift" || c.includes("shade")) return "shade";
+    return null;
+  }
+
+  /**
+   * Normalise an externally-supplied kind hint ("shade", "blind",
+   * "blackout", "curtain", "light", "load", "switched", ...) into one of
+   * the canonical control-type tags the CreateRequest router below
+   * understands.
+   */
+  _kindFromHint(hint) {
+    if (!hint) return null;
+    const h = String(hint).toLowerCase();
+    if (h === "switched" || h === "relay") return "switched";
+    if (h === "tilt" || h === "tiltonly") return "tilt";
+    if (h === "shadeandtilt" || h === "liftandtilt") return "shadeAndTilt";
+    if (h === "shade" || h === "blind" || h === "blackout" || h === "curtain" || h === "roman") {
+      return "shade";
+    }
+    if (h === "dimmed" || h === "light" || h === "load") return "dimmed";
+    return null;
+  }
+
+  /**
+   * Learn the ControlType of a zone so subsequent commands use the right
+   * CreateRequest shape. Resolution order:
+   *   1. Cache (`_kindByZone`).
+   *   2. Caller-supplied hint (the UI knows from the Integration Report).
+   *   3. A live `ReadRequest /zone/<id>` against the processor.
+   * Concurrent callers for the same zone share a single probe.
+   */
+  async _probeZoneKind(id, kindHint = null) {
+    const key = String(id);
+    const cached = this._kindByZone.get(key);
+    if (cached) return cached;
+
+    const hinted = this._kindFromHint(kindHint);
+    if (hinted) {
+      this._kindByZone.set(key, hinted);
+      return hinted;
+    }
+
+    if (this._kindProbes.has(key)) return this._kindProbes.get(key);
+
+    const probe = (async () => {
+      try {
+        const resp = await this.client.request(
+          "ReadRequest",
+          `/zone/${key}`,
+          undefined
+        );
+        const body = resp?.Body || {};
+        const zone = body.Zone || body.OneZoneDefinition?.Zone || body;
+        const ct = zone?.ControlType || zone?.Category?.Type || null;
+        const mapped = this._kindFromControlType(ct);
+        if (mapped) {
+          log(`[${this.host}:${this.port}] probed /zone/${key} ControlType=${ct} → kind=${mapped}`);
+          this._kindByZone.set(key, mapped);
+          return mapped;
+        }
+        log(`[${this.host}:${this.port}] probed /zone/${key} (ControlType=${ct || "?"}); defaulting to dimmed`);
+        return "dimmed";
+      } catch (err) {
+        logWarn(`[${this.host}:${this.port}] kind probe for /zone/${key} failed (${err.message}); defaulting to dimmed`);
+        return "dimmed";
+      } finally {
+        this._kindProbes.delete(key);
+      }
+    })();
+    this._kindProbes.set(key, probe);
+    return probe;
   }
 
   /**
@@ -848,88 +954,132 @@ class LutronLeapClientWrapper extends EventEmitter {
    * Caséta dialect if the processor rejects the first attempt — that way a
    * single client speaks every Lutron processor without configuration.
    */
-  async setOutput(id, level, fadeSeconds = 0) {
+  async setOutput(id, level, fadeSeconds = 0, kindHint = null) {
     const lvl = Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
     const fade = this._formatFade(fadeSeconds);
-    const known = this.lastLevels.get(String(id));
-    const kind = known?.kind || "dimmed";
+    // Discover the zone's control type via cache → hint → live probe so the
+    // CreateRequest body matches what the processor expects. Without this,
+    // every shade / blind / blackout gets a GoToDimmedLevel and the
+    // processor rejects it with 400.
+    const kind = await this._probeZoneKind(id, kindHint);
 
-    // Build the primary (QSX-canonical) message for the detected zone kind.
-    let primaryBody;
-    let primaryLabel;
+    // Build an ordered list of CreateRequest bodies to try. The first entry
+    // is the canonical HomeWorks QSX shape for the detected kind; the rest
+    // are pragmatic fallbacks for older QSX firmwares, Caséta SmartBridge,
+    // and dual lift/tilt shades that won't accept the strict shape.
+    const attempts = [];
     if (kind === "switched") {
-      primaryBody = {
-        Command: {
-          CommandType: "GoToSwitchedLevel",
-          SwitchedLevelParameters: { SwitchedLevel: lvl > 0 ? "On" : "Off" },
+      attempts.push({
+        label: "GoToSwitchedLevel",
+        body: {
+          Command: {
+            CommandType: "GoToSwitchedLevel",
+            SwitchedLevelParameters: { SwitchedLevel: lvl > 0 ? "On" : "Off" },
+          },
         },
-      };
-      primaryLabel = "GoToSwitchedLevel";
+      });
     } else if (kind === "shade") {
-      primaryBody = {
-        Command: {
-          CommandType: "GoToShadeLevel",
-          ShadeLevelParameters: { Level: lvl, FadeTime: fade, DelayTime: "00:00:00" },
+      attempts.push({
+        label: "GoToShadeLevel",
+        body: {
+          Command: {
+            CommandType: "GoToShadeLevel",
+            ShadeLevelParameters: { Level: lvl, FadeTime: fade, DelayTime: "00:00:00" },
+          },
         },
-      };
-      primaryLabel = "GoToShadeLevel";
+      });
     } else if (kind === "tilt") {
-      primaryBody = {
-        Command: {
-          CommandType: "GoToTiltLevel",
-          TiltLevelParameters: { Tilt: lvl, FadeTime: fade },
+      attempts.push({
+        label: "GoToTiltLevel",
+        body: {
+          Command: {
+            CommandType: "GoToTiltLevel",
+            TiltLevelParameters: { Tilt: lvl, FadeTime: fade },
+          },
         },
-      };
-      primaryLabel = "GoToTiltLevel";
+      });
+    } else if (kind === "shadeAndTilt") {
+      attempts.push({
+        label: "GoToShadeAndTiltLevel",
+        body: {
+          Command: {
+            CommandType: "GoToShadeAndTiltLevel",
+            ShadeAndTiltLevelParameters: {
+              ShadeLevel: lvl,
+              TiltLevel: lvl,
+              FadeTime: fade,
+              DelayTime: "00:00:00",
+            },
+          },
+        },
+      });
+      attempts.push({
+        label: "GoToShadeLevel",
+        body: {
+          Command: {
+            CommandType: "GoToShadeLevel",
+            ShadeLevelParameters: { Level: lvl, FadeTime: fade, DelayTime: "00:00:00" },
+          },
+        },
+      });
     } else {
-      primaryBody = {
-        Command: {
-          CommandType: "GoToDimmedLevel",
-          DimmedLevelParameters: { Level: lvl, FadeTime: fade, DelayTime: "00:00:00" },
+      attempts.push({
+        label: "GoToDimmedLevel",
+        body: {
+          Command: {
+            CommandType: "GoToDimmedLevel",
+            DimmedLevelParameters: { Level: lvl, FadeTime: fade, DelayTime: "00:00:00" },
+          },
         },
-      };
-      primaryLabel = "GoToDimmedLevel";
+      });
     }
+    // Universal last-ditch fallback: Caséta's generic GoToLevel. Caséta
+    // doesn't speak any of the typed CommandTypes above, so this gets us
+    // a working command even on a SmartBridge.
+    attempts.push({
+      label: "GoToLevel",
+      body: {
+        Command: {
+          CommandType: "GoToLevel",
+          Parameter: [
+            { Type: "Level", Value: lvl },
+            ...(fadeSeconds > 0 ? [{ Type: "Fade", Value: fade }] : []),
+          ],
+        },
+      },
+    });
 
     log(
-      `[${this.host}:${this.port}] setOutput: zone=${id} level=${lvl} fade=${fade} kind=${kind} cmd=${primaryLabel}`
+      `[${this.host}:${this.port}] setOutput: zone=${id} level=${lvl} fade=${fade} kind=${kind} cmd=${attempts[0].label}${attempts.length > 1 ? ` (+${attempts.length - 1} fallback)` : ""}`
     );
 
     let lastError = null;
-    try {
-      await this._sendZoneCommand(id, primaryBody, primaryLabel);
-    } catch (err) {
-      lastError = err;
-      // 400 typically means the processor doesn't speak this command type
-      // (e.g. Caséta gets QSX's GoToDimmedLevel and balks). Retry with the
-      // generic GoToLevel shape, which Caséta accepts.
-      if (err?.leapStatus?.startsWith?.("400") || err?.leapStatus === "" || /BadRequest/i.test(err?.message)) {
-        log(
-          `[${this.host}:${this.port}] ${primaryLabel} rejected with 400 — retrying with Caséta-style GoToLevel.`
-        );
-        try {
-          await this._sendZoneCommand(
-            id,
-            {
-              Command: {
-                CommandType: "GoToLevel",
-                Parameter: [
-                  { Type: "Level", Value: lvl },
-                  ...(fadeSeconds > 0 ? [{ Type: "Fade", Value: fade }] : []),
-                ],
-              },
-            },
-            "GoToLevel"
+    for (let i = 0; i < attempts.length; i++) {
+      const { label, body } = attempts[i];
+      try {
+        await this._sendZoneCommand(id, body, label);
+        lastError = null;
+        if (i > 0) {
+          log(`[${this.host}:${this.port}] zone=${id}: ${label} accepted after ${i} earlier rejection(s)`);
+        }
+        break;
+      } catch (err) {
+        lastError = err;
+        const isBadRequest =
+          err?.leapStatus?.startsWith?.("400") ||
+          err?.leapStatus === "" ||
+          /BadRequest/i.test(err?.message);
+        if (!isBadRequest) break;
+        if (i < attempts.length - 1) {
+          log(
+            `[${this.host}:${this.port}] zone=${id}: ${label} rejected with 400 — falling back to ${attempts[i + 1].label}.`
           );
-          lastError = null;
-        } catch (retryErr) {
-          lastError = retryErr;
         }
       }
     }
     if (lastError) {
       logError(
-        `[${this.host}:${this.port}] setOutput FAILED zone=${id} level=${lvl}: ${lastError.message}`
+        `[${this.host}:${this.port}] setOutput FAILED zone=${id} level=${lvl} kind=${kind}: ${lastError.message}`
       );
       throw lastError;
     }
@@ -950,10 +1100,14 @@ class LutronLeapClientWrapper extends EventEmitter {
     return next;
   }
 
-  async raiseLower(id, action) {
+  async raiseLower(id, action, kindHint = null) {
     const cmdType =
       action === "raise" ? "Raise" : action === "lower" ? "Lower" : "Stop";
     const body = { Command: { CommandType: cmdType } };
+    // Stash a kind hint if the UI knows — handy for downstream consumers
+    // (subscription updates emitted after a Raise/Lower will keep this
+    // kind sticky on the cache).
+    if (kindHint) await this._probeZoneKind(id, kindHint);
     log(`[${this.host}:${this.port}] raiseLower: zone=${id} action=${action} cmd=${cmdType}`);
     try {
       await this._sendZoneCommand(id, body, cmdType);
@@ -969,7 +1123,19 @@ class LutronLeapClientWrapper extends EventEmitter {
         throw err;
       }
     }
-    return { id, action, updatedAt: new Date().toISOString() };
+    // Fire an immediate `zoneLevel` event so any UI listening over SSE
+    // pulses the row (and so the platform's pendingZones guard releases).
+    // The subscription will overwrite the level a moment later with the
+    // processor's real position; we don't fake a level here because
+    // raise/lower runs for an unknown duration.
+    const updatedAt = new Date().toISOString();
+    const cached = this.lastLevels.get(String(id));
+    if (cached) {
+      const next = { ...cached, updatedAt };
+      this.lastLevels.set(String(id), next);
+      this.emit("zoneLevel", next);
+    }
+    return { id, action, updatedAt };
   }
 
   async pressButton(deviceId, componentId) {
