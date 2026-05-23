@@ -57,7 +57,7 @@ const DEFAULT_ZONE_STATE = {};
  * localStorage cache for offline/demo use, mirroring how the lighting house
  * itself is persisted.
  */
-export const LUTRON_PROTOCOLS = ["telnet", "leap"];
+export const LUTRON_PROTOCOLS = ["leap", "telnet"];
 export const KNX_PROTOCOLS = ["knx-ip", "knx-tunnelling"];
 export const DALI_PROTOCOLS = ["dali-usb", "dali-ip"];
 export const DMX_PROTOCOLS = ["art-net", "sacn", "enttec-usb"];
@@ -89,8 +89,8 @@ export const DEFAULT_LIGHTING_CONNECTION = {
   systemType: "lutron",
   enabled: false,
   host: "",
-  port: 23,
-  protocol: "telnet",
+  port: 8081,
+  protocol: "leap",
   username: "lutron",
   password: "integration",
   tlsVerify: true,

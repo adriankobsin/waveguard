@@ -46,7 +46,19 @@ import {
   probeLutronPorts,
   recommendationFromPorts,
 } from "../scanner/integrations/lutron/lutronClient.js";
-import { getLeapClient, closeLeapClient } from "../scanner/integrations/lutron/leapClient.js";
+import {
+  getLeapClient,
+  closeLeapClient,
+  isPaired,
+  startPairing,
+  mockPairing,
+  getPairingStatus,
+  getPairingDetails,
+  getPairedHosts,
+  removePairedHost,
+  cancelPairing,
+  testConnection as testLeapConnection,
+} from "../scanner/integrations/lutron/leapClient.js";
 import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
 import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
 import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
@@ -1264,8 +1276,10 @@ function resolveLiveConnection(reqBody = {}) {
       ? getStoredLutronConnection()
       : getStoredLightingConnection(systemType);
   const conn = override || stored;
-  if (!conn?.enabled || !conn.host || !conn.username) return null;
+  if (!conn?.enabled || !conn.host) return null;
   const protocol = conn.protocol === "leap" ? "leap" : conn.protocol || "telnet";
+  // LEAP uses TLS certificate authentication — username/password not required
+  if (protocol !== "leap" && !conn.username) return null;
   return {
     enabled: true,
     host: conn.host,
@@ -1309,6 +1323,9 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
     const engine = engineForSystemType(systemType);
 
     const live = resolveLiveConnection(req.body);
+    // Diagnostic logging
+    const storedConn = getStoredLutronConnection();
+    console.log(`[lutronCommand] op=${op} systemType=${systemType} live=${live ? "yes" : "no"} stored=${storedConn ? "yes" : "no"} storedHost=${storedConn?.host || "none"} storedProtocol=${storedConn?.protocol || "none"} storedEnabled=${storedConn?.enabled}`);
     // Live client based on system type
     let liveClient = null;
     if (live) {
@@ -1316,6 +1333,10 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
         liveClient = getLutronClient(live);
       } else if (systemType === "lutron" && live.protocol === "leap") {
         liveClient = getLeapClient(live);
+        console.log(`[lutronCommand] getLeapClient(${live.host}) returned ${liveClient ? "client" : "NULL (certs not found)"}`);
+        if (liveClient) {
+          console.log(`[lutronCommand] LEAP client state=${liveClient.state} host=${liveClient.host} port=${liveClient.port}`);
+        }
       } else if (systemType === "knx") {
         liveClient = getKnxClient(live);
       } else if (systemType === "dali") {
@@ -1330,15 +1351,19 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
     // to connect here so a transient disconnection retries cleanly.
     if (liveClient && op !== "testProcessor") {
       try {
+        console.log(`[lutronCommand] calling ${liveClient.constructor?.name || "client"}.connect()...`);
         await liveClient.connect();
+        console.log(`[lutronCommand] connect() succeeded, state=${liveClient.state}`);
       } catch (err) {
-        console.warn("[lutronCommand] connect failed:", err.message);
+        console.warn(`[lutronCommand] connect failed: ${err.message}`, err.stack?.split("\n").slice(0, 4).join("\n"));
         return res.json({
           success: false,
           mode: "live",
-          error: err.message,
+          error: `LEAP connect failed: ${err.message}`,
         });
       }
+    } else if (op !== "testProcessor") {
+      console.log(`[lutronCommand] liveClient unavailable: live=${!!live}, mode will be MOCK`);
     }
 
     switch (op) {
@@ -1537,7 +1562,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             ...overrides,
           });
 
-          if (!effectiveUser) {
+          if (!effectiveUser && resolvedProtocol !== "leap") {
             return res.json(
               buildResponse({
                 success: false,
@@ -1575,11 +1600,36 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
                   message: err.message,
                   recommendation: portProbeFailed
                     ? recommendation
-                    : `${resolvedProtocol === "leap" ? "LEAP" : "Telnet"} connection to ${target} failed: ${err.message}. Verify the processor IP, port ${resolvedProtocol === "leap" ? "8081" : "23"} is open, and integration is enabled in Lutron Designer.`,
+                    : `${resolvedProtocol === "leap" ? "LEAP" : "Telnet"} connection to ${target} failed: ${err.message}. Verify the processor IP, port ${resolvedProtocol === "leap" ? "8081 (LEAP) / 8083 (pairing)" : "23"} is open, and integration is enabled in Lutron Designer.`,
                 })
               );
             }
           }
+          // LEAP with no paired certificates — tell the user to pair first
+          if (resolvedProtocol === "leap") {
+            const paired = isPaired(targetHost);
+            return res.json(
+              buildResponse({
+                success: false,
+                mode: "live",
+                message: paired
+                  ? `Certificates found for ${targetHost} but connection failed. Verify the processor is online and reachable on port ${effectivePort}.`
+                  : `No LEAP certificates found for ${targetHost}. Use the LEAP Pairing workflow to generate a certificate by pressing the physical button on the processor.`,
+                recommendation: paired
+                  ? `Delete the existing certificates for ${targetHost} and re-pair, or verify network connectivity.`
+                  : `Navigate to Lighting Settings → LEAP Pairing, enter ${targetHost}, and press the processor's physical button when prompted.`,
+              })
+            );
+          }
+
+          // Telnet with no liveClient — report port scan findings
+          return res.json(
+            buildResponse({
+              success: false,
+              mode: "live",
+              message: `Telnet client could not be created for ${target}. Verify the integration username is correct.`,
+            })
+          );
       } // end if (systemType === "lutron")
 
       // KNX / DALI / DMX — probe ports and try live client
@@ -1651,6 +1701,224 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
     console.error("[lutronCommand]", err);
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+// ── Live lighting events (SSE) ───────────────────────────────────────────
+//
+// Server-Sent Events stream that pipes every zone-level change the LEAP /
+// Telnet client observes (initial snapshot + wall-keypad presses + scene
+// activations + the platform's own commands) back to the browser, so the
+// Lighting page reflects the processor's real state without polling.
+//
+// The browser opens this with `new EventSource(...)`; events are emitted as
+//   event: snapshot   → { zones: [{ href, integrationId, level, on, kind, updatedAt }, ...] }
+//   event: zoneLevel  → { href, integrationId, level, on, kind, updatedAt }
+//   event: ping       → {}
+//   event: error      → { message }
+app.get("/api/apps/:appId/functions/lutronEvents", async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  // Disable any intermediate buffering (Nginx, Cloudflare, etc.) so single
+  // SSE frames are flushed to the browser immediately.
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const writeEvent = (event, data) => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {
+      /* socket already closed */
+    }
+  };
+
+  const conn = getStoredLutronConnection();
+  if (!conn?.enabled || !conn?.host) {
+    writeEvent("error", {
+      message: "No Lutron processor configured — open Lighting → Set credentials.",
+    });
+    res.end();
+    return;
+  }
+
+  let liveClient = null;
+  if (conn.protocol === "leap") {
+    liveClient = getLeapClient(conn);
+  } else {
+    liveClient = getLutronClient(conn);
+  }
+  if (!liveClient) {
+    writeEvent("error", {
+      message:
+        conn.protocol === "leap"
+          ? `No LEAP certificates found for ${conn.host}. Pair the processor first.`
+          : `Telnet client could not be created for ${conn.host}.`,
+    });
+    res.end();
+    return;
+  }
+
+  try {
+    await liveClient.connect();
+  } catch (err) {
+    writeEvent("error", { message: `Connect failed: ${err.message}` });
+    res.end();
+    return;
+  }
+
+  // Initial snapshot from whatever the subscription/poll cache has so far.
+  const snapshot = [];
+  for (const [id, entry] of liveClient.lastLevels) {
+    snapshot.push({
+      href: `/zone/${id}`,
+      integrationId: String(id),
+      level: entry.level ?? 0,
+      on: entry.on ?? false,
+      kind: entry.kind || "dimmed",
+      updatedAt: entry.updatedAt || new Date().toISOString(),
+    });
+  }
+  writeEvent("snapshot", {
+    processor: `${conn.host}:${conn.port || (conn.protocol === "leap" ? 8081 : 23)}`,
+    protocol: conn.protocol,
+    zones: snapshot,
+  });
+
+  // LEAP wrapper emits `zoneLevel`; Telnet client emits `output`. Subscribe
+  // to both so this single endpoint speaks every Lutron protocol.
+  const forward = (entry) => {
+    writeEvent("zoneLevel", {
+      href: `/zone/${entry.id}`,
+      integrationId: String(entry.id),
+      level: entry.level ?? 0,
+      on: entry.on != null ? entry.on : (entry.level ?? 0) > 0,
+      kind: entry.kind || "dimmed",
+      updatedAt: entry.updatedAt || new Date().toISOString(),
+    });
+  };
+  liveClient.on("zoneLevel", forward);
+  liveClient.on("output", forward);
+
+  // Periodic keep-alive comment frame; SSE proxies typically close idle
+  // connections after ~60s without traffic.
+  const keepAlive = setInterval(() => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+    } catch {
+      /* */
+    }
+  }, 25_000);
+
+  const cleanup = () => {
+    clearInterval(keepAlive);
+    try { liveClient.off("zoneLevel", forward); } catch { /* */ }
+    try { liveClient.off("output", forward); } catch { /* */ }
+  };
+  req.on("close", cleanup);
+  req.on("aborted", cleanup);
+  res.on("close", cleanup);
+});
+
+// ── LEAP certificate pairing ──────────────────────────────────────────────
+
+// Start LEAP pairing — returns IMMEDIATELY ("pairing started"). The pairing
+// continues in the background; the client should poll lutronLeapPairingStatus
+// every 1-2 seconds for progress updates until status is "paired" or "failed".
+app.post("/api/apps/:appId/functions/lutronLeapPair", (req, res) => {
+  try {
+    const { host, port } = req.body || {};
+    if (!host) {
+      return res.status(400).json({ success: false, error: "host required" });
+    }
+
+    const status = getPairingStatus(host);
+    if (status === "pairing") {
+      const details = getPairingDetails(host);
+      return res.json({
+        success: false,
+        status: "pairing",
+        message: details.message || "Pairing already in progress.",
+      });
+    }
+    if (status === "paired") {
+      return res.json({
+        success: true,
+        status: "paired",
+        message: "Already paired with this processor.",
+      });
+    }
+
+    // Mock mode: generate self-signed certs instantly (no real processor needed)
+    if (USE_MOCK_SCAN) {
+      mockPairing(host);
+      return res.json({
+        success: true,
+        status: "paired",
+        host,
+        message: "Mock pairing successful (dev mode — no real processor required).",
+      });
+    }
+
+    // Real pairing — start it on the pairing port (8083) and return immediately.
+    startPairing(host, port || 8083);
+    const details = getPairingDetails(host);
+    res.json({
+      success: true,
+      status: "pairing",
+      host,
+      message: details.message || "Pairing started. Press the physical button on the processor.",
+      pollIntervalMs: 1500,
+    });
+  } catch (err) {
+    console.error("[lutronLeapPair]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Detailed pairing status (used for polling during pairing).
+app.post("/api/apps/:appId/functions/lutronLeapPairingStatus", (req, res) => {
+  const { host } = req.body || {};
+  const details = host ? getPairingDetails(host) : { status: "unpaired" };
+  const hosts = getPairedHosts();
+  res.json({ host, ...details, pairedHosts: hosts });
+});
+
+// Cancel an in-progress pairing.
+app.post("/api/apps/:appId/functions/lutronLeapCancel", (req, res) => {
+  const { host } = req.body || {};
+  if (!host) {
+    return res.status(400).json({ success: false, error: "host required" });
+  }
+  cancelPairing(host);
+  res.json({ success: true, host, status: getPairingStatus(host) });
+});
+
+// Diagnostic: test raw TCP + TLS connectivity (no pairing required).
+app.post("/api/apps/:appId/functions/lutronLeapTestConnection", async (req, res) => {
+  try {
+    const { host } = req.body || {};
+    if (!host) {
+      return res.status(400).json({ success: false, error: "host required" });
+    }
+    // Auto-tests both port 8081 (LEAP) and 8083 (pairing)
+    const result = await testLeapConnection(host);
+    res.json({ success: result.reachable && result.tlsAccepted, ...result });
+  } catch (err) {
+    console.error("[lutronLeapTestConnection]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/lutronLeapUnpair", (req, res) => {
+  const { host } = req.body || {};
+  if (!host) {
+    return res.status(400).json({ success: false, error: "host required" });
+  }
+  removePairedHost(host);
+  closeLeapClient();
+  res.json({ success: true, host, status: "unpaired" });
 });
 
 // Close any active lighting client sockets on process exit so dev restarts don't leak.

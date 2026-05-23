@@ -95,17 +95,6 @@ const INTEGRATION_DEFS = [
   { key: "qsys", label: "Q-SYS", fields: [{ k: "host", l: "Host" }, { k: "port", l: "Port" }] },
   { key: "dahua", label: "Dahua CCTV", fields: [{ k: "host", l: "Host" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
   { key: "mqtt", label: "MQTT", fields: [{ k: "brokerUrl", l: "Broker URL" }, { k: "topicPrefix", l: "Topic prefix" }] },
-  {
-    key: "lutron",
-    label: "Lutron (HomeWorks QSX / Athena / RadioRA 3)",
-    fields: [
-      { k: "host", l: "Processor host / IP" },
-      { k: "port", l: "Port (LEAP 443, Telnet 23)" },
-      { k: "user", l: "Username" },
-      { k: "password", l: "Password", secret: true },
-      { k: "api", l: "API mode (leap | telnet)" },
-    ],
-  },
   { key: "dali", label: "DALI", fields: [{ k: "host", l: "Gateway host" }] },
   { key: "dmx", label: "DMX / Art-Net", fields: [{ k: "host", l: "Art-Net host" }] },
   { key: "knx", label: "KNX", fields: [{ k: "host", l: "Gateway host" }, { k: "port", l: "Port" }] },
@@ -133,7 +122,7 @@ export function IntegrationsPanel() {
     setTesting(key);
     setTestResult(null);
     try {
-      if (key === "lutron" || key === "knx" || key === "dali" || key === "dmx") {
+      if (key === "knx" || key === "dali" || key === "dmx") {
         const ic = cfg[key] || {};
         const res = await testLightingProcessor({
           host: ic.host,

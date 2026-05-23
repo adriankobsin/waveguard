@@ -1,45 +1,51 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   X,
-  Activity,
   CheckCircle2,
   AlertCircle,
   Loader2,
   KeyRound,
   Eye,
   EyeOff,
-  ShieldCheck,
   Network,
-  Save,
+  ChevronDown,
+  ChevronUp,
+  Hand,
+  Power,
+  Unlink,
 } from "lucide-react";
 import {
   DEFAULT_LUTRON_CONNECTION,
   defaultPortForProtocol,
   normalizeLutronConnection,
 } from "@/lib/lighting/lightingSettings";
-import { testLutronProcessor } from "@/api/lightingApi";
+import {
+  testLutronProcessor,
+  leapPairWithProcessor,
+  leapGetPairingStatus,
+  leapCancelPairing,
+  leapTestConnection,
+  leapUnpairProcessor,
+} from "@/api/lightingApi";
 
 const PROTOCOL_OPTIONS = [
-  {
-    id: "telnet",
-    label: "Telnet (port 23)",
-    helper:
-      "HomeWorks QSX, RadioRA 3 and legacy processors. Enable Telnet support in Lutron Designer → Tools → Integration.",
-  },
-  {
-    id: "leap",
-    label: "LEAP / HTTPS (port 8081)",
-    helper:
-      "HomeWorks Athena and newer firmware. The integration username + password is still required when LEAP is paired to a 3rd-party account.",
-  },
+  { id: "leap", label: "LEAP (HomeWorks QSX, Athena)" },
+  { id: "telnet", label: "Telnet (RadioRA 3, legacy HomeWorks)" },
 ];
 
 /**
- * Modal for editing the Lutron processor connection. The integration
- * username / password configured here must match the credentials saved
- * in Lutron Designer (Integration tab) — without them the processor
- * refuses commands from 3rd-party platforms like Wave Guard.
+ * Simplified Lutron connection modal.
+ *
+ * Default flow ("simple mode"):
+ *   1. Enter processor IP
+ *   2. Click Connect
+ *   3. (LEAP only) Press the physical button on the processor when prompted
+ *   4. Done — saved automatically, modal closes
+ *
+ * Everything else (protocol selection, port override, Telnet credentials,
+ * TLS verify, manual test connection) lives under an "Advanced settings"
+ * disclosure that's collapsed by default.
  */
 export default function LutronConnectionModal({
   open,
@@ -50,20 +56,63 @@ export default function LutronConnectionModal({
   const [draft, setDraft] = useState(() =>
     normalizeLutronConnection(connection || DEFAULT_LUTRON_CONNECTION)
   );
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+
+  // Connection lifecycle
+  const [connecting, setConnecting] = useState(false);
+  const [phase, setPhase] = useState("idle"); // idle | testing | waiting-button | signing | success | failed | unpaired
+  const [statusMessage, setStatusMessage] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+  const [elapsed, setElapsed] = useState(0);
+
+  const pollTimerRef = useRef(null);
+  const elapsedTimerRef = useRef(null);
+  const isLeap = draft.protocol === "leap";
+
+  // ── Lifecycle: open/close ────────────────────────────────────────────────
 
   useEffect(() => {
     if (open) {
       setDraft(normalizeLutronConnection(connection || DEFAULT_LUTRON_CONNECTION));
-      setTestResult(null);
-      setError(null);
+      setShowAdvanced(false);
       setShowPassword(false);
+      setConnecting(false);
+      setStatusMessage(null);
+      setErrorMessage(null);
+      setElapsed(0);
+      if (connection?.host && connection.protocol === "leap") {
+        bootstrapStatus(connection.host);
+      } else if (connection?.host) {
+        setPhase("idle");
+      } else {
+        setPhase("idle");
+      }
     }
+    return () => stopTimers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, connection]);
+
+  useEffect(() => () => stopTimers(), []);
+
+  function stopTimers() {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+    if (elapsedTimerRef.current) {
+      clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
+    }
+  }
+
+  async function bootstrapStatus(host) {
+    const result = await leapGetPairingStatus(host);
+    if (result?.status === "paired") setPhase("success");
+    else setPhase("idle");
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────────────
 
   const portPlaceholder = useMemo(
     () => String(defaultPortForProtocol(draft.protocol)),
@@ -77,47 +126,196 @@ export default function LutronConnectionModal({
     const currentDefault = defaultPortForProtocol(draft.protocol);
     const nextDefault = defaultPortForProtocol(nextProtocol);
     const nextPort = draft.port === currentDefault ? nextDefault : draft.port;
-    patch({ protocol: nextProtocol, port: nextPort });
-  }
-
-  async function handleTest() {
-    setTesting(true);
-    setTestResult(null);
-    setError(null);
-    try {
-      const result = await testLutronProcessor(draft);
-      setTestResult(result);
-    } catch (err) {
-      setError(err?.message || "Test failed");
-    } finally {
-      setTesting(false);
+    const changes = { protocol: nextProtocol, port: nextPort };
+    if (nextProtocol === "leap") {
+      changes.username = "";
+      changes.password = "";
     }
+    patch(changes);
+    setPhase("idle");
+    setStatusMessage(null);
+    setErrorMessage(null);
   }
 
-  async function handleSave() {
+  // ── Single unified Connect flow ──────────────────────────────────────────
+
+  async function handleConnect() {
     if (!draft.host) {
-      setError("Host is required before saving.");
+      setErrorMessage("Enter your processor's IP address first.");
       return;
     }
-    if (!draft.username) {
-      setError("Integration username is required.");
-      return;
-    }
-    if (draft.enabled && !draft.password) {
-      setError("Integration password is required when the integration is enabled.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
+    stopTimers();
+    setConnecting(true);
+    setErrorMessage(null);
+    setElapsed(0);
+
+    const startedAt = Date.now();
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsed(Math.floor((Date.now() - startedAt) / 1000));
+    }, 1000);
+
     try {
-      await onSave?.(draft);
-      onClose?.();
+      if (isLeap) {
+        await runLeapConnect();
+      } else {
+        await runTelnetConnect();
+      }
     } catch (err) {
-      setError(err?.message || "Save failed");
-    } finally {
-      setSaving(false);
+      handleFailure(err?.message || "Connection failed");
     }
   }
+
+  async function runLeapConnect() {
+    // Step 1 — test connectivity (informational, but bail if firewalled)
+    setPhase("testing");
+    setStatusMessage(`Testing connection to ${draft.host}:${draft.port}...`);
+    const conn = await leapTestConnection(draft.host, draft.port);
+    if (!conn?.reachable) {
+      handleFailure(
+        `Can't reach ${draft.host}:${draft.port}. Check the IP is correct and the processor is powered on.`
+      );
+      return;
+    }
+    if (!conn?.tlsAccepted) {
+      handleFailure(
+        `Reached ${draft.host} but LEAP isn't responding on port ${draft.port}. ` +
+          `Enable LEAP in Lutron Designer (Tools › Integration › Allow LEAP) and transfer the project.`
+      );
+      return;
+    }
+
+    // Step 2 — check if already paired
+    const status = await leapGetPairingStatus(draft.host);
+    if (status?.status === "paired") {
+      await persistAndFinish("Already paired. Settings saved.");
+      return;
+    }
+
+    // Step 3 — start pairing, wait for button press
+    setPhase("waiting-button");
+    setStatusMessage("Press the physical button on your processor now");
+    const kickoff = await leapPairWithProcessor(draft.host, draft.port);
+    if (!kickoff?.success && kickoff?.status !== "pairing") {
+      handleFailure(kickoff?.message || "Failed to start pairing.");
+      return;
+    }
+    if (kickoff?.status === "paired") {
+      await persistAndFinish("Paired! Settings saved.");
+      return;
+    }
+
+    // Step 4 — poll for completion
+    pollPairing(draft.host, kickoff?.pollIntervalMs || 1500);
+  }
+
+  async function runTelnetConnect() {
+    setPhase("testing");
+    setStatusMessage(`Testing connection to ${draft.host}:${draft.port}...`);
+    if (!draft.username) {
+      handleFailure(
+        "Telnet needs an integration username. Open Advanced settings to enter it."
+      );
+      return;
+    }
+    const result = await testLutronProcessor(draft);
+    if (!result?.success) {
+      handleFailure(
+        result?.message ||
+          `Could not connect to ${draft.host}:${draft.port}. ` +
+            "Verify the integration username/password and that Telnet is enabled in Designer."
+      );
+      return;
+    }
+    await persistAndFinish("Connected. Settings saved.");
+  }
+
+  function pollPairing(host, intervalMs) {
+    const poll = async () => {
+      try {
+        const result = await leapGetPairingStatus(host);
+        if (!result) {
+          pollTimerRef.current = setTimeout(poll, intervalMs);
+          return;
+        }
+        if (result.state === "signing") {
+          setPhase("signing");
+          setStatusMessage("Button detected! Saving certificate...");
+        } else if (result.state === "waiting-button") {
+          setPhase("waiting-button");
+          setStatusMessage("Press the physical button on your processor now");
+        }
+        if (result.status === "paired") {
+          await persistAndFinish("Paired! Settings saved.");
+          return;
+        }
+        if (result.status === "failed") {
+          handleFailure(result.message || result.error || "Pairing failed.");
+          return;
+        }
+        pollTimerRef.current = setTimeout(poll, intervalMs);
+      } catch {
+        pollTimerRef.current = setTimeout(poll, intervalMs);
+      }
+    };
+    pollTimerRef.current = setTimeout(poll, intervalMs);
+  }
+
+  async function persistAndFinish(successMsg) {
+    stopTimers();
+    setPhase("success");
+    setStatusMessage(successMsg);
+    try {
+      await onSave?.({ ...draft, enabled: true });
+    } catch (err) {
+      handleFailure(err?.message || "Save failed after pairing.");
+      return;
+    }
+    setConnecting(false);
+    // Brief pause so user sees success before close
+    setTimeout(() => {
+      onClose?.();
+    }, 1200);
+  }
+
+  function handleFailure(message) {
+    stopTimers();
+    setPhase("failed");
+    setConnecting(false);
+    setStatusMessage(null);
+    setErrorMessage(message);
+  }
+
+  async function handleCancel() {
+    stopTimers();
+    if (draft.host) {
+      try { await leapCancelPairing(draft.host); } catch { /* */ }
+    }
+    setConnecting(false);
+    setPhase("idle");
+    setStatusMessage("Connection cancelled.");
+  }
+
+  async function handleDisconnect() {
+    if (!draft.host) return;
+    setConnecting(true);
+    setErrorMessage(null);
+    try {
+      if (isLeap) {
+        await leapUnpairProcessor(draft.host);
+      }
+      await onSave?.({ ...draft, enabled: false });
+      setPhase("unpaired");
+      setStatusMessage("Disconnected.");
+    } catch (err) {
+      setErrorMessage(err?.message || "Disconnect failed");
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
+  const phaseUi = renderPhase(phase, statusMessage, errorMessage, elapsed);
 
   return (
     <AnimatePresence>
@@ -127,17 +325,16 @@ export default function LutronConnectionModal({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-          onClick={() => {
-            if (!testing && !saving) onClose?.();
-          }}
+          onClick={() => { if (!connecting) onClose?.(); }}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
-            className="w-full max-w-2xl bg-card border border-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+            className="w-full max-w-md bg-card border border-border rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-border">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-amber-500/10 ring-1 ring-amber-500/25 flex items-center justify-center">
@@ -145,16 +342,17 @@ export default function LutronConnectionModal({
                 </div>
                 <div>
                   <p className="text-sm font-bold text-foreground">
-                    Lutron processor connection
+                    Connect Lutron processor
                   </p>
                   <p className="text-[11px] text-muted-foreground">
-                    Integration credentials configured in Lutron Designer.
-                    Required for 3rd-party control of the processor.
+                    {phase === "success"
+                      ? "Connected"
+                      : "Enter IP, click Connect, press button."}
                   </p>
                 </div>
               </div>
               <button
-                disabled={testing || saving}
+                disabled={connecting}
                 onClick={onClose}
                 className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground disabled:opacity-50"
               >
@@ -163,309 +361,235 @@ export default function LutronConnectionModal({
             </div>
 
             <div className="flex-1 overflow-y-auto p-5 space-y-4">
-              <div className="rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-[11px] text-amber-300/90 leading-relaxed">
-                <p className="font-semibold text-amber-300 mb-1">
-                  Enable integration access on the processor first
-                </p>
-                <p>
-                  In Lutron Designer, open the processor properties →{" "}
-                  <span className="font-mono text-amber-200">
-                    Tools › Integration
-                  </span>
-                  , enable Telnet / LEAP support, set an integration login and
-                  send the program to the processor. Then enter the same
-                  credentials below.
+              {/* IP input — the only required field */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                  <Network size={11} />
+                  Processor IP
+                </label>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  value={draft.host}
+                  onChange={(e) => patch({ host: e.target.value })}
+                  disabled={connecting}
+                  placeholder="192.168.20.70"
+                  className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2.5 text-base font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1.5">
+                  Find this in Lutron Designer → Activate → Processor IP address.
                 </p>
               </div>
 
-              {/* Enable + protocol */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label className="rounded-xl border border-border bg-muted/30 px-3 py-2.5 flex items-center justify-between gap-2 cursor-pointer">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-foreground">
-                      Live control
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Route commands to the processor
-                    </p>
-                  </div>
+              {/* Live status area */}
+              {phaseUi}
+
+              {/* Main action button(s) */}
+              <div className="space-y-2">
+                {phase === "success" ? (
                   <button
                     type="button"
-                    onClick={() => patch({ enabled: !draft.enabled })}
-                    className={`relative w-10 h-5.5 rounded-full transition-colors flex-shrink-0 ${
-                      draft.enabled ? "bg-amber-500" : "bg-muted"
-                    }`}
-                    style={{ height: 22 }}
-                    title={draft.enabled ? "Disable" : "Enable"}
+                    disabled={connecting}
+                    onClick={handleDisconnect}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 text-red-400 text-sm font-bold border border-red-500/25 hover:bg-red-500/20 disabled:opacity-50"
                   >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                        draft.enabled ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
+                    {connecting ? <Loader2 size={16} className="animate-spin" /> : <Unlink size={16} />}
+                    Disconnect
                   </button>
-                </label>
-
-                <div className="sm:col-span-2 rounded-xl border border-border bg-muted/30 px-3 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-                    Protocol
-                  </p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {PROTOCOL_OPTIONS.map((opt) => {
-                      const active = draft.protocol === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => handleProtocolChange(opt.id)}
-                          className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-left border transition-colors ${
-                            active
-                              ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
-                              : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-muted"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <p className="text-[10px] text-muted-foreground mt-1.5 leading-snug">
-                    {PROTOCOL_OPTIONS.find((p) => p.id === draft.protocol)?.helper}
-                  </p>
-                </div>
-              </div>
-
-              {/* Host / port */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-2">
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 flex items-center gap-1.5">
-                    <Network size={11} />
-                    Processor host / IP
-                  </label>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={draft.host}
-                    onChange={(e) => patch({ host: e.target.value })}
-                    placeholder="192.168.40.2"
-                    className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">
-                    Port
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={65535}
-                    value={draft.port}
-                    onChange={(e) =>
-                      patch({ port: Number(e.target.value) || draft.port })
-                    }
-                    placeholder={portPlaceholder}
-                    className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                  />
-                </div>
-              </div>
-
-              {/* Username / password */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">
-                    Integration username
-                  </label>
-                  <input
-                    type="text"
-                    autoComplete="off"
-                    value={draft.username}
-                    onChange={(e) => patch({ username: e.target.value })}
-                    placeholder="lutron"
-                    className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">
-                    Integration password
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      autoComplete="new-password"
-                      value={draft.password}
-                      onChange={(e) => patch({ password: e.target.value })}
-                      placeholder="integration"
-                      className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 pr-9 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword((v) => !v)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      tabIndex={-1}
-                    >
-                      {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* TLS verify (LEAP only) */}
-              {draft.protocol === "leap" && (
-                <label className="flex items-center gap-2.5 rounded-xl border border-border bg-muted/30 px-3 py-2.5 cursor-pointer">
+                ) : connecting ? (
                   <button
                     type="button"
-                    onClick={() => patch({ tlsVerify: !draft.tlsVerify })}
-                    className={`relative w-10 rounded-full transition-colors flex-shrink-0 ${
-                      draft.tlsVerify ? "bg-emerald-500" : "bg-muted"
-                    }`}
-                    style={{ height: 22 }}
+                    onClick={handleCancel}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-secondary border border-border text-sm font-bold text-foreground hover:bg-muted"
                   >
-                    <span
-                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                        draft.tlsVerify ? "translate-x-5" : "translate-x-0"
-                      }`}
-                    />
+                    <X size={16} />
+                    Cancel
                   </button>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <ShieldCheck size={12} className="text-emerald-400" />
-                      Verify TLS certificate
-                    </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Disable only for self-signed LEAP processor certificates.
-                    </p>
-                  </div>
-                </label>
-              )}
-
-              {/* Errors */}
-              {error && (
-                <div className="flex items-start gap-2 px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-xs text-red-400">
-                  <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              {/* Test result */}
-              {testResult && (
-                <div className="space-y-2">
-                  <div
-                    className={`flex items-start gap-2 px-3 py-2 rounded-xl border text-xs ${
-                      testResult.success
-                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                        : "border-red-500/30 bg-red-500/10 text-red-400"
-                    }`}
-                  >
-                    {testResult.success ? (
-                      <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
-                    ) : (
-                      <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold">
-                        {testResult.success
-                          ? "Processor reachable"
-                          : "Processor unreachable"}
-                        <span className="font-normal opacity-80 ml-1">
-                          · {testResult.processor} · {testResult.api || draft.protocol}
-                        </span>
-                      </p>
-                      {testResult.message && (
-                        <p className="opacity-80 mt-0.5">{testResult.message}</p>
-                      )}
-                      {testResult.authenticatedAs && (
-                        <p className="opacity-80 mt-0.5">
-                          Authenticated as{" "}
-                          <span className="font-mono">{testResult.authenticatedAs}</span>
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  {Array.isArray(testResult.availablePorts) &&
-                    testResult.availablePorts.length > 0 && (
-                      <div className="rounded-xl border border-border bg-muted/30 px-3 py-2">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-                          Detected integration ports on {testResult.processor?.split(":")[0]}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {testResult.availablePorts.map((p) => (
-                            <span
-                              key={p.port}
-                              className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                                p.open
-                                  ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                                  : "border-border bg-secondary text-muted-foreground"
-                              }`}
-                              title={p.label}
-                            >
-                              <span className="font-mono">{p.port}</span>
-                              <span className="opacity-80">{p.label}</span>
-                              <span
-                                className={`w-1.5 h-1.5 rounded-full ${
-                                  p.open ? "bg-emerald-400" : "bg-muted-foreground"
-                                }`}
-                              />
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                  {testResult.recommendation && !testResult.success && (
-                    <div className="flex items-start gap-2 px-3 py-2 rounded-xl border border-amber-500/30 bg-amber-500/8 text-[11px] text-amber-300/95 leading-relaxed">
-                      <KeyRound size={12} className="flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-semibold text-amber-300 mb-0.5">
-                          Suggested next step
-                        </p>
-                        <p>{testResult.recommendation}</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-border bg-muted/30">
-              <button
-                disabled={testing || saving}
-                onClick={handleTest}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary border border-border text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted disabled:opacity-50"
-              >
-                {testing ? (
-                  <Loader2 size={12} className="animate-spin" />
                 ) : (
-                  <Activity size={12} />
+                  <button
+                    type="button"
+                    disabled={!draft.host}
+                    onClick={handleConnect}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-500 text-amber-950 text-sm font-bold hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <Power size={16} />
+                    Connect to processor
+                  </button>
                 )}
-                Test connection
+              </div>
+
+              {/* Advanced settings (collapsed by default) */}
+              <button
+                type="button"
+                onClick={() => setShowAdvanced((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-border bg-muted/30 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:bg-muted"
+              >
+                <span>Advanced settings</span>
+                {showAdvanced ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               </button>
 
-              <div className="flex items-center gap-2">
-                <button
-                  disabled={testing || saving}
-                  onClick={onClose}
-                  className="px-3 py-1.5 rounded-lg border border-border text-xs font-semibold text-muted-foreground hover:bg-muted disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  disabled={saving}
-                  onClick={handleSave}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-amber-950 text-xs font-bold hover:bg-amber-400 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Save size={12} />
-                  )}
-                  Save credentials
-                </button>
-              </div>
+              <AnimatePresence>
+                {showAdvanced && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-3 pt-1">
+                      {/* Protocol */}
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                          Protocol
+                        </p>
+                        <div className="grid grid-cols-1 gap-1.5">
+                          {PROTOCOL_OPTIONS.map((opt) => {
+                            const active = draft.protocol === opt.id;
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                disabled={connecting}
+                                onClick={() => handleProtocolChange(opt.id)}
+                                className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold text-left border transition-colors ${
+                                  active
+                                    ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
+                                    : "border-border bg-secondary text-muted-foreground hover:text-foreground hover:bg-muted"
+                                } disabled:opacity-50`}
+                              >
+                                {opt.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Port */}
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">
+                          Port
+                        </label>
+                        <input
+                          type="number"
+                          min={1}
+                          max={65535}
+                          disabled={connecting}
+                          value={draft.port}
+                          onChange={(e) =>
+                            patch({ port: Number(e.target.value) || draft.port })
+                          }
+                          placeholder={portPlaceholder}
+                          className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                        />
+                      </div>
+
+                      {/* Credentials (username/password used for Telnet; optional for LEAP) */}
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">
+                            Integration username
+                          </label>
+                          <input
+                            type="text"
+                            autoComplete="off"
+                            disabled={connecting}
+                            value={draft.username}
+                            onChange={(e) => patch({ username: e.target.value })}
+                            placeholder="lutron"
+                            className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">
+                            Integration password
+                          </label>
+                          <input
+                            type={showPassword ? "text" : "password"}
+                            autoComplete="off"
+                            disabled={connecting}
+                            value={draft.password}
+                            onChange={(e) => patch({ password: e.target.value })}
+                            placeholder="integration"
+                            className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm font-mono text-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/40 disabled:opacity-50"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassword((v) => !v)}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                          >
+                            {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </motion.div>
         </motion.div>
       )}
     </AnimatePresence>
   );
+}
+
+// ── Status area ──────────────────────────────────────────────────────────
+
+function renderPhase(phase, message, errorMessage, elapsed) {
+  if (phase === "waiting-button") {
+    return (
+      <div className="rounded-xl border-2 border-amber-500/50 bg-amber-500/10 px-4 py-5 text-center">
+        <div className="mx-auto mb-3 w-16 h-16 rounded-full bg-amber-500/20 ring-2 ring-amber-500/50 flex items-center justify-center">
+          <Hand size={28} className="text-amber-400 animate-pulse" />
+        </div>
+        <p className="text-base font-bold text-amber-300 mb-1">
+          Press the button on your processor
+        </p>
+        <p className="text-[11px] text-amber-200/80 leading-relaxed">
+          Use a paperclip on the small recessed button on the front of the
+          processor.
+        </p>
+        <p className="text-[10px] text-amber-300/70 mt-2 font-mono">
+          {elapsed > 0 ? `Waiting · ${elapsed}s of 60s` : "Waiting..."}
+        </p>
+      </div>
+    );
+  }
+
+  if (phase === "testing" || phase === "signing") {
+    return (
+      <div className="flex items-start gap-2 px-3 py-3 rounded-xl border border-sky-500/30 bg-sky-500/10 text-sky-300 text-[12px]">
+        <Loader2 size={14} className="animate-spin flex-shrink-0 mt-0.5" />
+        <span>{message || "Working..."}</span>
+      </div>
+    );
+  }
+
+  if (phase === "success") {
+    return (
+      <div className="flex items-start gap-2 px-3 py-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[12px]">
+        <CheckCircle2 size={14} className="flex-shrink-0 mt-0.5" />
+        <span className="font-semibold">{message || "Connected!"}</span>
+      </div>
+    );
+  }
+
+  if (phase === "failed" || errorMessage) {
+    return (
+      <div className="flex items-start gap-2 px-3 py-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 text-[12px]">
+        <AlertCircle size={14} className="flex-shrink-0 mt-0.5" />
+        <span>{errorMessage || message}</span>
+      </div>
+    );
+  }
+
+  if (phase === "unpaired") {
+    return (
+      <div className="flex items-start gap-2 px-3 py-3 rounded-xl border border-border bg-muted/30 text-muted-foreground text-[12px]">
+        <span>{message}</span>
+      </div>
+    );
+  }
+
+  return null;
 }

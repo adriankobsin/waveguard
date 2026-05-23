@@ -209,7 +209,7 @@ async function persistLightingConnectionToSettings(conn) {
 
 export async function loadLightingConnection() {
   if (isDemoModeActive()) {
-    return loadLightingConnectionLocal() || { ...DEFAULT_LIGHTING_CONNECTION };
+  return loadLightingConnectionLocal() || loadLutronConnectionLocal() || { ...DEFAULT_LIGHTING_CONNECTION };
   }
   return loadLightingConnectionFromSettings();
 }
@@ -346,10 +346,13 @@ async function callMockLutron(op, body) {
     });
     const data = await res.json().catch(() => ({}));
     if (res.ok) return data;
+    // Server returned an error — preserve the error info so the caller can
+    // distinguish "server is down" from "server rejected the command".
+    return { success: false, mode: "live", error: data?.error || `HTTP ${res.status}`, _httpError: true };
   } catch {
-    /* fall through */
+    /* network error — mock server unreachable */
+    return null;
   }
-  return null;
 }
 
 async function callMockLighting(op, body, systemType) {
@@ -486,6 +489,131 @@ export async function pollZones({ hrefs = [] } = {}) {
 }
 
 /**
+ * Open a live event stream from the Lutron processor.
+ *
+ * The mock-server forwards every `zoneLevel` event the LEAP / Telnet client
+ * observes (initial snapshot on connect, then every wall-keypad press,
+ * timeclock scene, app command, or our own GoToLevel) as Server-Sent Events.
+ *
+ * Returns an object `{ close() }` for the caller to tear down the stream
+ * (typically on component unmount). The connection auto-reconnects via the
+ * native EventSource backoff, plus we manually re-open on processor-side
+ * errors (e.g. credentials changed) with a 5-second delay so a flapping
+ * processor doesn't hammer the server.
+ *
+ * `onUpdate` is called with `{ type, ...payload }` where:
+ *   - `type: "snapshot"` → payload has `{ processor, protocol, zones: [...] }`.
+ *   - `type: "zoneLevel"` → payload has `{ href, integrationId, level, on, kind, updatedAt }`.
+ *   - `type: "error"` → payload has `{ message }` (informational; the stream
+ *     will retry automatically).
+ */
+export function subscribeLutronEvents(onUpdate) {
+  if (typeof window === "undefined" || typeof EventSource === "undefined") {
+    return { close: () => {} };
+  }
+  if (isDemoModeActive() || !isMockServer) {
+    // Demo mode has no real processor to stream from. The local mock engine
+    // doesn't push events, so just no-op the subscription.
+    return { close: () => {} };
+  }
+
+  let source = null;
+  let retryTimer = null;
+  let closed = false;
+  const base = getMockAppApiBase();
+  // EventSource doesn't allow custom headers; the mock server treats this
+  // endpoint as unauthenticated (it's local-only) so the auth header is
+  // unnecessary. If we ever proxy to a remote endpoint we'd need to mint a
+  // short-lived token in the URL.
+  const url = `${base}/functions/lutronEvents`;
+
+  const safeEmit = (payload) => {
+    try {
+      onUpdate?.(payload);
+    } catch (err) {
+      console.warn("[lightingApi] subscribeLutronEvents handler threw:", err);
+    }
+  };
+
+  const connect = () => {
+    if (closed) return;
+    try {
+      source = new EventSource(url);
+    } catch (err) {
+      safeEmit({ type: "error", message: err.message });
+      scheduleRetry();
+      return;
+    }
+    source.addEventListener("snapshot", (e) => {
+      try {
+        const payload = JSON.parse(e.data || "{}");
+        safeEmit({ type: "snapshot", ...payload });
+      } catch (err) {
+        console.warn("[lightingApi] bad snapshot payload:", err);
+      }
+    });
+    source.addEventListener("zoneLevel", (e) => {
+      try {
+        const payload = JSON.parse(e.data || "{}");
+        safeEmit({ type: "zoneLevel", ...payload });
+      } catch (err) {
+        console.warn("[lightingApi] bad zoneLevel payload:", err);
+      }
+    });
+    source.addEventListener("error", (e) => {
+      // Two distinct flavours of "error" land here:
+      //   1) An app-level `error` event the server emitted with a JSON body
+      //      describing why it gave up (no certs, connect failed, etc.).
+      //   2) A transport error (EventSource fires the generic "error" with
+      //      no `data`). EventSource will auto-reconnect on its own; we just
+      //      surface the message for debugging.
+      const message =
+        typeof e?.data === "string" && e.data
+          ? (() => {
+              try {
+                return JSON.parse(e.data).message || e.data;
+              } catch {
+                return e.data;
+              }
+            })()
+          : "Live event stream lost connection — retrying…";
+      safeEmit({ type: "error", message });
+      // If the server explicitly closed the stream (readyState CLOSED),
+      // schedule a manual retry; otherwise EventSource handles it.
+      if (source?.readyState === EventSource.CLOSED) {
+        try { source.close(); } catch { /* */ }
+        source = null;
+        scheduleRetry();
+      }
+    });
+  };
+
+  const scheduleRetry = () => {
+    if (closed || retryTimer) return;
+    retryTimer = setTimeout(() => {
+      retryTimer = null;
+      connect();
+    }, 5000);
+  };
+
+  connect();
+
+  return {
+    close: () => {
+      closed = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+      if (source) {
+        try { source.close(); } catch { /* */ }
+        source = null;
+      }
+    },
+  };
+}
+
+/**
  * Stop a moving shade/blind. Sends the raiseLowerStop command to halt
  * the shade at its current position.
  */
@@ -579,4 +707,93 @@ export async function testLightingProcessor(override = {}, systemType) {
       remote?.error ||
       `Unable to reach ${effectiveType.toUpperCase()} processor`,
   };
+}
+
+// ── LEAP certificate pairing ──────────────────────────────────────────────
+
+async function callLeapFunction(endpoint, body) {
+  if (!isMockServer) {
+    return { success: true, mock: true };
+  }
+  const base = getMockAppApiBase();
+  try {
+    const res = await fetch(`${base}/functions/${endpoint}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...getMockAuthHeaders() },
+      body: JSON.stringify(body),
+    });
+    return await res.json().catch(() => ({}));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Start LEAP certificate pairing with a Lutron processor. Returns immediately
+ * with `{ status: "pairing", pollIntervalMs }`. Use `leapGetPairingStatus()`
+ * to poll for progress updates.
+ */
+export async function leapPairWithProcessor(host, port = 8083) {
+  if (isDemoModeActive() || !isMockServer) {
+    await new Promise((r) => setTimeout(r, 1500));
+    return { success: true, status: "paired", host, message: "Pairing simulated (demo mode)" };
+  }
+  const result = await callLeapFunction("lutronLeapPair", { host, port });
+  return result || { success: false, status: "failed", host, message: "Mock server unreachable" };
+}
+
+/**
+ * Check LEAP pairing status / progress for a given host. Returns detailed
+ * status:
+ *   { status: "paired"|"pairing"|"failed"|"unpaired",
+ *     state?: "connecting"|"waiting-button"|"signing",
+ *     message?: string,
+ *     error?: string,
+ *     elapsedMs?: number,
+ *     pairedHosts?: string[] }
+ */
+export async function leapGetPairingStatus(host) {
+  const result = await callLeapFunction("lutronLeapPairingStatus", { host });
+  return result || { host, status: "unpaired", pairedHosts: [] };
+}
+
+/**
+ * Cancel an in-progress LEAP pairing for a host.
+ */
+export async function leapCancelPairing(host) {
+  const result = await callLeapFunction("lutronLeapCancel", { host });
+  return result || { success: false, host, status: "error" };
+}
+
+/**
+ * Diagnostic: test raw TCP + TLS connectivity to the processor's LEAP port
+ * (8081). Does NOT attempt pairing. Useful to separate network / firewall
+ * issues from authentication issues.
+ *
+ * Returns: { success, reachable, tlsAccepted, peerCert, error, durationMs }
+ */
+export async function leapTestConnection(host, port) {
+  if (!isMockServer) {
+    return {
+      success: false,
+      reachable: false,
+      tlsAccepted: false,
+      error: "Connectivity test requires the local mock server.",
+    };
+  }
+  const result = await callLeapFunction("lutronLeapTestConnection", { host, port });
+  return result || {
+    success: false,
+    reachable: false,
+    tlsAccepted: false,
+    error: "Mock server unreachable",
+  };
+}
+
+/**
+ * Unpair (remove certificates) for a given host.
+ */
+export async function leapUnpairProcessor(host) {
+  const result = await callLeapFunction("lutronLeapUnpair", { host });
+  return result || { success: false, host, status: "error" };
 }

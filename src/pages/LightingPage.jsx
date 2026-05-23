@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb,
@@ -40,6 +40,7 @@ import {
   pollZones,
   stopShade,
   testLutronProcessor,
+  subscribeLutronEvents,
 } from "@/api/lightingApi";
 import {
   buildLightingHierarchy,
@@ -65,6 +66,11 @@ export default function LightingPage() {
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [zoneState, setZoneState] = useState({});
   const [pendingZones, setPendingZones] = useState({});
+  // Mirror of `pendingZones` for use inside long-lived callbacks (SSE
+  // handler) that must not re-bind when a single slider drag flips the
+  // pending flag. The ref is updated on every render below.
+  const pendingZonesRef = useRef({});
+  pendingZonesRef.current = pendingZones;
   const [pendingScene, setPendingScene] = useState(null);
   const [connection, setConnection] = useState(null);
   const [connectionTesting, setConnectionTesting] = useState(false);
@@ -280,6 +286,56 @@ export default function LightingPage() {
     connectionTesting,
     handleTestConnection,
   ]);
+
+  // Open a Server-Sent Events stream from the mock-server so the LEAP /
+  // Telnet client's zone-status subscription pushes wall-keypad presses,
+  // schedule activations, and any commanded changes straight into the UI
+  // — no polling button required. Updates for zones the user is currently
+  // dragging are deferred to `pendingZones` so the slider doesn't snap
+  // mid-drag.
+  useEffect(() => {
+    if (!lutronConn?.enabled || !lutronConn?.host) return undefined;
+    const subscription = subscribeLutronEvents((evt) => {
+      if (!evt) return;
+      if (evt.type === "snapshot" && Array.isArray(evt.zones)) {
+        setZoneState((prev) => {
+          const next = { ...prev };
+          for (const z of evt.zones) {
+            if (!z?.href) continue;
+            // Don't clobber a zone the operator is actively dragging.
+            if (pendingZonesRef.current[z.href]) continue;
+            next[z.href] = {
+              level: z.level ?? 0,
+              on: z.on ?? (z.level ?? 0) > 0,
+              kind: z.kind,
+              updatedAt: z.updatedAt || new Date().toISOString(),
+            };
+          }
+          return next;
+        });
+        return;
+      }
+      if (evt.type === "zoneLevel" && evt.href) {
+        if (pendingZonesRef.current[evt.href]) return;
+        setZoneState((prev) => ({
+          ...prev,
+          [evt.href]: {
+            level: evt.level ?? 0,
+            on: evt.on ?? (evt.level ?? 0) > 0,
+            kind: evt.kind,
+            updatedAt: evt.updatedAt || new Date().toISOString(),
+          },
+        }));
+        return;
+      }
+      if (evt.type === "error") {
+        // Stream errors are informational — the subscription auto-reconnects.
+        // We log them but don't toast every transient blip.
+        console.warn("[lighting] live stream:", evt.message);
+      }
+    });
+    return () => subscription.close();
+  }, [lutronConn?.enabled, lutronConn?.host]);
 
   const handlePollAll = useCallback(async () => {
     if (!house?.zones?.length) return;
