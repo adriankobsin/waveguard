@@ -374,7 +374,16 @@ export function redactLightingConnection(conn) {
   return { ...c, password: c.password ? "••••••••" : "" };
 }
 
-const SHADE_KINDS = new Set(["shade", "blind", "blackout"]);
+const SHADE_KINDS = new Set([
+  // From the Integration Report parser (zone-name heuristics).
+  "shade",
+  "blind",
+  "blackout",
+  // From the live LEAP probe (Lutron ControlType).
+  "openCloseStop",
+  "shadeAndTilt",
+  "tilt",
+]);
 const SHADE_NAME_KEYWORDS = ["shade", "blind", "blackout", "venetian", "roman", "curtain"];
 
 /** Returns true if the zone is a shade/blind/curtain based on kind or name. */

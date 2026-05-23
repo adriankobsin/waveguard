@@ -812,8 +812,17 @@ class LutronLeapClientWrapper extends EventEmitter {
   }
 
   /**
-   * Map a Lutron LEAP `ControlType` (Dimmed/Switched/Shade/LiftOnly/
-   * LiftAndTilt/TiltOnly/etc.) onto our internal kind tag.
+   * Map a Lutron LEAP `ControlType` onto our internal kind tag. Known
+   * values returned by HomeWorks QSX / RA3 / Athena / Caséta:
+   *   - Dimmed                  → dimmed       (continuous 0–100 lights)
+   *   - Switched / Relay        → switched     (on/off relays)
+   *   - Shade / LiftOnly / Lift → shade        (lift-only motorised shades)
+   *   - TiltOnly / Tilt         → tilt         (tilt-only horizontal blinds)
+   *   - LiftAndTilt /
+   *     ShadeAndTilt            → shadeAndTilt (dual axis venetians)
+   *   - OpenCloseStop           → openCloseStop (binary blinds — Raise/
+   *                                              Lower/Stop only, no level)
+   *   - FanSpeed                → fan           (treated as dimmer for now)
    */
   _kindFromControlType(controlType) {
     if (!controlType) return null;
@@ -822,7 +831,9 @@ class LutronLeapClientWrapper extends EventEmitter {
     if (c === "switched" || c === "relay") return "switched";
     if (c === "tiltonly" || c === "tilt") return "tilt";
     if (c === "liftandtilt" || c === "shadeandtilt") return "shadeAndTilt";
+    if (c === "openclosestop" || c === "openclose") return "openCloseStop";
     if (c === "shade" || c === "liftonly" || c === "lift" || c.includes("shade")) return "shade";
+    if (c === "fanspeed") return "dimmed";
     return null;
   }
 
@@ -830,7 +841,10 @@ class LutronLeapClientWrapper extends EventEmitter {
    * Normalise an externally-supplied kind hint ("shade", "blind",
    * "blackout", "curtain", "light", "load", "switched", ...) into one of
    * the canonical control-type tags the CreateRequest router below
-   * understands.
+   * understands. The hint is a best-guess from the parsed Integration
+   * Report — `_probeZoneKind` will still go to the processor to learn
+   * the real ControlType because a "blind" in the report can be either
+   * a Shade (level-based) or an OpenCloseStop blind on the wire.
    */
   _kindFromHint(hint) {
     if (!hint) return null;
@@ -838,7 +852,11 @@ class LutronLeapClientWrapper extends EventEmitter {
     if (h === "switched" || h === "relay") return "switched";
     if (h === "tilt" || h === "tiltonly") return "tilt";
     if (h === "shadeandtilt" || h === "liftandtilt") return "shadeAndTilt";
+    if (h === "openclosestop" || h === "openclose") return "openCloseStop";
     if (h === "shade" || h === "blind" || h === "blackout" || h === "curtain" || h === "roman") {
+      // Default shade-family hints to "shade"; the live probe will replace
+      // this with "openCloseStop" / "tilt" / etc. when the processor says
+      // otherwise.
       return "shade";
     }
     if (h === "dimmed" || h === "light" || h === "load") return "dimmed";
@@ -848,21 +866,20 @@ class LutronLeapClientWrapper extends EventEmitter {
   /**
    * Learn the ControlType of a zone so subsequent commands use the right
    * CreateRequest shape. Resolution order:
-   *   1. Cache (`_kindByZone`).
-   *   2. Caller-supplied hint (the UI knows from the Integration Report).
-   *   3. A live `ReadRequest /zone/<id>` against the processor.
-   * Concurrent callers for the same zone share a single probe.
+   *   1. Cache (`_kindByZone`) — the result of any previous probe.
+   *   2. Live `ReadRequest /zone/<id>` against the processor — authoritative.
+   *   3. Caller-supplied hint — only used when the probe itself failed.
+   *
+   * The probe always wins when it succeeds because the UI hint is derived
+   * from the zone name in the Integration Report (e.g. "BLACKOUT BLIND"),
+   * which can't distinguish a level-based Shade from a binary
+   * OpenCloseStop blind. Concurrent callers for the same zone share a
+   * single probe.
    */
   async _probeZoneKind(id, kindHint = null) {
     const key = String(id);
     const cached = this._kindByZone.get(key);
     if (cached) return cached;
-
-    const hinted = this._kindFromHint(kindHint);
-    if (hinted) {
-      this._kindByZone.set(key, hinted);
-      return hinted;
-    }
 
     if (this._kindProbes.has(key)) return this._kindProbes.get(key);
 
@@ -882,9 +899,27 @@ class LutronLeapClientWrapper extends EventEmitter {
           this._kindByZone.set(key, mapped);
           return mapped;
         }
+        // Probe responded but with an unrecognised ControlType — fall
+        // through to the hint before defaulting to dimmed so a UI-known
+        // "shade" doesn't get downgraded.
+        const hinted = this._kindFromHint(kindHint);
+        if (hinted) {
+          log(`[${this.host}:${this.port}] probed /zone/${key} (ControlType=${ct || "?"}); using hint=${hinted}`);
+          this._kindByZone.set(key, hinted);
+          return hinted;
+        }
         log(`[${this.host}:${this.port}] probed /zone/${key} (ControlType=${ct || "?"}); defaulting to dimmed`);
         return "dimmed";
       } catch (err) {
+        // Probe failed (network blip, processor temporarily refusing). Use
+        // the hint if we have one — better than blindly defaulting to
+        // dimmed and breaking shade control.
+        const hinted = this._kindFromHint(kindHint);
+        if (hinted) {
+          logWarn(`[${this.host}:${this.port}] kind probe for /zone/${key} failed (${err.message}); using hint=${hinted}`);
+          this._kindByZone.set(key, hinted);
+          return hinted;
+        }
         logWarn(`[${this.host}:${this.port}] kind probe for /zone/${key} failed (${err.message}); defaulting to dimmed`);
         return "dimmed";
       } finally {
@@ -957,11 +992,36 @@ class LutronLeapClientWrapper extends EventEmitter {
   async setOutput(id, level, fadeSeconds = 0, kindHint = null) {
     const lvl = Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
     const fade = this._formatFade(fadeSeconds);
-    // Discover the zone's control type via cache → hint → live probe so the
-    // CreateRequest body matches what the processor expects. Without this,
-    // every shade / blind / blackout gets a GoToDimmedLevel and the
-    // processor rejects it with 400.
+    // Discover the zone's control type via live probe so the CreateRequest
+    // body matches what the processor expects. Without this, every
+    // shade / blind / blackout gets a GoToDimmedLevel and the processor
+    // rejects it with 400.
     const kind = await this._probeZoneKind(id, kindHint);
+
+    // OpenCloseStop zones (motorised blinds / curtains where the
+    // processor only exposes binary Open/Close/Stop semantics) refuse
+    // every level-based command, so we translate Set-to-100 → Raise and
+    // Set-to-0 → Lower and bail before we build the GoToLevel chain.
+    // The Lighting UI's Open/Close buttons already send 100 / 0, so this
+    // is a no-op for the user.
+    if (kind === "openCloseStop") {
+      const action = lvl >= 50 ? "raise" : "lower";
+      log(
+        `[${this.host}:${this.port}] setOutput: zone=${id} level=${lvl} kind=openCloseStop → routing to ${action.toUpperCase()}`
+      );
+      await this.raiseLower(id, action, "openCloseStop");
+      const updatedAt = new Date().toISOString();
+      const next = {
+        id: String(id),
+        level: lvl,
+        on: lvl > 0,
+        kind: "openCloseStop",
+        updatedAt,
+      };
+      this.lastLevels.set(String(id), next);
+      this.emit("zoneLevel", next);
+      return next;
+    }
 
     // Build an ordered list of CreateRequest bodies to try. The first entry
     // is the canonical HomeWorks QSX shape for the detected kind; the rest
