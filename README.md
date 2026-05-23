@@ -119,7 +119,7 @@ WaveGuard supports four lighting system types through a common adapter interface
 
 | System | Protocol | Live Client | Mock Engine |
 |---|---|---|---|
-| **Lutron** | Telnet (port 23), LEAP (port 8081) | TCP telnet client | In-memory zone/scene/button state |
+| **Lutron** | Telnet (port 23), LEAP (port 8081) | Telnet TCP + LEAP HTTP REST | In-memory zone/scene/button state |
 | **KNX** | KNXnet/IP tunnelling (UDP 3671) | UDP KNX client | In-memory group address state |
 | **DALI** | DALI-IP bridge (TCP 5582) | TCP DALI client | In-memory ballast state |
 | **DMX** | Art-Net (UDP 6454), sACN (UDP 5568) | UDP Art-Net/sACN client | In-memory channel state |

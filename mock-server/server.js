@@ -46,6 +46,7 @@ import {
   probeLutronPorts,
   recommendationFromPorts,
 } from "../scanner/integrations/lutron/lutronClient.js";
+import { getLeapClient, closeLeapClient } from "../scanner/integrations/lutron/leapClient.js";
 import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
 import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
 import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
@@ -1244,7 +1245,7 @@ function getStoredLightingConnection(systemType) {
  * Decide whether the live integration should handle a command. We
  * honour any per-request override (so the connection-test modal can validate
  * draft values without saving) and otherwise fall back to the stored
- * connection. LEAP / Athena is not yet wired — see lutronClient.js header.
+ * connection.
  */
 function resolveLiveConnection(reqBody = {}) {
   const systemType = reqBody.systemType || "lutron";
@@ -1313,6 +1314,8 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
     if (live) {
       if (systemType === "lutron" && live.protocol === "telnet") {
         liveClient = getLutronClient(live);
+      } else if (systemType === "lutron" && live.protocol === "leap") {
+        liveClient = getLeapClient(live);
       } else if (systemType === "knx") {
         liveClient = getKnxClient(live);
       } else if (systemType === "dali") {
@@ -1534,19 +1537,6 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             ...overrides,
           });
 
-          if (resolvedProtocol === "leap") {
-            return res.json(
-              buildResponse({
-                success: false,
-                mode: "live",
-                message:
-                  "LEAP / Athena (TLS) live control is not wired yet. " +
-                  "Switch the protocol to Telnet (port 23) once it has been " +
-                  "enabled in Lutron Designer.",
-              })
-            );
-          }
-
           if (!effectiveUser) {
             return res.json(
               buildResponse({
@@ -1557,15 +1547,16 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
             );
           }
 
-          const telnetPort = availablePorts.find((p) => p.role === "telnet");
-          const portProbeFailed = telnetPort && !telnetPort.open;
+          const probeRole = resolvedProtocol === "leap" ? "leap" : "telnet";
+          const probed = availablePorts.find((p) => p.role === probeRole);
+          const portProbeFailed = probed && !probed.open;
 
           if (liveClient) {
             try {
               await liveClient.connect();
               await liveClient.ping();
               const msg = portProbeFailed
-                ? `Connected to ${target} (port probe showed closed — connection succeeded anyway).`
+                ? `Connected to ${target} (${probeRole} probe showed closed — connection succeeded anyway).`
                 : `Connected to ${target} and authenticated as ${effectiveUser}.`;
               return res.json(
                 buildResponse({
@@ -1584,7 +1575,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
                   message: err.message,
                   recommendation: portProbeFailed
                     ? recommendation
-                    : `Telnet connection to ${target} failed: ${err.message}. Verify the processor IP, port 23 is open, and Telnet integration is enabled in Lutron Designer.`,
+                    : `${resolvedProtocol === "leap" ? "LEAP" : "Telnet"} connection to ${target} failed: ${err.message}. Verify the processor IP, port ${resolvedProtocol === "leap" ? "8081" : "23"} is open, and integration is enabled in Lutron Designer.`,
                 })
               );
             }
@@ -1666,6 +1657,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
 for (const sig of ["SIGINT", "SIGTERM"]) {
   process.once(sig, () => {
     try { closeLutronClient(); } catch { /* */ }
+    try { closeLeapClient(); } catch { /* */ }
     try { closeKnxClient(); } catch { /* */ }
     try { closeDaliClient(); } catch { /* */ }
     try { closeDmxClient(); } catch { /* */ }

@@ -17,18 +17,24 @@ When testing, the server:
 
 #### Lutron (Telnet / LEAP)
 
-| Protocol | Port | Probe Method |
-|---|---|---|
-| Telnet | 23 | TCP connect + login/password prompt detection |
-| LEAP | 8081 | TCP connect (TLS not yet wired — shows setup guide) |
-| LEAP pairing | 8083 | TCP probe |
-| Legacy Telnet | 2147 | TCP probe |
-| Web admin | 443 | TCP probe |
+| Protocol | Port | Probe Method | Live Client |
+|---|---|---|---|
+| Telnet | 23 | TCP connect + login/password prompt detection | Telnet socket with command queue |
+| LEAP | 8081 | TCP probe | HTTP REST (JSON via Basic auth) |
+| LEAP pairing | 8083 | TCP probe | — |
+| Legacy Telnet | 2147 | TCP probe | — |
+| Web admin | 443 | TCP probe | — |
+
+**Live LEAP client** (`leapClient.js`):
+- Sends `CreateRequest` commands via HTTP PUT to `/zone/{id}/commandprocessor`, `/area/{id}/commandprocessor`, `/device/{id}/button/{comp}/commandprocessor`
+- Reads zone status via `GET /zone/{id}/status`
+- Supports `GoToLevel`, `Raise`/`Lower`/`StopRaisingOrLowering`, `PressAndRelease`, `ActivateScene`
+- Uses HTTP (port 8081) by default; HTTPS is used when port is 443 or 8083
+- Authentication via HTTP Basic auth with integration username/password (no certificate pairing required on port 8081)
 
 **Recommendations:**
-- If Telnet (23) is closed but LEAP (8081) is open: suggests enabling Telnet in Lutron Designer
+- If Telnet (23) is closed but LEAP (8081) is open: suggests switching to LEAP protocol in the connection settings
 - If both are closed: advises enabling integration access in Designer and re-transferring
-- If LEAP is selected: informs that LEAP is not yet wired and suggests switching to Telnet
 
 #### KNX (KNXnet/IP)
 
