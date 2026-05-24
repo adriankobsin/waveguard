@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
 import {
   Lightbulb,
   ChevronDown,
@@ -10,8 +11,10 @@ import {
   Building2,
   MapPin,
   Wand2,
+  GripVertical,
 } from "lucide-react";
 import ZoneInlineControls from "./ZoneInlineControls";
+import { applyFloorOrder } from "@/lib/lighting/lightingSettings";
 
 function ZoneRow(props) {
   return <ZoneInlineControls {...props} variant="row" />;
@@ -163,16 +166,18 @@ export default function LutronAreaLoads({
   onActivateScene,
   defaultFloor,
   emptyMessage,
+  orderKey,
+  floorOrder,
+  onFloorReorder,
 }) {
-  // Open every floor and every area by default so the user lands on a
-  // page that already shows controls. Previously only the first floor
-  // was open and *no* areas were expanded, which made the Shades tab
-  // look empty even when zones existed — the user had to discover
-  // they needed to click through two levels of disclosure before any
-  // Open/Close button appeared.
+  // Floors and areas start collapsed; the user expands what they need.
+  const sortedHierarchy = useMemo(
+    () => applyFloorOrder(hierarchy, floorOrder?.[orderKey]),
+    [hierarchy, floorOrder, orderKey]
+  );
   const allFloorIds = useMemo(
-    () => (hierarchy || []).map((f) => f.id),
-    [hierarchy]
+    () => (sortedHierarchy || []).map((f) => f.id),
+    [sortedHierarchy]
   );
   const allAreaIds = useMemo(
     () =>
@@ -182,23 +187,22 @@ export default function LutronAreaLoads({
     [hierarchy]
   );
   const [openFloors, setOpenFloors] = useState(() =>
-    new Set(defaultFloor ? [defaultFloor] : allFloorIds)
+    new Set(defaultFloor ? [defaultFloor] : [])
   );
-  const [openAreas, setOpenAreas] = useState(() => new Set(allAreaIds));
+  const [openAreas, setOpenAreas] = useState(() => new Set());
 
-  // When the hierarchy changes (e.g. Lights ↔ Shades tab switch, or a
-  // fresh Integration Report import) expand any newly-introduced floors
-  // and areas without collapsing whatever the user had manually opened.
+  // Drop expand state for floors/areas removed from the hierarchy (e.g.
+  // re-import). Never auto-expand — the user opens sections manually.
   useEffect(() => {
+    const floorSet = new Set(allFloorIds);
+    const areaSet = new Set(allAreaIds);
     setOpenFloors((prev) => {
-      const next = new Set(prev);
-      for (const id of allFloorIds) next.add(id);
-      return next;
+      const next = new Set([...prev].filter((id) => floorSet.has(id)));
+      return next.size === prev.size ? prev : next;
     });
     setOpenAreas((prev) => {
-      const next = new Set(prev);
-      for (const id of allAreaIds) next.add(id);
-      return next;
+      const next = new Set([...prev].filter((id) => areaSet.has(id)));
+      return next.size === prev.size ? prev : next;
     });
   }, [allFloorIds, allAreaIds]);
 
@@ -233,6 +237,97 @@ export default function LutronAreaLoads({
     });
   };
 
+  function handleDragEnd(result) {
+    if (!result.destination || result.source.index === result.destination.index) return;
+    onFloorReorder?.(result.source.index, result.destination.index);
+  }
+
+  function renderFloorSection(floor, { dragHandleProps } = {}) {
+    const totals = floorTotals.get(floor.id) || { zones: 0, on: 0 };
+    const isOpen = openFloors.has(floor.id);
+    return (
+      <>
+        <div className="w-full flex items-center gap-1 px-2 py-3">
+          {dragHandleProps && (
+            <button
+              type="button"
+              {...dragHandleProps}
+              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-grab active:cursor-grabbing flex-shrink-0 touch-none"
+              aria-label={`Drag to reorder ${floor.name}`}
+              title="Drag to reorder"
+            >
+              <GripVertical size={16} />
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => toggleFloor(floor.id)}
+            className="flex-1 flex items-center gap-3 text-left hover:bg-muted/40 transition-colors rounded-lg px-2 py-1 min-w-0"
+          >
+            <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
+              <Building2 size={15} className="text-muted-foreground" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-foreground">{floor.name}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {floor.areas.length} areas · {totals.zones} loads
+              </p>
+            </div>
+            <div className="text-right hidden sm:block">
+              <p
+                className={`text-sm font-bold ${
+                  totals.on > 0 ? "text-amber-400" : "text-muted-foreground"
+                }`}
+              >
+                {totals.on}/{totals.zones}
+              </p>
+              <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
+                loads on
+              </p>
+            </div>
+            {isOpen ? (
+              <ChevronDown size={16} className="text-muted-foreground" />
+            ) : (
+              <ChevronRight size={16} className="text-muted-foreground" />
+            )}
+          </button>
+        </div>
+        <AnimatePresence initial={false}>
+          {isOpen && (
+            <motion.div
+              layout
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="px-3 pb-3 space-y-2">
+                {floor.areas.map((area) => (
+                  <AreaCard
+                    key={area.fullPath || area.id}
+                    area={area}
+                    zoneState={zoneState}
+                    pending={pendingZones}
+                    pendingScene={pendingScene}
+                    onZoneLevel={onZoneLevel}
+                    onZoneToggle={onZoneToggle}
+                    onStopShade={onStopShade}
+                    onEditZone={onEditZone}
+                    onActivateScene={onActivateScene}
+                    expanded={openAreas.has(area.fullPath || area.id)}
+                    onToggleExpanded={() =>
+                      toggleArea(area.fullPath || area.id)
+                    }
+                  />
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
+
   if (!hierarchy || hierarchy.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
@@ -250,82 +345,55 @@ export default function LutronAreaLoads({
     );
   }
 
+  const canReorder = Boolean(orderKey && onFloorReorder);
+
+  if (canReorder) {
+    return (
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId={`lutron-floors-${orderKey}`}>
+          {(provided) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className="max-w-5xl mx-auto px-4 py-4 space-y-3"
+            >
+              {sortedHierarchy.map((floor, index) => (
+                <Draggable key={floor.id} draggableId={floor.id} index={index}>
+                  {(dragProvided, snapshot) => (
+                    <section
+                      ref={dragProvided.innerRef}
+                      {...dragProvided.draggableProps}
+                      className={`rounded-2xl border border-border bg-card/40 overflow-hidden transition-shadow ${
+                        snapshot.isDragging
+                          ? "shadow-xl ring-2 ring-amber-500/25 z-10"
+                          : ""
+                      }`}
+                    >
+                      {renderFloorSection(floor, {
+                        dragHandleProps: dragProvided.dragHandleProps,
+                      })}
+                    </section>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
+      </DragDropContext>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-4 space-y-3">
-      {hierarchy.map((floor) => {
-        const totals = floorTotals.get(floor.id) || { zones: 0, on: 0 };
-        const isOpen = openFloors.has(floor.id);
-        return (
-          <section
-            key={floor.id}
-            className="rounded-2xl border border-border bg-card/40 overflow-hidden"
-          >
-            <button
-              onClick={() => toggleFloor(floor.id)}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
-            >
-              <div className="w-9 h-9 rounded-xl bg-secondary border border-border flex items-center justify-center flex-shrink-0">
-                <Building2 size={15} className="text-muted-foreground" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-foreground">{floor.name}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {floor.areas.length} areas · {totals.zones} loads
-                </p>
-              </div>
-              <div className="text-right hidden sm:block">
-                <p
-                  className={`text-sm font-bold ${
-                    totals.on > 0 ? "text-amber-400" : "text-muted-foreground"
-                  }`}
-                >
-                  {totals.on}/{totals.zones}
-                </p>
-                <p className="text-[9px] uppercase tracking-widest text-muted-foreground">
-                  loads on
-                </p>
-              </div>
-              {isOpen ? (
-                <ChevronDown size={16} className="text-muted-foreground" />
-              ) : (
-                <ChevronRight size={16} className="text-muted-foreground" />
-              )}
-            </button>
-            <AnimatePresence initial={false}>
-              {isOpen && (
-                <motion.div
-                  layout
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                >
-                  <div className="px-3 pb-3 space-y-2">
-                    {floor.areas.map((area) => (
-                      <AreaCard
-                        key={area.fullPath || area.id}
-                        area={area}
-                        zoneState={zoneState}
-                        pending={pendingZones}
-                        pendingScene={pendingScene}
-                        onZoneLevel={onZoneLevel}
-                        onZoneToggle={onZoneToggle}
-                        onStopShade={onStopShade}
-                        onEditZone={onEditZone}
-                        onActivateScene={onActivateScene}
-                        expanded={openAreas.has(area.fullPath || area.id)}
-                        onToggleExpanded={() =>
-                          toggleArea(area.fullPath || area.id)
-                        }
-                      />
-                    ))}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </section>
-        );
-      })}
+      {sortedHierarchy.map((floor) => (
+        <section
+          key={floor.id}
+          className="rounded-2xl border border-border bg-card/40 overflow-hidden"
+        >
+          {renderFloorSection(floor)}
+        </section>
+      ))}
     </div>
   );
 }

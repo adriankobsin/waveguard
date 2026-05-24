@@ -197,6 +197,80 @@ The full SNMP topology scan only runs on **Refresh** in the Topology page or **R
 
 ---
 
+## 6b. Cisco Catalyst 1300 / CBS350 (SSH + SNMP)
+
+The **Cisco Switches** workspace lives inside **Core Network** (`/snmp?tab=cisco`). It integrates Catalyst 1300 (C1300-48FP-4G is the reference SKU) and CBS350-family switches over SSH and SNMP. Initial focus is read-only — the modal collects credentials, the orchestrator pulls every datapoint the UI needs.
+
+### What we read
+
+| Section | SSH command | SNMP MIB |
+|---|---|---|
+| System info (model, serial, firmware, uptime, PoE budget) | `show version`, `show system` | sysName / sysDescr / sysUpTime |
+| Interfaces (status, speed, duplex, VLAN, alias, PoE) | `show interfaces status`, `show interfaces description`, `show power inline` | IF-MIB + POWER-ETHERNET-MIB |
+| Connected devices (MAC table + LLDP/CDP) | `show mac address-table dynamic`, `show lldp neighbors detail`, `show cdp neighbors detail` | BRIDGE-MIB `dot1dTpFdbTable` + LLDP-MIB `lldpRemTable` |
+| Live counter updates | — | IF-MIB `ifHCInOctets` / `ifHCOutOctets` |
+
+### Configure
+
+1. **Core Network → Cisco Switches** tab → **Add switch**.
+2. Enter the **switch IP**, **SSH user** (default `cisco`), and **SSH password**. Click **Connect to switch**.
+3. The platform probes TCP/22 and TCP/161 (SSH and SNMP only — Telnet port 23 is not probed), attempts an SSH login, and runs `show version` to confirm the model. On success, the modal turns green and shows model/firmware/serial.
+4. Save — the switch appears in the left rail. The Overview / Interfaces / Connected devices / Activity tabs render immediately and refresh every ~30 s while the workspace is open.
+5. The same switch is also auto-registered into the **Core Network** fleet with `integrationVendor: "cisco"` and `pollMethod: "cisco_ssh"`, so it shows up in the port grid alongside any existing SNMP devices.
+
+The legacy route `/cisco-switches` redirects to `/snmp?tab=cisco`.
+
+Advanced settings cover non-default SSH ports, enable-password, SNMP v2c community override, and SNMPv3 USM (user, auth proto/pass, priv proto/pass).
+
+### Prerequisites on the switch
+
+- SSH enabled (Security → TCP/UDP Services → Enable SSH server).
+- A user with privilege 15 (Administration → User Accounts → Access level 15).
+- SNMP v2c read-only community (Administration → SNMP → Communities). Optional but recommended — it powers continuous counter polling without re-running SSH commands every second.
+- LLDP enabled (Administration → Discovery → LLDP → Enable). Not strictly required; CDP is the fallback.
+
+### Architecture
+
+```
+React UI (CiscoSwitchesPage, CiscoConnectionModal, Core Network fleet)
+   │
+   ├─ src/api/ciscoApi.js
+   │     │
+   │     ├─ POST /functions/ciscoCommand   ──┐
+   │     └─ GET  /functions/ciscoEvents (SSE)│
+   │                                         ▼
+   │                       mock-server/server.js
+   │                                  │
+   │                                  ▼
+   │            scanner/integrations/cisco/ciscoSwitchClient.js   (per-host singleton)
+   │                ├─ ciscoSshClient.js  (ssh2 + show parsers)
+   │                └─ ciscoSnmpPoller.js (BRIDGE/LLDP/POE walks)
+   │                          │
+   │                          ▼
+   │                Cisco C1300 (ports 22 + 161)
+   │
+   └─ src/lib/integrations/cisco/ciscoAdapter.js
+         normalises SSH+SNMP into the existing `port[]` shape
+         used by the Core Network fleet — same UI for free.
+```
+
+### Dashboard widgets
+
+| Widget | Data source |
+|---|---|
+| `lutron_lights` | `SystemDataContext` — Lutron connection probe + lighting house zone state (lights on / total) |
+| `cisco_switches` | `SystemDataContext` — Cisco switch list + per-host SSH probe results |
+
+Both widgets link to their respective management pages. Add them from **Settings → Dashboard widgets** if your layout predates this release.
+
+### Falling back gracefully
+
+- If `ssh2` isn't installed in the scanner package, the SSH client returns a clear error message and the page falls back to a mock C1300-48FP-4G snapshot so the page still renders during development.
+- If SSH succeeds but SNMP times out, the snapshot keeps the SSH-derived data and the LLDP/MAC tables — counters just aren't continuously refreshed.
+- Demo mode short-circuits the live path entirely and returns a curated `C1300-48FP-4G` with realistic interfaces, MAC entries, and LLDP/CDP neighbours.
+
+---
+
 ## 7. Vessel Spreadsheet Import
 
 Albatros-style multi-sheet `.xlsx` workbooks can be imported through **Equipment → Import spreadsheet**:
@@ -224,8 +298,9 @@ Every subsystem emits diagnoses into the central generator (`src/lib/systemData/
 | **SNMP** | port count drift, fault hints, FDB anomalies |
 | **WAN** | `wan-link-down`, `wan-link-degraded` |
 | **Lighting** | `lighting-processor-offline`, `lighting-zone-rejected-<href>`, `lighting-zone-unreachable-<href>` |
+| **Cisco** | `cisco-switch-offline-<host>`, `cisco-switch-auth-failed-<host>`, `cisco-port-flapping-<host>-<ifIndex>` |
 
-`src/contexts/SystemDataContext.jsx` periodically probes the Lutron processor (60s) and re-generates lighting diagnoses on every `LIGHTING_EVENT_LOG_CHANGED_EVENT` / `LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT` dispatch.
+`src/contexts/SystemDataContext.jsx` periodically probes the Lutron processor and each saved Cisco switch (60 s cadence each) and re-generates the matching diagnoses on every `LIGHTING_EVENT_LOG_CHANGED_EVENT`, `LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT`, `NETWORK_CISCO_EVENT_LOG_CHANGED_EVENT`, or `NETWORK_CISCO_SWITCHES_CHANGED_EVENT` dispatch.
 
 ---
 
@@ -240,3 +315,8 @@ Every subsystem emits diagnoses into the central generator (`src/lib/systemData/
 | Lutron LEAP pairing hangs | Designer didn't enable Integration Access for the user, or you missed the 30s window after pressing the pairing button | Re-enable Integration Access in Designer, re-transfer the project, then restart the WaveGuard pairing flow. |
 | KNX gateway not responding | UDP 3671 blocked or multicast missing from the subnet | Verify the firewall and switch-level IGMP snooping settings. |
 | `POST /api/functions/lutronCommand` returns 500 | Mock server can't reach the live processor at all | Check the mock-server terminal — the error message is logged in full, including the LEAP `ExceptionResponse` body. |
+| Cisco connection modal says "SSH login failed: All configured authentication methods failed" | Wrong username or password, OR the user lacks SSH access | Verify on the switch CLI: `show running-config | include username` — the user must have `password` and `privilege 15`. Reset the password via the console port if forgotten. |
+| Cisco Overview shows the model but Interfaces is empty | SSH succeeded but the firmware version is older / newer than the SMB-OS regex covers | Open the mock-server terminal and look for the raw `show interfaces status` output. Send a snippet so the parser regex can be widened. |
+| Connected Devices tab is empty | LLDP / CDP not enabled on the switch; or the operator hasn't polled yet | Enable LLDP under Administration → Discovery → LLDP. CDP is auto-enabled by default; if it was disabled, re-enable it under Discovery → CDP. |
+| `ssh2 is not installed` error from the Cisco modal | The `scanner/node_modules` hasn't been rebuilt since `ssh2` was added | Run `npm install` at the project root (postinstall installs `scanner/`) or `npm install` inside `scanner/` |
+| Switch logs `%AAA-W-REJECT` for telnet | A client probed port 23 | WaveGuard no longer probes Telnet during Cisco port discovery — only SSH (22) and SNMP (161) |

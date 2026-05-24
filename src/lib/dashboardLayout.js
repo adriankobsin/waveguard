@@ -6,4 +6,6 @@ export const DEFAULT_DASHBOARD_LAYOUT = [
   { id: "w4", type: "alarms",        x: 0, y: 5, w: 4,  h: 3 },
   { id: "w5", type: "categories",    x: 4, y: 5, w: 4,  h: 3 },
   { id: "w6", type: "wan_status",    x: 8, y: 5, w: 4,  h: 3 },
+  { id: "w7", type: "lutron_lights", x: 0, y: 8, w: 4,  h: 3 },
+  { id: "w8", type: "cisco_switches", x: 4, y: 8, w: 4, h: 3 },
 ];

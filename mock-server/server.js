@@ -62,7 +62,21 @@ import {
 import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
 import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
 import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
+import {
+  getCiscoSwitchClient,
+  closeCiscoSwitchClient,
+  probeCiscoPorts,
+  recommendationFromPorts as ciscoRecommendation,
+} from "../scanner/integrations/cisco/ciscoSwitchClient.js";
+import { mergeCiscoIntoPoll } from "../src/lib/integrations/cisco/ciscoAdapter.js";
 import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
+import {
+  NETWORK_CISCO_SWITCHES_KEY,
+  normalizeCiscoSwitches,
+  normalizeCiscoSwitch,
+  CISCO_LIVE_POLL_INTERVAL_MS,
+  CISCO_BACKGROUND_POLL_INTERVAL_MS,
+} from "../src/lib/network/ciscoSwitchSettings.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1019,6 +1033,27 @@ async function pollProfileAndSave(profile) {
     }
   }
 
+  const useCisco =
+    profile.pollMethod === "cisco_ssh" || profile.integrationVendor === "cisco";
+  if (useCisco) {
+    try {
+      const ciscoConn = resolveCiscoConnectionForProfile(profile, eq);
+      if (ciscoConn) {
+        const client = getCiscoSwitchClient(ciscoConn);
+        const snapshot = await client.pollAll({
+          snmpCommunity: profile.snmpCommunity || disc.snmpCommunity,
+          snmpVersion: profile.snmpVersion === "3" ? "3" : "2c",
+        });
+        poll = mergeCiscoIntoPoll(poll, snapshot, eq);
+      }
+    } catch (err) {
+      console.warn("[pollProfileAndSave] Cisco enrich failed:", err.message);
+      if (!poll?.ports?.length) {
+        poll = { ...poll, error: err.message };
+      }
+    }
+  }
+
   const global = getSnmpSwitchesState().global;
   const updated = mergePollIntoProfile(profile, poll, {
     trafficHistorySamples: global?.trafficHistorySamples,
@@ -1288,6 +1323,137 @@ function resolveLiveConnection(reqBody = {}) {
     username: conn.username,
     password: conn.password,
   };
+}
+
+// ── Cisco helpers (per-host singleton lookup + cred resolution) ─────────
+
+function getStoredCiscoSwitches() {
+  const row = db.systemSettings.find((s) => s.key === NETWORK_CISCO_SWITCHES_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeCiscoSwitches(raw || { switches: [] });
+}
+
+function findStoredCiscoSwitch(hostOrId) {
+  if (!hostOrId) return null;
+  const stored = getStoredCiscoSwitches();
+  const needle = String(hostOrId).toLowerCase().trim();
+  return (
+    stored.switches.find(
+      (s) =>
+        s.host.toLowerCase() === needle ||
+        s.id === hostOrId ||
+        s.equipmentId === hostOrId
+    ) || null
+  );
+}
+
+function saveStoredCiscoSwitches(payload) {
+  const normalized = normalizeCiscoSwitches(payload);
+  const row = db.systemSettings.find((s) => s.key === NETWORK_CISCO_SWITCHES_KEY);
+  if (row) row.value = normalized;
+  else {
+    db.systemSettings.push({
+      id: `setting-${Date.now()}`,
+      key: NETWORK_CISCO_SWITCHES_KEY,
+      value: normalized,
+    });
+  }
+  return normalized;
+}
+
+function updateCiscoSwitchPollMeta(host, { snapshot = null, error = null } = {}) {
+  if (!host) return;
+  const stored = getStoredCiscoSwitches();
+  const idx = stored.switches.findIndex(
+    (s) => s.host.toLowerCase() === String(host).toLowerCase()
+  );
+  if (idx < 0) return;
+  stored.switches[idx] = {
+    ...stored.switches[idx],
+    system: snapshot?.system || stored.switches[idx].system,
+    lastConnectedAt: error ? stored.switches[idx].lastConnectedAt : new Date().toISOString(),
+    lastError: error,
+    updatedAt: new Date().toISOString(),
+  };
+  saveStoredCiscoSwitches(stored);
+}
+
+async function pollStoredCiscoSwitch(sw) {
+  const client = getCiscoSwitchClient(sw);
+  if (!client) return null;
+  try {
+    const snapshot = await client.pollAll({
+      snmpCommunity: sw.snmpCommunity,
+      snmpVersion: sw.snmpVersion,
+    });
+    updateCiscoSwitchPollMeta(sw.host, { snapshot });
+    return snapshot;
+  } catch (err) {
+    updateCiscoSwitchPollMeta(sw.host, { error: err?.message || String(err) });
+    throw err;
+  }
+}
+
+async function pollAllStoredCiscoSwitches() {
+  const stored = getStoredCiscoSwitches();
+  for (const sw of stored.switches.filter((s) => s.enabled !== false && s.host)) {
+    try {
+      await pollStoredCiscoSwitch(sw);
+    } catch (err) {
+      console.warn(`[ciscoPoll] ${sw.host} failed:`, err?.message || err);
+    }
+  }
+}
+
+function resolveCiscoConnection(reqBody = {}) {
+  // Per-request override wins so the modal "Test connection" path doesn't
+  // need a saved switch first.
+  if (reqBody.host && (reqBody.sshPassword || reqBody.password)) {
+    return normalizeCiscoSwitch({
+      host: reqBody.host,
+      sshPort: reqBody.sshPort,
+      sshUsername: reqBody.sshUsername || reqBody.username || "cisco",
+      sshPassword: reqBody.sshPassword || reqBody.password,
+      enablePassword: reqBody.enablePassword,
+      snmpPort: reqBody.snmpPort,
+      snmpVersion: reqBody.snmpVersion,
+      snmpCommunity: reqBody.snmpCommunity,
+      snmpv3User: reqBody.snmpv3User,
+      snmpv3AuthProto: reqBody.snmpv3AuthProto,
+      snmpv3AuthPass: reqBody.snmpv3AuthPass,
+      snmpv3PrivProto: reqBody.snmpv3PrivProto,
+      snmpv3PrivPass: reqBody.snmpv3PrivPass,
+    });
+  }
+  return findStoredCiscoSwitch(reqBody.host || reqBody.switchId);
+}
+
+function resolveCiscoConnectionForProfile(profile, equipment) {
+  const host = equipment?.ip || equipment?.ipAddress || null;
+  if (!host) return null;
+  const stored = findStoredCiscoSwitch(host);
+  if (stored) return stored;
+  // Fall back to whatever creds the operator put on the SNMP profile —
+  // useful for the demo path where the fleet profile carries SSH login
+  // info even before the operator opens the Cisco Switches page.
+  const ciscoCfg = profile.ciscoConfig || {};
+  if (!ciscoCfg.sshPassword) return null;
+  return normalizeCiscoSwitch({
+    host,
+    sshPort: ciscoCfg.sshPort,
+    sshUsername: ciscoCfg.sshUsername || "cisco",
+    sshPassword: ciscoCfg.sshPassword,
+    enablePassword: ciscoCfg.enablePassword,
+    snmpCommunity: profile.snmpCommunity,
+    snmpVersion: profile.snmpVersion,
+  });
 }
 
 /** Best-effort scene number from the scene name in the integration report. */
@@ -1939,6 +2105,198 @@ app.get("/api/apps/:appId/functions/lutronEvents", async (req, res) => {
     clearInterval(keepAlive);
     try { liveClient.off("zoneLevel", forward); } catch { /* */ }
     try { liveClient.off("output", forward); } catch { /* */ }
+  };
+  req.on("close", cleanup);
+  req.on("aborted", cleanup);
+  res.on("close", cleanup);
+});
+
+// ── Cisco Catalyst 1300 / CBS350 SSH+SNMP commands ───────────────────────
+//
+// Mirrors the Lutron `lutronCommand` endpoint above. Operations:
+//   - testSwitch     → probe ports + try SSH login + grab system info
+//   - getSystem      → `show version` + `show system` parsed
+//   - getInterfaces  → `show interfaces status/description/power inline`
+//   - getMacTable    → `show mac address-table dynamic`
+//   - getNeighbors   → `show lldp neighbors detail` + `show cdp ...`
+//   - pollAll        → all of the above in one call
+//   - setPortEnabled → reserved for future write support (returns 501)
+//
+// Per-request credentials override the stored connection so the modal can
+// run a "Test connection" before saving anything.
+
+app.post("/api/apps/:appId/functions/ciscoCommand", async (req, res) => {
+  try {
+    const { op } = req.body || {};
+    const conn = resolveCiscoConnection(req.body);
+    if (!conn) {
+      return res.status(400).json({
+        success: false,
+        error: "host + sshPassword required (or save the switch first)",
+      });
+    }
+    const client = getCiscoSwitchClient(conn);
+    if (!client) {
+      return res.status(500).json({ success: false, error: "client unavailable" });
+    }
+    switch (op) {
+      case "testSwitch": {
+        const result = await client.testConnection();
+        return res.json(result);
+      }
+      case "getSystem": {
+        const system = await client.getSystem();
+        return res.json({ success: true, system });
+      }
+      case "getInterfaces": {
+        const interfaces = await client.getInterfaces();
+        return res.json({ success: true, interfaces });
+      }
+      case "getMacTable": {
+        const macs = await client.getMacTable();
+        return res.json({ success: true, macs });
+      }
+      case "getNeighbors": {
+        const neighbors = await client.getNeighbors();
+        return res.json({ success: true, neighbors });
+      }
+      case "pollAll": {
+        const snapshot = await client.pollAll({
+          snmpCommunity: conn.snmpCommunity,
+          snmpVersion: conn.snmpVersion,
+        });
+        updateCiscoSwitchPollMeta(conn.host, { snapshot });
+        return res.json({ success: true, host: conn.host, snapshot });
+      }
+      case "probePorts": {
+        const ports = await probeCiscoPorts(conn.host);
+        return res.json({
+          success: true,
+          host: conn.host,
+          ports,
+          recommendation: ciscoRecommendation(ports),
+        });
+      }
+      case "disconnect": {
+        closeCiscoSwitchClient(conn.host);
+        return res.json({ success: true, host: conn.host });
+      }
+      case "setPortEnabled": {
+        // Reserved — write support is a follow-up PR.
+        return res.status(501).json({
+          success: false,
+          error: "Port admin shutdown not yet supported. Coming in the next release.",
+        });
+      }
+      default:
+        return res.status(400).json({ success: false, error: `unknown op ${op}` });
+    }
+  } catch (err) {
+    console.error("[ciscoCommand]", err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
+// SSE for live Cisco switch updates — initial `snapshot`, then `portChange`
+// events whenever the poller observes a change in interface status.
+//
+//   event: snapshot   → { host, system, interfaces, macs, neighbors }
+//   event: portChange → { host, ifIndex, portName, status, prevStatus }
+//   event: ping       → {}
+//   event: error      → { message }
+app.get("/api/apps/:appId/functions/ciscoEvents", async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const writeEvent = (event, data) => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {
+      /* socket already closed */
+    }
+  };
+
+  const hostFilter = (req.query?.host || "").toString().trim();
+  const stored = getStoredCiscoSwitches();
+  const targets = hostFilter
+    ? stored.switches.filter((s) => s.host.toLowerCase() === hostFilter.toLowerCase())
+    : stored.switches.filter((s) => s.enabled);
+
+  if (targets.length === 0) {
+    writeEvent("error", {
+      message: "No Cisco switches configured — open Cisco Switches → Add switch.",
+    });
+    res.end();
+    return;
+  }
+
+  // Initial snapshot for each tracked switch. Pull from the in-memory cache
+  // if available; otherwise poll once.
+  const cleanups = [];
+  for (const sw of targets) {
+    const client = getCiscoSwitchClient(sw);
+    try {
+      const snap = client.lastSnapshot || (await pollStoredCiscoSwitch(sw));
+      writeEvent("snapshot", { host: sw.host, ...snap });
+    } catch (err) {
+      writeEvent("error", { host: sw.host, message: err?.message || String(err) });
+    }
+    // Watch for snapshot/portChange events emitted by the orchestrator.
+    const lastStatusByIfIndex = new Map();
+    const onSnapshot = (snapshot) => {
+      writeEvent("snapshot", { host: sw.host, ...snapshot });
+      for (const p of snapshot.interfaces || []) {
+        const prev = lastStatusByIfIndex.get(p.index);
+        if (prev != null && prev !== p.status) {
+          writeEvent("portChange", {
+            host: sw.host,
+            ifIndex: p.index,
+            portName: p.name,
+            status: p.status,
+            prevStatus: prev,
+            ifAlias: p.ifAlias,
+            ts: snapshot.polledAt,
+          });
+        }
+        lastStatusByIfIndex.set(p.index, p.status);
+      }
+    };
+    client.on("snapshot", onSnapshot);
+    cleanups.push(() => {
+      try { client.off("snapshot", onSnapshot); } catch { /* */ }
+    });
+  }
+
+  const pollTimer = setInterval(async () => {
+    if (res.writableEnded) return;
+    for (const sw of targets) {
+      try {
+        await pollStoredCiscoSwitch(sw);
+      } catch (err) {
+        writeEvent("error", { host: sw.host, message: err?.message || String(err) });
+      }
+    }
+  }, CISCO_LIVE_POLL_INTERVAL_MS);
+
+  const keepAlive = setInterval(() => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+    } catch {
+      /* */
+    }
+  }, 25_000);
+
+  const cleanup = () => {
+    clearInterval(keepAlive);
+    clearInterval(pollTimer);
+    for (const fn of cleanups) {
+      try { fn(); } catch { /* */ }
+    }
   };
   req.on("close", cleanup);
   req.on("aborted", cleanup);
@@ -3006,6 +3364,14 @@ app.delete("/api/apps/:appId/users/:id", (req, res) => {
 
 // ---- Start ----
 ensureDefaultWanRouterProfile();
+pollAllStoredCiscoSwitches().catch((err) => {
+  console.warn("[ciscoPoll] initial fleet poll failed:", err?.message || err);
+});
+setInterval(() => {
+  pollAllStoredCiscoSwitches().catch((err) => {
+    console.warn("[ciscoPoll] background fleet poll failed:", err?.message || err);
+  });
+}, CISCO_BACKGROUND_POLL_INTERVAL_MS);
 
 app.listen(PORT, () => {
   console.log(`[mock-base44] Server running at http://localhost:${PORT}`);

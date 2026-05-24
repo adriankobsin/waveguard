@@ -52,6 +52,7 @@ import {
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
+  reorderFloorOrder,
 } from "@/lib/lighting/lightingSettings";
 
 const PAGE_TABS = [
@@ -450,6 +451,23 @@ export default function LightingPage() {
     setHouse(parsed);
   }, []);
 
+  const handleFloorReorder = useCallback(
+    async (tabKey, sourceIndex, destIndex) => {
+      const tabHierarchy = tabKey === "shades" ? shadesHierarchy : lightsHierarchy;
+      const nextOrder = reorderFloorOrder(
+        house?.floorOrder,
+        tabKey,
+        sourceIndex,
+        destIndex,
+        tabHierarchy
+      );
+      const nextHouse = { ...house, floorOrder: nextOrder };
+      setHouse(nextHouse);
+      await saveLightingHouse(nextHouse);
+    },
+    [house, lightsHierarchy, shadesHierarchy]
+  );
+
   const handleClearHouse = useCallback(async () => {
     if (!window.confirm("Remove the loaded Lutron house? Devices, zones and scenes will be cleared.")) return;
     await clearLightingHouse();
@@ -704,6 +722,11 @@ export default function LightingPage() {
               onStopShade={handleStopShade}
               onEditZone={handleEditZone}
               onActivateScene={handleActivateScene}
+              orderKey={activePageTab === "lights" ? "lights" : "shades"}
+              floorOrder={house?.floorOrder}
+              onFloorReorder={(from, to) =>
+                handleFloorReorder(activePageTab === "lights" ? "lights" : "shades", from, to)
+              }
               emptyMessage={
                 activePageTab === "shades"
                   ? "No shades, blinds, blackouts or curtains found in the parsed Integration Report."

@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Table2, PanelTop, Cpu, Zap, Lightbulb, X, Search, ChevronDown, ChevronUp } from "lucide-react";
+import { Table2, PanelTop, Cpu, Zap, Lightbulb, X, Search } from "lucide-react";
 
 export default function LoadScheduleTable({ house, open, onClose }) {
   const [filter, setFilter] = useState("");

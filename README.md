@@ -12,6 +12,7 @@ WaveGuard runs entirely on the host network — discovery, lighting control, SNM
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
 - [Lights and Shades](#lights-and-shades)
+- [Cisco Switches](#cisco-switches)
 - [Network & SNMP](#network--snmp)
 - [Vessel Spreadsheet Import](#vessel-spreadsheet-import)
 - [Diagnoses](#diagnoses)
@@ -27,10 +28,10 @@ WaveGuard runs entirely on the host network — discovery, lighting control, SNM
 
 | Module | What it does |
 |---|---|
-| **Dashboard** | Real-time status overview with customisable widgets — device health, alerts, network stats |
+| **Dashboard** | Real-time status overview with customisable widgets — device health, alerts, WAN status, **Lutron processor + lights**, **Cisco switch fleet**, network stats |
 | **Topology** | Filterable equipment list with per-device scan/edit, path tracing, groups, CSV import. Full SNMP scan only on **Refresh** |
 | **Topology — Deck / Rack / AV / Control** | Deck floor plans, rack elevation designer, AV signal flow, control-path diagrams |
-| **Core Network (SNMP)** | Live switch port status, connected device detection, cable fault hints, VLAN / PoE / speed display |
+| **Core Network (SNMP)** | Live switch port status, connected device detection, cable fault hints, VLAN / PoE / speed display, **WAN management**, and **Cisco Switches** (Catalyst 1300 / CBS350 over SSH + SNMP) |
 | **Discovery** | Subnet scans (ping / ARP / full / SNMP), auto-classify discovered devices, register to inventory |
 | **Diagnoses** | Aggregated diagnostic findings from every subsystem — network, SNMP, WAN, lighting (processor offline, zone rejected, zone unreachable). Severity-coded with acknowledgement |
 | **Maintenance** | Scheduled task management with priority levels, status tracking, due-date alerts |
@@ -73,7 +74,15 @@ The Diagnoses badge in the sidebar shows a live count of unresolved findings acr
 git clone https://github.com/adriankobsin/waveguard.git
 cd waveguard
 npm install
+```
+
+The root `postinstall` script also installs dependencies for `mock-server/` and `scanner/` (including the `ssh2` package required for Cisco SSH).
+
+Or install manually:
+
+```bash
 cd mock-server && npm install && cd ..
+cd scanner && npm install && cd ..
 ```
 
 ### Run locally (recommended)
@@ -140,8 +149,8 @@ The Lights and Shades page has four tabs:
 
 | Tab | Purpose |
 |---|---|
-| **Lights** | Floor → Area → Zone tree, filtered to dimmer / switched / light zones. Per-zone slider + on/off toggle. Edit pencil renames or re-addresses the zone. |
-| **Shades** | Same tree filtered to shade / blind / blackout / curtain zones. Open / Close / Stop buttons instead of sliders. |
+| **Lights** | Floor → Area → Zone tree, filtered to dimmer / switched / light zones. Per-zone slider + on/off toggle. Edit pencil renames or re-addresses the zone. **Drag floors** by the grip handle (⋮⋮) to reorder — order is saved separately for Lights and Shades. |
+| **Shades** | Same tree filtered to shade / blind / blackout / curtain zones. Open / Close / Stop buttons instead of sliders. Floors can be reordered independently of the Lights tab. |
 | **Area Control** | Floor switcher with a map view (clickable zone pins → inline control popover) and a list view. The "Recent activity" event log lives in the left rail. |
 | **Scenes** | User-authored Lutron scenes — Area Scene (`area_id` + scene number), LEAP href, or Phantom Keypad Button. Run / Delete actions. Scenes persist across sessions. |
 
@@ -200,6 +209,61 @@ For Lutron HomeWorks QSX / RA3 the platform handles the full TLS pairing flow (p
 
 ---
 
+## Cisco Switches
+
+Cisco Catalyst 1300 / CBS350-family switches are managed from **Core Network → Cisco Switches** (not a separate sidebar entry). The module combines **SSH** (rich CLI data) and **SNMP** (live counter polling). The C1300 has no on-switch REST API; SSH + SNMP is the documented, stable surface and covers every data point exposed in the UI.
+
+### Dashboard widget
+
+Add the **Cisco switches** widget on the Dashboard (or **Settings → Dashboard widgets**) for a live online/offline summary and per-switch status. Links straight to **Core Network → Cisco Switches**.
+
+### What you get
+
+| Tab | Source | Data |
+|---|---|---|
+| **Overview** | SSH `show version` / `show system` / `show inventory` + SNMP `sysName` / `sysDescr` / `sysUpTime` | Model, serial, MAC, firmware, uptime, PoE budget + KPI tiles |
+| **Interfaces** | SSH `show interfaces status` / `description` / `vlan` / `show power inline` + IF-MIB + POWER-ETHERNET-MIB | Per-port status, speed, duplex, VLAN, alias, PoE wattage |
+| **Connected devices** | SSH `show mac address-table` / `show lldp neighbors detail` / `show cdp neighbors detail` + BRIDGE-MIB + LLDP-MIB | Per-port MAC table + LLDP / CDP neighbors, cross-referenced against Equipment |
+| **Activity** | Ring buffer | Every command, port flap, connection test and SSE event |
+
+### Workflow
+
+1. **Core Network** → **Cisco Switches** tab → **Add switch** (top-right).
+2. Enter host IP, expand **Advanced settings** and fill SSH credentials (username / password / port / optional `enable` password) plus SNMP credentials (v2c community or SNMPv3 USM, port 161 default).
+3. **Test connection** → SSH + SNMP are probed; the chip turns green with the model and firmware when both respond.
+4. **Save** → the switch joins the left rail **and** is auto-registered into **Core Network → Fleet** with `integrationVendor: cisco` and `pollMethod: cisco_ssh`.
+
+The legacy URL `/cisco-switches` redirects to `/snmp?tab=cisco`.
+
+### Persistence and security
+
+- Configured switches live under SystemSettings key `network-cisco-switches`, mirrored in `localStorage` (`waveguard:network:cisco-switches`).
+- Connection events (200-entry ring buffer) live under `network-cisco-event-log`.
+- SSH/SNMP credentials are kept inside the switch record (encrypted in production via the Base44 secrets vault) and are never returned to the browser by the `list` API in plain form.
+
+### Live updates
+
+The mock / production server exposes:
+
+- `POST /functions/ciscoCommand` — ops: `testSwitch`, `getSystem`, `getInterfaces`, `getMacTable`, `getNeighbors`, `pollAll`, `setPortEnabled`.
+- `GET /functions/ciscoEvents` (SSE) — initial `snapshot`, then `portChange` / `error` events on a 30 s cadence while the page is open.
+
+A per-host singleton orchestrator (`scanner/integrations/cisco/ciscoSwitchClient.js`) keeps one SSH session + SNMP poller per `host:sshPort:username`, mirroring the Lutron `getLeapClient(conn)` pattern. A background fleet poll runs every 60 s on the mock server.
+
+### Diagnoses
+
+The `Diagnoses` page surfaces three Cisco-specific findings:
+
+- `cisco-switch-offline-<host>` — switch failed both SSH and SNMP probes.
+- `cisco-switch-auth-failed-<host>` — credentials rejected on the last test / poll.
+- `cisco-port-flapping-<host>-<ifIndex>` — same port toggled up/down 3+ times in five minutes.
+
+### Demo mode
+
+Without a physical switch on the LAN, the platform serves a fully-populated `C1300-48FP-4G` from `scanner/integrations/cisco/ciscoMockEngine.js` (server) and `src/lib/integrations/cisco/ciscoDemoSnapshot.js` (client-side, for full offline demo). All four tabs render realistic data without any network access.
+
+---
+
 ## Network & SNMP
 
 | Action | What runs |
@@ -212,7 +276,18 @@ For Lutron HomeWorks QSX / RA3 the platform handles the full TLS pairing flow (p
 
 Configure default subnets and SNMP credentials under **Settings → Discovery**.
 
-The **Core Network (SNMP)** page renders a live port map for every managed switch in inventory — port up/down, speed, VLAN, PoE power, link partner MAC + IP. The grid is built from periodic IF-MIB polls and a Bridge-MIB FDB pull; cable-fault hints come from comparing planned cables in the Cable Register to the live connected-port reality.
+The **Core Network (SNMP)** page renders a live port map for every managed switch in inventory — port up/down, speed, VLAN, PoE power, link partner MAC + IP. Tabs include **Overview**, **Fleet**, **Cisco Switches**, **WAN Management**, **Alerts**, and **Settings**. The grid is built from periodic IF-MIB polls and a Bridge-MIB FDB pull; cable-fault hints come from comparing planned cables in the Cable Register to the live connected-port reality.
+
+### Dashboard widgets
+
+| Widget | Shows |
+|---|---|
+| **Lutron lights** | Processor connection status (connected / offline / mock) and light loads on vs total |
+| **Cisco switches** | Online/offline count and per-switch reachability |
+| **Network** | Equipment health + SNMP fleet summary |
+| **WAN / internet** | Live WAN throughput, ISP details, speed test |
+
+Add or rearrange widgets from **Settings → Dashboard widgets** or the Dashboard edit mode.
 
 ---
 
@@ -269,7 +344,9 @@ See [`docs/diagnostics.md`](docs/diagnostics.md) for the per-system probe matrix
                                     │    ├─ dali/daliClient      │
                                     │    ├─ dmx/dmxClient        │
                                     │    ├─ peplinkPoll          │
-                                    │    └─ wanSpeedTest         │
+                                    │    ├─ wanSpeedTest         │
+                                    │    └─ cisco/               │
+                                    │         ciscoSwitchClient  │
                                     └────────────────────────────┘
 ```
 
@@ -347,7 +424,13 @@ scanner/integrations/
 ├── dali/daliClient.js
 ├── dmx/dmxClient.js
 ├── peplinkPoll.js
-└── wanSpeedTest.js
+├── wanSpeedTest.js
+└── cisco/                  # Catalyst 1300 / CBS350 — SSH (`ssh2`) + SNMP
+    ├── ciscoSshClient.js   # show-* command runner + parsers
+    ├── ciscoSnmpPoller.js  # IF-MIB / BRIDGE-MIB / LLDP-MIB walks
+    ├── ciscoSwitchClient.js # per-host singleton orchestrator
+    ├── probeCiscoPorts.js  # 22 / 161 / 443 TCP probes
+    └── ciscoMockEngine.js  # in-memory C1300-48FP-4G for demo mode
 
 mock-server/                # Express mock API + entity store + lighting mock engines
 base44/functions/           # Serverless function entry points (production)
@@ -368,6 +451,8 @@ docs/                       # Markdown docs (reports, diagnostics)
 | `npm run lint` | Run ESLint |
 | `npm run lint:fix` | Auto-fix lint issues |
 | `npm run typecheck` | TypeScript check (uses `jsconfig.json`) |
+
+Root `npm install` runs a `postinstall` hook that installs `mock-server/` and `scanner/` dependencies automatically.
 
 ---
 

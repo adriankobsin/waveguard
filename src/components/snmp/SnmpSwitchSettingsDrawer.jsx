@@ -145,7 +145,12 @@ export default function SnmpSwitchSettingsDrawer({
                   setDraft((d) => ({
                     ...d,
                     integrationVendor: e.target.value,
-                    pollMethod: e.target.value === "peplink" ? "peplink_hybrid" : "snmp",
+                    pollMethod:
+                      e.target.value === "peplink"
+                        ? "peplink_hybrid"
+                        : e.target.value === "cisco"
+                        ? "cisco_ssh"
+                        : "snmp",
                   }))
                 }
                 className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-2 py-1.5 text-sm"
@@ -184,7 +189,11 @@ export default function SnmpSwitchSettingsDrawer({
               >
                 {POLL_METHODS.map((pm) => (
                   <option key={pm} value={pm}>
-                    {pm === "peplink_hybrid" ? "Peplink hybrid (SNMP + REST)" : "SNMP only"}
+                    {pm === "peplink_hybrid"
+                      ? "Peplink hybrid (SNMP + REST)"
+                      : pm === "cisco_ssh"
+                      ? "Cisco SSH + SNMP"
+                      : "SNMP only"}
                   </option>
                 ))}
               </select>
@@ -480,6 +489,67 @@ export default function SnmpSwitchSettingsDrawer({
               {testingPeplink ? <Loader2 size={14} className="animate-spin" /> : <Radio size={14} />}
               Test Peplink connection
             </button>
+          </div>
+        )}
+
+        {draft.integrationVendor === "cisco" && (
+          <div className="rounded-xl border border-sky-500/25 bg-sky-500/5 p-4 space-y-3">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Radio size={12} className="text-sky-400" /> Cisco SSH integration
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground">SSH user</label>
+                <input
+                  value={draft.cisco?.sshUsername || "cisco"}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      cisco: { ...d.cisco, sshUsername: e.target.value },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground">SSH port</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={draft.cisco?.sshPort || 22}
+                  onChange={(e) =>
+                    setDraft((d) => ({
+                      ...d,
+                      cisco: { ...d.cisco, sshPort: Number(e.target.value) || 22 },
+                    }))
+                  }
+                  className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Enable password (privilege 15)</label>
+              <input
+                type="password"
+                value={draft.cisco?.enablePassword || ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    cisco: { ...d.cisco, enablePassword: e.target.value },
+                  }))
+                }
+                placeholder="Optional"
+                className="mt-1 w-full rounded-lg border border-border bg-secondary/30 px-3 py-2 text-sm font-mono"
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              SSH password is managed on the dedicated{" "}
+              <Link to="/snmp?tab=cisco" className="text-sky-400 hover:underline">
+                Cisco Switches
+              </Link>{" "}
+              page. This profile picks credentials up automatically once you add the switch there.
+            </p>
           </div>
         )}
 

@@ -25,7 +25,14 @@ export const PEPLINK_CREDENTIALS_KEY = "peplink-credentials";
 
 export const DEVICE_ROLES = ["switch", "router", "firewall", "wan_router"];
 export const INTEGRATION_VENDORS = ["snmp", "cisco", "peplink", "fortinet", "kerio", "unifi"];
-export const POLL_METHODS = ["snmp", "peplink_hybrid"];
+export const POLL_METHODS = ["snmp", "peplink_hybrid", "cisco_ssh"];
+
+export const DEFAULT_CISCO_CONFIG = {
+  ciscoSwitchId: "",
+  sshPort: 22,
+  sshUsername: "cisco",
+  enablePassword: "",
+};
 
 export const DEFAULT_PEPLINK_CONFIG = {
   mode: "auto",
@@ -167,7 +174,23 @@ export function detectDeviceRole(eq) {
 
 export function defaultPollMethod(vendor) {
   if (vendor === "peplink") return "peplink_hybrid";
+  if (vendor === "cisco") return "cisco_ssh";
   return "snmp";
+}
+
+export function normalizeCiscoConfig(raw) {
+  if (!raw || typeof raw !== "object") return { ...DEFAULT_CISCO_CONFIG };
+  const sshPort = Number(raw.sshPort);
+  return {
+    ciscoSwitchId: raw.ciscoSwitchId || "",
+    sshPort: Number.isFinite(sshPort) && sshPort > 0 ? Math.floor(sshPort) : 22,
+    sshUsername:
+      typeof raw.sshUsername === "string" && raw.sshUsername.trim()
+        ? raw.sshUsername.trim()
+        : DEFAULT_CISCO_CONFIG.sshUsername,
+    enablePassword:
+      typeof raw.enablePassword === "string" ? raw.enablePassword : "",
+  };
 }
 
 export function buildDefaultProfileFields(eq, options = {}) {
@@ -183,6 +206,7 @@ export function buildDefaultProfileFields(eq, options = {}) {
     integrationVendor,
     pollMethod,
     peplink: { ...DEFAULT_PEPLINK_CONFIG },
+    cisco: { ...DEFAULT_CISCO_CONFIG },
     browserLogin: pepLogin
       ? {
           loginUrl: ip ? `https://${ip}/` : "",
@@ -223,6 +247,7 @@ export function normalizeSnmpSwitchProfile(raw) {
     integrationVendor,
     pollMethod,
     peplink: normalizePeplinkConfig(raw.peplink),
+    cisco: normalizeCiscoConfig(raw.cisco),
     browserLogin: normalizeBrowserLogin(raw.browserLogin),
     capabilities: normalizeCapabilities(raw.capabilities, integrationVendor),
     lastPollAt: raw.lastPollAt || null,

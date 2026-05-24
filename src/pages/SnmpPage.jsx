@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Network,
   RefreshCw,
@@ -13,6 +13,7 @@ import {
   SlidersHorizontal,
   Trash2,
   Globe,
+  Cpu,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -58,6 +59,7 @@ import SnmpSwitchSettingsDrawer from "@/components/snmp/SnmpSwitchSettingsDrawer
 import SnmpWanManagementPanel from "@/components/snmp/SnmpWanManagementPanel";
 import { loadWanManagement, saveWanManagement } from "@/api/wanManagementApi";
 import { DEFAULT_WAN_MANAGEMENT } from "@/lib/wan/wanManagementSettings";
+import CiscoSwitchesPage from "@/pages/CiscoSwitchesPage";
 
 const HEALTH_BORDER = {
   healthy: "border-l-emerald-500",
@@ -87,13 +89,19 @@ function EmptyFleetPrompt({ onRegister }) {
   );
 }
 
+const VALID_TABS = new Set(["overview", "switches", "cisco", "wan", "alerts", "settings"]);
+
 export default function SnmpPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState(DEFAULT_SNMP_SWITCHES);
   const [equipment, setEquipment] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedPort, setSelectedPort] = useState(null);
   const [portView, setPortView] = useState(DEFAULT_SNMP_GLOBAL.defaultPortView);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => {
+    const q = searchParams.get("tab");
+    return q && VALID_TABS.has(q) ? q : "overview";
+  });
   const [loading, setLoading] = useState(true);
   const [polling, setPolling] = useState(false);
   const [testingPort, setTestingPort] = useState(false);
@@ -114,6 +122,37 @@ export default function SnmpPage() {
   useEffect(() => {
     profileCountRef.current = state.profiles.length;
   }, [state.profiles.length]);
+
+  useEffect(() => {
+    const q = searchParams.get("tab");
+    if (q && VALID_TABS.has(q) && q !== tab) setTab(q);
+  }, [searchParams, tab]);
+
+  const handleTabChange = useCallback(
+    (value) => {
+      setTab(value);
+      if (value === "overview") {
+        setSearchParams({}, { replace: true });
+      } else {
+        setSearchParams({ tab: value }, { replace: true });
+      }
+    },
+    [setSearchParams]
+  );
+
+  const ciscoTabPanel = (
+    <TabsContent value="cisco" className="mt-0">
+      <div className="rounded-2xl border border-border overflow-hidden min-h-[calc(100vh-14rem)]">
+        <CiscoSwitchesPage embedded />
+      </div>
+    </TabsContent>
+  );
+
+  const ciscoTabTrigger = (
+    <TabsTrigger value="cisco" className="gap-1.5">
+      <Cpu size={14} /> Cisco Switches
+    </TabsTrigger>
+  );
 
   const load = useCallback(async () => {
     const showFullPageLoader = profileCountRef.current === 0;
@@ -460,7 +499,7 @@ export default function SnmpPage() {
             Core Network
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Managed switches, WAN routers, and firewalls — fleet health, interfaces, and cable faults
+            Managed switches, Cisco Catalyst fleet, WAN routers, and firewalls — health, interfaces, and cable faults
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -492,7 +531,7 @@ export default function SnmpPage() {
       </header>
 
       {state.profiles.length === 0 ? (
-        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <Tabs value={tab} onValueChange={handleTabChange} className="space-y-4">
           <TabsList className="flex flex-wrap h-auto gap-1 bg-secondary/50 p-1">
             <TabsTrigger value="overview" className="gap-1.5">
               <LayoutDashboard size={14} /> Overview
@@ -500,6 +539,7 @@ export default function SnmpPage() {
             <TabsTrigger value="switches" className="gap-1.5">
               <Server size={14} /> Fleet
             </TabsTrigger>
+            {ciscoTabTrigger}
             <TabsTrigger value="wan" className="gap-1.5">
               <Globe size={14} /> WAN Management
             </TabsTrigger>
@@ -518,6 +558,8 @@ export default function SnmpPage() {
           <TabsContent value="switches" className="mt-0">
             <EmptyFleetPrompt onRegister={openAddModal} />
           </TabsContent>
+
+          {ciscoTabPanel}
 
           <TabsContent value="wan" className="mt-0">
             <SnmpWanManagementPanel
@@ -548,7 +590,7 @@ export default function SnmpPage() {
           </TabsContent>
         </Tabs>
       ) : (
-        <Tabs value={tab} onValueChange={setTab} className="space-y-4">
+        <Tabs value={tab} onValueChange={handleTabChange} className="space-y-4">
           <TabsList className="flex flex-wrap h-auto gap-1 bg-secondary/50 p-1">
             <TabsTrigger value="overview" className="gap-1.5">
               <LayoutDashboard size={14} /> Overview
@@ -556,6 +598,7 @@ export default function SnmpPage() {
             <TabsTrigger value="switches" className="gap-1.5">
               <Server size={14} /> Fleet
             </TabsTrigger>
+            {ciscoTabTrigger}
             <TabsTrigger value="wan" className="gap-1.5">
               <Globe size={14} /> WAN Management
             </TabsTrigger>
@@ -668,6 +711,8 @@ export default function SnmpPage() {
               />
             </div>
           </TabsContent>
+
+          {ciscoTabPanel}
 
           <TabsContent value="wan" className="mt-0">
             <SnmpWanManagementPanel

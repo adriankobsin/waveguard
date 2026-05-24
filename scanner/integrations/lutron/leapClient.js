@@ -303,11 +303,26 @@ function loadCerts(host) {
   if (!fs.existsSync(keyPath) || !fs.existsSync(certPath) || !fs.existsSync(caPath)) {
     return null;
   }
-  return {
+  const certs = {
     key: ensurePkcs8PrivateKeyPem(fs.readFileSync(keyPath, "utf8")),
     cert: fs.readFileSync(certPath, "utf8"),
     ca: fs.readFileSync(caPath, "utf8"),
   };
+  // Validate before handing them to Node's TLS layer — malformed certs cause
+  // an `asn1 encoding routines::too long` error on every connect, which the
+  // UI surfaces as "no control" while the connection chip stays green. The
+  // most common source is the dev-mode `mockPairing()` helper writing
+  // hand-crafted placeholder bytes that aren't a real X.509 chain.
+  try {
+    new crypto.X509Certificate(certs.cert);
+    new crypto.X509Certificate(certs.ca);
+    crypto.createPrivateKey(certs.key);
+  } catch (err) {
+    log(`[${host}] paired certs failed validation (${err.message}) — discarding so the next connect re-pairs cleanly.`);
+    try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* */ }
+    return null;
+  }
+  return certs;
 }
 
 function saveCerts(host, key, cert, ca) {

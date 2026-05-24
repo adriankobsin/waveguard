@@ -7,6 +7,7 @@
     "dev": "vite",
     "mock": "npm --prefix mock-server start",
     "dev:all": "concurrently -n scanner,vite -c cyan,green \"npm run mock\" \"npm run dev\"",
+    "postinstall": "npm --prefix mock-server install && npm --prefix scanner install",
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",

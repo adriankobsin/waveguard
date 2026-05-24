@@ -8,7 +8,7 @@
  * persist the most recent commanded value without rewriting the whole house.
  */
 
-import { classifyZoneKind } from "./parseLutronIntegrationReport";
+import { classifyZoneKind } from "./parseLutronIntegrationReport.js";
 
 export const LIGHTING_HOUSE_SETTINGS_KEY = "lighting-house";
 export const LIGHTING_ZONE_STATE_SETTINGS_KEY = "lighting-zone-state";
@@ -54,6 +54,8 @@ export const DEFAULT_LIGHTING_HOUSE = {
   hvacZones: [],
   shadeGroups: [],
   loadSchedule: [],
+  /** Per-tab floor display order (`lights` / `shades` keys → floor id arrays). */
+  floorOrder: { lights: [], shades: [] },
 };
 
 const DEFAULT_ZONE_STATE = {};
@@ -204,7 +206,58 @@ export function normalizeLightingHouse(value) {
     hvacZones: Array.isArray(value.hvacZones) ? value.hvacZones : [],
     shadeGroups: Array.isArray(value.shadeGroups) ? value.shadeGroups : [],
     loadSchedule: Array.isArray(value.loadSchedule) ? value.loadSchedule.map(normalizeLoadScheduleEntry) : [],
+    floorOrder: normalizeFloorOrder(value.floorOrder),
   };
+}
+
+export function normalizeFloorOrder(value) {
+  if (!value || typeof value !== "object") {
+    return { lights: [], shades: [] };
+  }
+  return {
+    lights: Array.isArray(value.lights)
+      ? value.lights.map(String).filter(Boolean)
+      : [],
+    shades: Array.isArray(value.shades)
+      ? value.shades.map(String).filter(Boolean)
+      : [],
+  };
+}
+
+/** Apply a saved floor-id order to a hierarchy; unknown floors append at the end. */
+export function applyFloorOrder(hierarchy, orderIds) {
+  if (!Array.isArray(hierarchy)) return [];
+  if (!Array.isArray(orderIds) || orderIds.length === 0) return hierarchy;
+  const byId = new Map(hierarchy.map((f) => [f.id, f]));
+  const ordered = [];
+  for (const id of orderIds) {
+    const floor = byId.get(id);
+    if (floor) {
+      ordered.push(floor);
+      byId.delete(id);
+    }
+  }
+  ordered.push(...byId.values());
+  return ordered;
+}
+
+/** Reorder one tab's floor list after a drag-and-drop move. */
+export function reorderFloorOrder(current, tabKey, sourceIndex, destIndex, hierarchy) {
+  const order = normalizeFloorOrder(current);
+  const tab = tabKey === "shades" ? "shades" : "lights";
+  const validIds = (hierarchy || []).map((f) => f.id);
+  const validSet = new Set(validIds);
+
+  let ids = order[tab].filter((id) => validSet.has(id));
+  for (const id of validIds) {
+    if (!ids.includes(id)) ids.push(id);
+  }
+
+  const [moved] = ids.splice(sourceIndex, 1);
+  if (moved == null) return order;
+  ids.splice(destIndex, 0, moved);
+
+  return { ...order, [tab]: ids };
 }
 
 export function normalizeLoadScheduleEntry(entry) {

@@ -67,6 +67,7 @@ function App() {
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/lighting" element={<LightingPage />} />
             <Route path="/scenes" element={<ScenesPage />} />
+            <Route path="/cisco-switches" element={<Navigate to="/snmp?tab=cisco" replace />} />
             <Route path="/discovery" element={<NetworkDiscoveryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>

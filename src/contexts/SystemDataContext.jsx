@@ -12,12 +12,22 @@ import {
 } from "@/lib/systemData/diagnosisAcknowledgement";
 import { generateSnmpDiagnoses } from "@/lib/snmp/generateSnmpDiagnoses";
 import { generateLightingDiagnoses } from "@/lib/lighting/lightingDiagnoses";
+import { generateCiscoDiagnoses } from "@/lib/integrations/cisco/ciscoDiagnoses";
 import { loadLightingEvents } from "@/lib/lighting/lightingEventLog";
-import { loadLutronConnection, testLutronProcessor } from "@/api/lightingApi";
+import { loadCiscoEvents } from "@/lib/integrations/cisco/ciscoEventLog";
+import { loadLutronConnection, testLutronProcessor, loadLightingHouse, loadZoneState } from "@/api/lightingApi";
+import { listCiscoSwitches, testCiscoSwitch } from "@/api/ciscoApi";
 import {
   LIGHTING_EVENT_LOG_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
+  LIGHTING_HOUSE_CHANGED_EVENT,
+  LIGHTING_ZONE_STATE_CHANGED_EVENT,
+  isShadeZone,
 } from "@/lib/lighting/lightingSettings";
+import {
+  NETWORK_CISCO_EVENT_LOG_CHANGED_EVENT,
+  NETWORK_CISCO_SWITCHES_CHANGED_EVENT,
+} from "@/lib/network/ciscoSwitchSettings";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
 import { SNMP_SWITCHES_CHANGED_EVENT } from "@/lib/snmp/snmpSwitchProfiles";
 import { WAN_MANAGEMENT_CHANGED_EVENT } from "@/lib/wan/wanManagementSettings";
@@ -28,6 +38,7 @@ import { PLATFORM_MODE_CHANGED_EVENT } from "@/lib/platformMode";
 // SNMP poller uses for its critical-only checks, which is a sensible
 // trade-off between freshness and processor load.
 const LIGHTING_PROBE_INTERVAL_MS = 60_000;
+const CISCO_PROBE_INTERVAL_MS = 60_000;
 
 const SystemDataContext = createContext(null);
 
@@ -43,7 +54,15 @@ export function SystemDataProvider({ children }) {
   const [lightingEvents, setLightingEvents] = useState([]);
   const [lutronConnection, setLutronConnection] = useState(null);
   const [lightingProbe, setLightingProbe] = useState(null);
+  const [lightingHouse, setLightingHouse] = useState(null);
+  const [zoneState, setZoneState] = useState({});
   const probeAbortRef = useRef(false);
+
+  // Cisco state that feeds the Cisco diagnoses pipeline.
+  const [ciscoEvents, setCiscoEvents] = useState([]);
+  const [ciscoSwitches, setCiscoSwitches] = useState([]);
+  const [ciscoProbes, setCiscoProbes] = useState({}); // { [host]: probeResult }
+  const ciscoProbeAbortRef = useRef(false);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -92,12 +111,16 @@ export function SystemDataProvider({ children }) {
   // failures the moment the operator sees them on Lights / Shades.
   const refreshLightingState = useCallback(async () => {
     try {
-      const [events, conn] = await Promise.all([
+      const [events, conn, house, zs] = await Promise.all([
         loadLightingEvents(),
         loadLutronConnection(),
+        loadLightingHouse(),
+        loadZoneState(),
       ]);
       setLightingEvents(events?.events || []);
       setLutronConnection(conn);
+      setLightingHouse(house);
+      setZoneState(zs || {});
     } catch (err) {
       console.warn("[SystemData] lighting state load failed:", err);
     }
@@ -160,13 +183,110 @@ export function SystemDataProvider({ children }) {
       // Re-probe immediately so the diagnosis reflects the new credentials.
       probeLightingProcessor();
     };
+    const onHouse = (e) => {
+      if (e?.detail) setLightingHouse(e.detail);
+      else refreshLightingState();
+    };
+    const onZoneState = (e) => {
+      if (e?.detail?.state) setZoneState(e.detail.state);
+      else refreshLightingState();
+    };
     window.addEventListener(LIGHTING_EVENT_LOG_CHANGED_EVENT, onEventLog);
     window.addEventListener(LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT, onConn);
+    window.addEventListener(LIGHTING_HOUSE_CHANGED_EVENT, onHouse);
+    window.addEventListener(LIGHTING_ZONE_STATE_CHANGED_EVENT, onZoneState);
     return () => {
       window.removeEventListener(LIGHTING_EVENT_LOG_CHANGED_EVENT, onEventLog);
       window.removeEventListener(LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT, onConn);
+      window.removeEventListener(LIGHTING_HOUSE_CHANGED_EVENT, onHouse);
+      window.removeEventListener(LIGHTING_ZONE_STATE_CHANGED_EVENT, onZoneState);
     };
   }, [refreshLightingState, probeLightingProcessor]);
+
+  // ── Cisco diagnosis pipeline ────────────────────────────────────────
+  const refreshCiscoState = useCallback(async () => {
+    try {
+      const [events, list] = await Promise.all([
+        loadCiscoEvents(),
+        listCiscoSwitches(),
+      ]);
+      setCiscoEvents(events?.events || []);
+      setCiscoSwitches(list?.switches || []);
+    } catch (err) {
+      console.warn("[SystemData] cisco state load failed:", err);
+    }
+  }, []);
+
+  const probeCiscoSwitches = useCallback(async () => {
+    let list = ciscoSwitches;
+    if (!list || list.length === 0) {
+      try {
+        const payload = await listCiscoSwitches();
+        list = payload?.switches || [];
+        setCiscoSwitches(list);
+      } catch (_err) {
+        return;
+      }
+    }
+    if (!list || list.length === 0) {
+      setCiscoProbes({});
+      return;
+    }
+    const next = {};
+    for (const sw of list) {
+      if (!sw.enabled || !sw.host) continue;
+      try {
+        const result = await testCiscoSwitch(sw);
+        if (ciscoProbeAbortRef.current) return;
+        next[sw.host] = {
+          ...result,
+          checkedAt: new Date().toISOString(),
+        };
+      } catch (err) {
+        if (ciscoProbeAbortRef.current) return;
+        next[sw.host] = {
+          success: false,
+          message: err?.message || String(err),
+          checkedAt: new Date().toISOString(),
+        };
+      }
+    }
+    if (ciscoProbeAbortRef.current) return;
+    setCiscoProbes(next);
+  }, [ciscoSwitches]);
+
+  useEffect(() => {
+    refreshCiscoState();
+  }, [refreshCiscoState]);
+
+  useEffect(() => {
+    ciscoProbeAbortRef.current = false;
+    probeCiscoSwitches();
+    const id = setInterval(probeCiscoSwitches, CISCO_PROBE_INTERVAL_MS);
+    return () => {
+      ciscoProbeAbortRef.current = true;
+      clearInterval(id);
+    };
+  }, [probeCiscoSwitches]);
+
+  useEffect(() => {
+    const onCiscoEventLog = (e) => {
+      if (e?.detail?.events) setCiscoEvents(e.detail.events);
+      else refreshCiscoState();
+    };
+    const onCiscoSwitches = (e) => {
+      if (e?.detail?.switches) setCiscoSwitches(e.detail.switches);
+      else refreshCiscoState();
+      // Re-probe immediately so the diagnosis reflects the new switch list.
+      probeCiscoSwitches();
+    };
+    window.addEventListener(NETWORK_CISCO_EVENT_LOG_CHANGED_EVENT, onCiscoEventLog);
+    window.addEventListener(NETWORK_CISCO_SWITCHES_CHANGED_EVENT, onCiscoSwitches);
+    return () => {
+      window.removeEventListener(NETWORK_CISCO_EVENT_LOG_CHANGED_EVENT, onCiscoEventLog);
+      window.removeEventListener(NETWORK_CISCO_SWITCHES_CHANGED_EVENT, onCiscoSwitches);
+    };
+  }, [refreshCiscoState, probeCiscoSwitches]);
 
   const snapshot = useMemo(
     () =>
@@ -199,11 +319,21 @@ export function SystemDataProvider({ children }) {
       connection: lutronConnection,
       probe: lightingProbe,
     }).filter((d) => !dismissed.has(d.id));
+    const cisco = generateCiscoDiagnoses({
+      switches: ciscoSwitches.map((sw) => ({
+        ...sw,
+        lastProbe: ciscoProbes[sw.host] || null,
+      })),
+      events: ciscoEvents,
+    }).filter((d) => !dismissed.has(d.id));
 
     const order = { critical: 0, warning: 1, info: 2 };
-    const merged = applyAcknowledgements([...base, ...snmp, ...lighting]).sort(
-      (a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9)
-    );
+    const merged = applyAcknowledgements([
+      ...base,
+      ...snmp,
+      ...lighting,
+      ...cisco,
+    ]).sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
     return merged;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -213,6 +343,9 @@ export function SystemDataProvider({ children }) {
     lightingEvents,
     lutronConnection,
     lightingProbe,
+    ciscoEvents,
+    ciscoSwitches,
+    ciscoProbes,
   ]);
 
   const dismissDiagnosis = useCallback((id) => {
@@ -225,6 +358,23 @@ export function SystemDataProvider({ children }) {
     setAckVersion((v) => v + 1);
   }, []);
 
+  const lightingStats = useMemo(() => {
+    const zones = (lightingHouse?.zones || []).filter((z) => !isShadeZone(z));
+    const total = zones.length;
+    const on = zones.filter((z) => zoneState[z.href]?.on).length;
+    return { total, on };
+  }, [lightingHouse, zoneState]);
+
+  const ciscoStats = useMemo(() => {
+    const enabled = ciscoSwitches.filter((s) => s.enabled !== false);
+    const online = enabled.filter((sw) => {
+      const probe = ciscoProbes[sw.host];
+      if (probe?.success) return true;
+      return !!(sw.lastConnectedAt && !sw.lastError);
+    }).length;
+    return { total: enabled.length, online, offline: Math.max(0, enabled.length - online) };
+  }, [ciscoSwitches, ciscoProbes]);
+
   const value = useMemo(
     () => ({
       snapshot,
@@ -236,8 +386,34 @@ export function SystemDataProvider({ children }) {
       dismissDiagnosis,
       acknowledgeDiagnosis,
       sources,
+      lutronConnection,
+      lightingProbe,
+      lightingHouse,
+      zoneState,
+      lightingStats,
+      ciscoSwitches,
+      ciscoProbes,
+      ciscoStats,
     }),
-    [snapshot, diagnoses, loading, refreshing, error, load, dismissDiagnosis, acknowledgeDiagnosis, sources]
+    [
+      snapshot,
+      diagnoses,
+      loading,
+      refreshing,
+      error,
+      load,
+      dismissDiagnosis,
+      acknowledgeDiagnosis,
+      sources,
+      lutronConnection,
+      lightingProbe,
+      lightingHouse,
+      zoneState,
+      lightingStats,
+      ciscoSwitches,
+      ciscoProbes,
+      ciscoStats,
+    ]
   );
 
   return (

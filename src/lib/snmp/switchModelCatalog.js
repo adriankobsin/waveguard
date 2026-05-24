@@ -49,6 +49,25 @@ const EXACT_MODELS = {
   "CBS350-24T": { series: "CBS350", vendor: "Cisco", copperPorts: 24, uplinkPorts: 0, poe: false, layout: "dual-row" },
   "CBS350-16T": { series: "CBS350", vendor: "Cisco", copperPorts: 16, uplinkPorts: 0, poe: false, layout: "dual-row" },
   "CBS350-8P": { series: "CBS350", vendor: "Cisco", copperPorts: 8, uplinkPorts: 0, poe: true, layout: "single-row" },
+  // Catalyst 1300 family (SMB) — same firmware lineage as CBS350 but adds 10G uplinks.
+  "C1300-8P-2G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 8, uplinkPorts: 2, poe: true, layout: "access-uplink" },
+  "C1300-8FP-2G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 8, uplinkPorts: 2, poe: true, layout: "access-uplink" },
+  "C1300-8T-E-2G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 8, uplinkPorts: 2, poe: false, layout: "access-uplink" },
+  "C1300-16P-2G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 16, uplinkPorts: 2, poe: true, layout: "access-uplink" },
+  "C1300-16FP-2G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 16, uplinkPorts: 2, poe: true, layout: "access-uplink" },
+  "C1300-16T-2G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 16, uplinkPorts: 2, poe: false, layout: "access-uplink" },
+  "C1300-24P-4G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 24, uplinkPorts: 4, poe: true, layout: "access-uplink" },
+  "C1300-24FP-4G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 24, uplinkPorts: 4, poe: true, layout: "access-uplink" },
+  "C1300-24T-4G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 24, uplinkPorts: 4, poe: false, layout: "access-uplink" },
+  "C1300-24P-4X": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 24, uplinkPorts: 4, poe: true, layout: "access-uplink" },
+  "C1300-24FP-4X": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 24, uplinkPorts: 4, poe: true, layout: "access-uplink" },
+  "C1300-24T-4X": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 24, uplinkPorts: 4, poe: false, layout: "access-uplink" },
+  "C1300-48P-4G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 48, uplinkPorts: 4, poe: true, layout: "rack-48" },
+  "C1300-48FP-4G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 48, uplinkPorts: 4, poe: true, layout: "rack-48" },
+  "C1300-48T-4G": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 48, uplinkPorts: 4, poe: false, layout: "rack-48" },
+  "C1300-48P-4X": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 48, uplinkPorts: 4, poe: true, layout: "rack-48" },
+  "C1300-48FP-4X": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 48, uplinkPorts: 4, poe: true, layout: "rack-48" },
+  "C1300-48T-4X": { series: "Catalyst 1300", vendor: "Cisco", copperPorts: 48, uplinkPorts: 4, poe: false, layout: "rack-48" },
   "SG350-28": { series: "SG350", vendor: "Cisco", copperPorts: 28, uplinkPorts: 0, poe: false, layout: "dual-row" },
   "SG350-10": { series: "SG350", vendor: "Cisco", copperPorts: 10, uplinkPorts: 0, poe: false, layout: "single-row" },
   "SG250-18": { series: "SG250", vendor: "Cisco", copperPorts: 18, uplinkPorts: 0, poe: false, layout: "dual-row" },
@@ -118,6 +137,22 @@ export function parseSwitchModel(model) {
       uplinkPorts: 0,
       poe: cbs[3] === "P",
       layout: ports <= 12 ? "single-row" : "dual-row",
+    });
+  }
+
+  // Catalyst 1300: C1300-48FP-4G, C1300-24P-4X, C1300-8T-E-2G
+  let c1300 = m.match(/^C1300-(\d+)(FP|P|T|FX|X)?(?:-E)?(?:-(\d+)([GX]))?/);
+  if (c1300) {
+    const copper = Number(c1300[1]) || 0;
+    const suffix = (c1300[2] || "").toUpperCase();
+    const uplink = Number(c1300[3]) || 0;
+    return buildSpec(raw, {
+      series: "Catalyst 1300",
+      vendor: "Cisco",
+      copperPorts: copper,
+      uplinkPorts: uplink,
+      poe: /P|FP/.test(suffix),
+      layout: uplink > 0 ? "access-uplink" : copper >= 40 ? "rack-48" : "dual-row",
     });
   }
 

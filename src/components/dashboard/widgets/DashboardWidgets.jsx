@@ -1,15 +1,17 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import {
   Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
   WifiOff, Activity, Globe, ArrowDownToLine, ArrowUpFromLine,
-  Radio, BarChart3, Server, Clock,
+  Radio, BarChart3, Server, Clock, Lightbulb, Cpu, Loader2, ArrowRight,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
 import StatusPulse from "../../StatusPulse";
+import { useSystemData } from "@/contexts/SystemDataContext";
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 const STATS = { online: 47, offline: 3, warning: 5, alarms: 8 };
@@ -89,6 +91,22 @@ export const WIDGET_TYPES = {
     icon: Radio,
     minSize: { w: 2, h: 1 },
     defaultSize: { w: 2, h: 2 },
+  },
+  lutron_lights: {
+    id: "lutron_lights",
+    name: "Lutron lights",
+    description: "Lutron processor connection and live light status",
+    icon: Lightbulb,
+    minSize: { w: 2, h: 2 },
+    defaultSize: { w: 2, h: 3 },
+  },
+  cisco_switches: {
+    id: "cisco_switches",
+    name: "Cisco switches",
+    description: "Catalyst / CBS350 SSH switch fleet status",
+    icon: Cpu,
+    minSize: { w: 2, h: 2 },
+    defaultSize: { w: 2, h: 3 },
   },
 };
 
@@ -330,6 +348,165 @@ export function WanLatencyWidget() {
   );
 }
 
+function StatRow({ label, value, valueClass = "text-foreground" }) {
+  return (
+    <div className="flex justify-between gap-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className={`font-medium tabular-nums ${valueClass}`}>{value}</span>
+    </div>
+  );
+}
+
+export function LutronLightsWidget() {
+  const {
+    loading,
+    lutronConnection,
+    lightingProbe,
+    lightingStats,
+    lightingHouse,
+  } = useSystemData();
+
+  const hasHouse = (lightingHouse?.zones?.length || 0) > 0;
+  const conn = lutronConnection;
+  const probe = lightingProbe;
+  const configured = !!(conn?.host);
+  const liveEnabled = conn?.enabled !== false;
+
+  let processorLabel = "Not configured";
+  let processorDetail = "Add credentials in Lights and Shades.";
+  let pulseStatus = "warning";
+
+  if (configured && !liveEnabled) {
+    processorLabel = "Mock / demo";
+    processorDetail = `${conn.protocol === "leap" ? "LEAP" : "Telnet"} · ${conn.host}:${conn.port}`;
+    pulseStatus = "warning";
+  } else if (configured && probe?.success) {
+    processorLabel = "Connected";
+    processorDetail = probe.message || `${conn.host}:${conn.port}`;
+    pulseStatus = "online";
+  } else if (configured && probe) {
+    processorLabel = "Offline";
+    processorDetail = probe.message || probe.error || "Connection failed";
+    pulseStatus = "offline";
+  } else if (configured) {
+    processorLabel = "Checking…";
+    processorDetail = `${conn.host}:${conn.port}`;
+  }
+
+  return (
+    <Card>
+      <div className="p-5 h-full flex flex-col">
+        <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-widest flex items-center gap-2">
+          <Lightbulb size={12} className="text-amber-400" />
+          Lutron lights
+          <StatusPulse status={pulseStatus} />
+        </h3>
+        {loading && !lutronConnection ? (
+          <div className="flex items-center justify-center flex-1 text-muted-foreground text-xs gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            Loading…
+          </div>
+        ) : (
+          <div className="space-y-3 flex-1 text-xs">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                Processor
+              </p>
+              <p className={`font-semibold ${pulseStatus === "online" ? "text-emerald-400" : pulseStatus === "offline" ? "text-red-400" : "text-foreground"}`}>
+                {processorLabel}
+              </p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{processorDetail}</p>
+            </div>
+            <div className="rounded-lg bg-secondary/60 border border-border/60 p-2.5 space-y-1.5">
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+                Lights
+              </p>
+              {hasHouse ? (
+                <>
+                  <StatRow label="On / total" value={`${lightingStats.on}/${lightingStats.total}`} valueClass="text-amber-400 font-bold" />
+                  <div className="h-1 rounded-full bg-muted overflow-hidden mt-2">
+                    <div
+                      className="h-full rounded-full bg-amber-400"
+                      style={{ width: lightingStats.total ? `${(lightingStats.on / lightingStats.total) * 100}%` : "0%" }}
+                    />
+                  </div>
+                </>
+              ) : (
+                <p className="text-muted-foreground leading-relaxed">
+                  Import a Lutron Integration Report to track zones.
+                </p>
+              )}
+            </div>
+            <Link to="/lighting" className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
+              Lights and Shades <ArrowRight size={10} />
+            </Link>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+export function CiscoSwitchesWidget() {
+  const { loading, ciscoSwitches, ciscoProbes, ciscoStats } = useSystemData();
+
+  return (
+    <Card>
+      <div className="p-5 h-full flex flex-col">
+        <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-widest flex items-center gap-2">
+          <Cpu size={12} className="text-sky-400" />
+          Cisco switches
+          {ciscoStats.total > 0 && (
+            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              {ciscoStats.online}/{ciscoStats.total}
+            </span>
+          )}
+        </h3>
+        {loading && !ciscoSwitches.length ? (
+          <div className="flex items-center justify-center flex-1 text-muted-foreground text-xs gap-2">
+            <Loader2 size={14} className="animate-spin" />
+            Loading…
+          </div>
+        ) : !ciscoSwitches.length ? (
+          <div className="flex-1 text-xs text-muted-foreground">
+            <p>No Cisco switches configured.</p>
+            <Link to="/snmp?tab=cisco" className="mt-3 inline-flex items-center gap-1 text-primary hover:underline">
+              Core Network → Cisco Switches <ArrowRight size={10} />
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3 flex-1 text-xs min-h-0">
+            <StatRow label="Online" value={ciscoStats.online} valueClass="text-emerald-400" />
+            <StatRow label="Offline" value={ciscoStats.offline} valueClass={ciscoStats.offline > 0 ? "text-amber-400" : "text-foreground"} />
+            <div className="space-y-1.5 overflow-y-auto flex-1 min-h-0">
+              {ciscoSwitches.map((sw) => {
+                const probe = ciscoProbes[sw.host];
+                const online = probe?.success || !!(sw.enabled && sw.lastConnectedAt && !sw.lastError);
+                return (
+                  <Link
+                    key={sw.id}
+                    to="/snmp?tab=cisco"
+                    className="flex items-center gap-2 py-1 rounded-lg hover:bg-secondary/40 px-1 -mx-1 transition-colors group"
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${!sw.enabled ? "bg-muted-foreground/50" : online ? "bg-emerald-500" : "bg-red-500"}`} />
+                    <span className="text-foreground truncate flex-1 group-hover:text-primary">
+                      {sw.label || sw.system?.hostname || sw.host}
+                    </span>
+                    <span className="text-muted-foreground font-mono text-[10px] shrink-0">{sw.host}</span>
+                  </Link>
+                );
+              })}
+            </div>
+            <Link to="/snmp?tab=cisco" className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline">
+              Manage switches <ArrowRight size={10} />
+            </Link>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 // Map widget IDs to components
 export const WIDGET_COMPONENTS = {
   stats_grid: StatsGridWidget,
@@ -338,4 +515,6 @@ export const WIDGET_COMPONENTS = {
   wan_status: WanStatusWidget,
   traffic_chart: TrafficChartWidget,
   wan_latency: WanLatencyWidget,
+  lutron_lights: LutronLightsWidget,
+  cisco_switches: CiscoSwitchesWidget,
 };

@@ -19,9 +19,9 @@ You can switch modes any time from **Settings → Platform mode**.
 
 | Item | What you'll find |
 |---|---|
-| **Dashboard** | Customisable widgets — device health, alerts, WAN status, dashboard tiles |
+| **Dashboard** | Customisable widgets — device health, alerts, WAN status, **Lutron lights**, **Cisco switches**, network tiles |
 | **Topology** | Equipment table + deck plans / racks / AV signal flows / control paths |
-| **Core Network** | Live SNMP port map for every managed switch |
+| **Core Network** | Live SNMP port map, WAN management, and **Cisco Switches** (SSH + SNMP) — see below |
 | **Discovery** | Subnet scans (ping / ARP / full / SNMP) and auto-classification |
 | **Diagnoses** | All open findings across every subsystem with severity and acknowledgement |
 | **Maintenance** | Scheduled tasks with priority, status and due-date alerts |
@@ -36,6 +36,21 @@ You can switch modes any time from **Settings → Platform mode**.
 | **Settings** | Discovery, SNMP, lighting connections, users and roles |
 
 The number next to **Diagnoses** is the live count of unresolved findings.
+
+---
+
+## Dashboard widgets
+
+Open **Dashboard** for the at-a-glance view. Click **Edit** (or go to **Settings → Dashboard widgets**) to add, remove, or rearrange tiles.
+
+| Widget | What it shows |
+|---|---|
+| **Lutron lights** | Whether the Lutron processor is connected, plus how many light loads are on vs total |
+| **Cisco switches** | How many Cisco switches are online, with a per-switch list |
+| **Network** | Equipment health and SNMP fleet summary |
+| **WAN / internet** | Live WAN throughput, ISP details, and on-demand speed test |
+
+New installs include **Lutron lights** and **Cisco switches** in the default layout. If your dashboard was customised earlier, add them manually from the widget picker.
 
 ---
 
@@ -65,10 +80,12 @@ The page has four tabs:
 
 | Tab | Use |
 |---|---|
-| **Lights** | Floor → Area tree filtered to lights. Each zone shows a slider + on/off toggle. |
-| **Shades** | Same tree filtered to shades, blinds, blackouts, curtains and drapes. Each zone shows **Open / Close / Stop** buttons. |
+| **Lights** | Floor → Area tree filtered to lights. Each zone shows a slider + on/off toggle. Drag floors by the **⋮⋮ grip** on the left to reorder — your order is saved. |
+| **Shades** | Same tree filtered to shades, blinds, blackouts, curtains and drapes. Each zone shows **Open / Close / Stop** buttons. Floor order is independent of the Lights tab. |
 | **Area Control** | Per-floor map or list view. Click a pin to open an inline control card. The "Recent activity" event log is in the left rail. |
 | **Scenes** | Run saved Lutron scenes with one click. |
+
+**Floor order.** Floors start collapsed — click a floor row to expand it. Use the grip handle (⋮⋮) to drag and reorder floors. Lights and Shades each remember their own order.
 
 **Smooth dimming.** Sliders use a smooth-drag throttle — drag freely; commands are sent ~8/sec with a final commit on release. The visual will not flicker during a drag.
 
@@ -109,6 +126,50 @@ Each can be acknowledged so the sidebar badge stops counting it. Acknowledgement
 
 ---
 
+## Cisco Switches — step by step
+
+Cisco Catalyst 1300 (and CBS350-family) switches live under **Core Network → Cisco Switches**. Use this tab when you want rich CLI data (interfaces, MAC table, LLDP/CDP) on top of standard SNMP fleet polling.
+
+### A. Connecting to a switch
+
+1. Open **Core Network** in the sidebar.
+2. Select the **Cisco Switches** tab.
+3. Click **Add switch** (top-right).
+3. Enter the **Host / IP** of the switch.
+4. Expand **Advanced settings** and fill in:
+   - SSH username + password (and an optional `enable` password if your account is not already privilege‑15).
+   - SSH port (default `22`).
+   - SNMP community for v2c (default `public`) **or** SNMPv3 user, auth/priv protocols and passphrases.
+   - SNMP port (default `161`).
+5. Click **Test connection**. The chip turns green ("Switch OK") when SSH and SNMP both respond, and the model / firmware are echoed back.
+6. Click **Save**. The switch appears in the left rail **and** is auto-registered into **Core Network → Switches** with `integrationVendor: cisco` and `pollMethod: cisco_ssh`.
+
+### B. Browsing data
+
+The workspace has four tabs:
+
+- **Overview** — model, serial, firmware, uptime, PoE budget, plus KPI tiles (online ports, PoE used, error counters).
+- **Interfaces** — every port with status, speed, duplex, VLAN, description and PoE wattage. Search and filter by status/VLAN.
+- **Connected devices** — per-port MAC table joined to LLDP/CDP neighbor data, cross-referenced against the Equipment database.
+- **Activity** — the rolling event log: every command, port flap, connection test and SSE event.
+
+### C. Editing or removing a switch
+
+- Hover the switch in the left rail and click the pencil icon to re-open the credentials modal.
+- Click the trash icon to remove it (this also removes it from Core Network).
+
+### D. Diagnoses and alerts
+
+Cisco-specific findings appear on the **Diagnoses** page:
+
+- **Switch offline** — the configured switch stopped responding to SSH **and** SNMP probes.
+- **Authentication failed** — credentials were rejected on the last connection test or poll.
+- **Port flapping** — the same port toggled up/down three or more times in five minutes.
+
+Each can be acknowledged like any other diagnosis.
+
+---
+
 ## Common workflows
 
 ### Adding a new switch to the platform
@@ -144,6 +205,9 @@ In **Topology**, hover a device row and click **Scan**. Results are written to t
 | Slider visually jumps back | Probably an SSE echo from another control surface (wall keypad, second browser). The platform stays in sync intentionally. |
 | Sidebar Diagnoses badge keeps growing | A subsystem is generating new findings — open the Diagnoses page to triage. |
 | WAN widget shows "degraded" | The Peplink poller saw a SIM failover or packet-loss spike — see the per-WAN drill-down. |
+| Cisco modal says `ssh2 is not installed` | Scanner dependencies missing — run `npm install` at the project root |
+| Switch logs `%AAA-W-REJECT` telnet lines | WaveGuard uses SSH only; Telnet is no longer probed during connection tests |
+| Cisco KPI tiles stay at 0/0 | Wait ~30 s for the next poll or click **Refresh** in the switch workspace |
 
 If anything in the Lights and Shades pages feels wrong, the **Recent activity** sidebar is the fastest way to see what the platform actually sent to the processor.
 
@@ -168,6 +232,9 @@ The lighting Edit modal also accepts a bare numeric integration address — typi
 - **Custom scenes** — `lighting-custom-scenes` / `waveguard:lighting:custom-scenes`.
 - **Event log** — `lighting-event-log` / `waveguard:lighting:event-log`.
 - **OpenCloseStop discoveries** — `waveguard:lighting:ocs-zones` (localStorage only).
+- **Lighting floor order** — stored inside the lighting house as `floorOrder.lights` / `floorOrder.shades`.
+- **Cisco switches** — `network-cisco-switches` / `waveguard:network:cisco-switches`.
+- **Cisco event log** — `network-cisco-event-log`.
 - **TLS pairing certificates** — `mock-server/lutron-certs/<host>.{key,cert,ca}`.
 
 Clearing the relevant `localStorage` key forces a clean state for that subsystem on next reload.

@@ -335,7 +335,6 @@ async function loadLightingConnectionFromSettings() {
   } catch (err) {
     console.warn("[lightingApi] lighting connection load failed:", err);
   }
-  // Fall back to the legacy Lutron-specific key for backward compat
   try {
     const records = await base44.entities.SystemSettings.filter({
       key: LIGHTING_LUTRON_CONNECTION_KEY,
@@ -345,6 +344,24 @@ async function loadLightingConnectionFromSettings() {
       return { ...lutronConn, systemType: "lutron" };
     }
   } catch (_) {}
+  // Neither key found on the backend — likely the mock-server was restarted
+  // and lost its in-memory systemSettings. Rehydrate from localStorage so
+  // the live command path keeps working without forcing the operator to
+  // re-open the connection modal.
+  const localGeneric = loadLightingConnectionLocal();
+  if (localGeneric && localGeneric.enabled && localGeneric.host) {
+    persistLightingConnectionToSettings(localGeneric).catch((err) =>
+      console.warn("[lightingApi] lighting connection rehydrate failed:", err)
+    );
+    return normalizeLightingConnection(localGeneric);
+  }
+  const localLutron = loadLutronConnectionLocal();
+  if (localLutron && localLutron.enabled && localLutron.host) {
+    persistLutronConnectionToSettings(localLutron).catch((err) =>
+      console.warn("[lightingApi] lutron connection rehydrate failed:", err)
+    );
+    return { ...normalizeLutronConnection(localLutron), systemType: "lutron" };
+  }
   return loadLightingConnectionLocal() || { ...DEFAULT_LIGHTING_CONNECTION };
 }
 
@@ -402,6 +419,18 @@ async function loadLutronConnectionFromSettings() {
     });
     if (records.length > 0 && records[0].value != null) {
       return normalizeLutronConnection(parseSettingsValue(records[0].value));
+    }
+    // No record on the backend (e.g. mock-server restarted and lost its
+    // in-memory state). If we still have the connection cached locally,
+    // re-push it so subsequent `lutronCommand` calls can resolve it as a
+    // live processor instead of silently dropping into the generic mock
+    // engine — which is what causes sliders to snap back.
+    const local = loadLutronConnectionLocal();
+    if (local && local.enabled && local.host) {
+      persistLutronConnectionToSettings(local).catch((err) =>
+        console.warn("[lightingApi] lutron connection rehydrate failed:", err)
+      );
+      return normalizeLutronConnection(local);
     }
   } catch (err) {
     console.warn("[lightingApi] lutron connection load failed:", err);

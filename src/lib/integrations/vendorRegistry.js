@@ -17,8 +17,8 @@ export const VENDOR_REGISTRY = {
     id: "cisco",
     label: "Cisco",
     phase: 1,
-    pollMethods: ["snmp"],
-    capabilities: { snmp: true, rest: false, cellular: false, vpn: false },
+    pollMethods: ["snmp", "cisco_ssh"],
+    capabilities: { snmp: true, rest: false, ssh: true, cellular: false, vpn: false },
     docsUrl: "https://www.cisco.com/c/en/us/support/index.html",
   },
   peplink: {

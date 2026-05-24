@@ -2,5 +2,8 @@
   "name": "waveguard-scanner",
   "private": true,
   "type": "module",
-  "main": "index.js"
+  "main": "index.js",
+  "dependencies": {
+    "ssh2": "^1.16.0"
+  }
 }
