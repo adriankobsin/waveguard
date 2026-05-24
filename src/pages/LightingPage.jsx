@@ -5,7 +5,7 @@ import {
   Zap,
   LayoutGrid,
   Map,
-  GitBranch,
+  Blinds,
   Upload,
   Wand2,
   RefreshCcw,
@@ -22,11 +22,13 @@ import LightingZoneMap from "../components/lighting/LightingZoneMap";
 import LightingZoneList from "../components/lighting/LightingZoneList";
 import LightingScenePanel from "../components/lighting/LightingScenePanel";
 import LightingSystemStatus from "../components/lighting/LightingSystemStatus";
-import LightingMapTab from "../components/topology/LightingMapTab";
+import LightingEventLogPanel from "../components/lighting/LightingEventLogPanel";
 import LutronAreaLoads from "../components/lighting/LutronAreaLoads";
+import ScenesPanel from "../components/lighting/ScenesPanel";
 import LutronImportModal from "../components/lighting/LutronImportModal";
 import LutronConnectionModal from "../components/lighting/LutronConnectionModal";
 import LoadScheduleTable from "../components/lighting/LoadScheduleTable";
+import LightingZoneEditModal from "../components/lighting/LightingZoneEditModal";
 import { toast } from "@/components/ui/use-toast";
 import {
   loadLightingHouse,
@@ -41,9 +43,11 @@ import {
   stopShade,
   testLutronProcessor,
   subscribeLutronEvents,
+  updateLightingZone,
 } from "@/api/lightingApi";
 import {
   buildLightingHierarchy,
+  isShadeZone,
   DEFAULT_LUTRON_CONNECTION,
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
@@ -51,13 +55,34 @@ import {
 } from "@/lib/lighting/lightingSettings";
 
 const PAGE_TABS = [
-  { key: "loads", label: "Loads by Area", icon: Lightbulb },
+  { key: "lights", label: "Lights", icon: Lightbulb },
+  { key: "shades", label: "Shades", icon: Blinds },
   { key: "control", label: "Area Control", icon: LayoutGrid },
-  { key: "topology", label: "Lighting Map", icon: GitBranch },
+  { key: "scenes", label: "Scenes", icon: Wand2 },
 ];
 
+/**
+ * Filter a buildLightingHierarchy() result down to only zones matching
+ * the given predicate. Empty areas and empty floors are dropped so the
+ * Lights / Shades tabs never render an empty section.
+ */
+function filterHierarchy(hierarchy, zonePredicate) {
+  if (!Array.isArray(hierarchy)) return [];
+  return hierarchy
+    .map((floor) => ({
+      ...floor,
+      areas: (floor.areas || [])
+        .map((area) => ({
+          ...area,
+          zones: (area.zones || []).filter(zonePredicate),
+        }))
+        .filter((area) => area.zones.length > 0),
+    }))
+    .filter((floor) => floor.areas.length > 0);
+}
+
 export default function LightingPage() {
-  const [activePageTab, setActivePageTab] = useState("loads");
+  const [activePageTab, setActivePageTab] = useState("lights");
 
   // ── Lutron house (parsed integration report) ───────────────────────────
   const [house, setHouse] = useState(null);
@@ -78,6 +103,11 @@ export default function LightingPage() {
   const [lutronConn, setLutronConn] = useState(DEFAULT_LUTRON_CONNECTION);
   const [pollingAll, setPollingAll] = useState(false);
 
+  // Zone editor state — when set, renders LightingZoneEditModal over the
+  // page. The modal handles its own form state and validation; we just
+  // hold the target zone and react to the save / close lifecycle.
+  const [editingZone, setEditingZone] = useState(null);
+
   // ── Deck Control state (floor-based, Lutron-driven) ────────────────────
   const [activeFloorId, setActiveFloorId] = useState(null);
   const [selectedZoneHref, setSelectedZoneHref] = useState(null);
@@ -85,6 +115,17 @@ export default function LightingPage() {
 
   const hasHouse = !!house && (house.zones?.length || 0) > 0;
   const hierarchy = useMemo(() => buildLightingHierarchy(house), [house]);
+  // Pre-split the hierarchy so the Lights tab and Shades tab can each
+  // render `LutronAreaLoads` against a clean, kind-specific dataset
+  // without having to push a `kindFilter` prop deep into the rendering.
+  const lightsHierarchy = useMemo(
+    () => filterHierarchy(hierarchy, (z) => !isShadeZone(z)),
+    [hierarchy]
+  );
+  const shadesHierarchy = useMemo(
+    () => filterHierarchy(hierarchy, (z) => isShadeZone(z)),
+    [hierarchy]
+  );
 
   // Pick a sensible default floor whenever the hierarchy changes (e.g.
   // first load, re-import or clear).
@@ -174,18 +215,36 @@ export default function LightingPage() {
     });
   }, []);
 
+  // The Integration Report parser tags a curtain whose name doesn't match
+  // any window-treatment keyword (e.g. "MOTOR 1") as kind="load". That
+  // load hint makes the LEAP client probe for a Dimmed ControlType and
+  // fall back to GoToDimmedLevel — which the processor rejects on an
+  // OpenCloseStop curtain motor, leaving the user without working
+  // controls. Whenever the UI is rendering shade-family controls
+  // (Open/Close/Stop) for the zone, send "shade" as the hint so LEAP
+  // routes to GoToShadeLevel / OpenCloseStop even if the live probe
+  // can't pin down the type.
+  const effectiveZoneKind = useCallback(
+    (zone) => (isShadeZone(zone) ? "shade" : zone.kind || null),
+    []
+  );
+
   const handleZoneLevel = useCallback(
     async (zone, level) => {
       setPendingZone(zone.href, true);
       try {
-        await setZoneLevel({ zoneHref: zone.href, level, zoneKind: zone.kind });
+        await setZoneLevel({
+          zoneHref: zone.href,
+          level,
+          zoneKind: effectiveZoneKind(zone),
+        });
       } catch (err) {
         reportLightingError(`Could not set ${zone.name || "zone"}`, err);
       } finally {
         setPendingZone(zone.href, false);
       }
     },
-    [reportLightingError]
+    [reportLightingError, effectiveZoneKind]
   );
 
   const handleZoneToggle = useCallback(
@@ -200,14 +259,43 @@ export default function LightingPage() {
     async (zone) => {
       setPendingZone(zone.href, true);
       try {
-        await stopShade({ zoneHref: zone.href, zoneKind: zone.kind });
+        await stopShade({
+          zoneHref: zone.href,
+          zoneKind: effectiveZoneKind(zone),
+        });
       } catch (err) {
         reportLightingError(`Could not stop ${zone.name || "shade"}`, err);
       } finally {
         setPendingZone(zone.href, false);
       }
     },
-    [reportLightingError]
+    [reportLightingError, effectiveZoneKind]
+  );
+
+  const handleEditZone = useCallback((zone) => {
+    if (!zone) return;
+    setEditingZone(zone);
+  }, []);
+
+  const handleSaveZoneEdit = useCallback(
+    async ({ originalHref, name, href }) => {
+      const updated = await updateLightingZone({ originalHref, name, href });
+      // If the integration address moved, the Area Control tab's
+      // selected zone pointer needs to follow — otherwise the popover
+      // disappears the next render.
+      setSelectedZoneHref((cur) =>
+        cur === originalHref ? updated.href : cur
+      );
+      toast({
+        title: "Zone updated",
+        description:
+          updated.href !== originalHref
+            ? `${updated.name} now points at ${updated.href}`
+            : `Renamed to ${updated.name}`,
+      });
+      return updated;
+    },
+    []
   );
 
   const handleActivateScene = useCallback(
@@ -388,6 +476,22 @@ export default function LightingPage() {
   );
   const totalZones = house?.zones?.length || 0;
 
+  // Per-tab KPI counts so the strip on the Shades tab reports
+  // open/closed/moving instead of "loads on".
+  const lightsKpis = useMemo(() => {
+    const zones = (house?.zones || []).filter((z) => !isShadeZone(z));
+    const on = zones.filter((z) => zoneState[z.href]?.on).length;
+    return { total: zones.length, on };
+  }, [house?.zones, zoneState]);
+  const shadesKpis = useMemo(() => {
+    const zones = (house?.zones || []).filter((z) => isShadeZone(z));
+    const open = zones.filter((z) => {
+      const s = zoneState[z.href];
+      return s ? (s.level ?? (s.on ? 100 : 0)) > 0 : false;
+    }).length;
+    return { total: zones.length, open, closed: zones.length - open };
+  }, [house?.zones, zoneState]);
+
   // KPIs for the Deck Control top strip (active-floor scope).
   const deckKpis = useMemo(() => {
     const zones = activeFloorZones;
@@ -491,15 +595,27 @@ export default function LightingPage() {
         ))}
       </div>
 
-      {/* ── Loads-by-area tab ── */}
-      {activePageTab === "loads" && (
-        <div className="flex-1 overflow-auto bg-background">
+      {/* ── Lights and Shades tabs (kind-filtered LutronAreaLoads) ── */}
+      {(activePageTab === "lights" || activePageTab === "shades") && (
+        <div className="flex-1 overflow-auto bg-background min-w-0">
           {hasHouse && (
             <div className="px-5 py-3 border-b border-border bg-card/50 flex flex-wrap items-center gap-3 text-xs">
-              <span className="inline-flex items-center gap-1.5 text-amber-400 font-semibold">
-                <Lightbulb size={12} />
-                {onCountForHouse}/{totalZones} loads on
-              </span>
+              {activePageTab === "lights" ? (
+                <span className="inline-flex items-center gap-1.5 text-amber-400 font-semibold">
+                  <Lightbulb size={12} />
+                  {lightsKpis.on}/{lightsKpis.total} lights on
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-sky-400 font-semibold">
+                  <Blinds size={12} />
+                  {shadesKpis.open}/{shadesKpis.total} shades open
+                  {shadesKpis.closed > 0 && (
+                    <span className="text-muted-foreground font-normal">
+                      · {shadesKpis.closed} closed
+                    </span>
+                  )}
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5 text-muted-foreground">
                 <Building2 size={12} />
                 {house?.areas?.length || 0} areas across {hierarchy.length} floors
@@ -579,14 +695,20 @@ export default function LightingPage() {
             </div>
           ) : (
             <LutronAreaLoads
-              hierarchy={hierarchy}
+              hierarchy={activePageTab === "lights" ? lightsHierarchy : shadesHierarchy}
               zoneState={zoneState}
               pendingZones={pendingZones}
               pendingScene={pendingScene}
               onZoneLevel={handleZoneLevel}
               onZoneToggle={handleZoneToggle}
               onStopShade={handleStopShade}
+              onEditZone={handleEditZone}
               onActivateScene={handleActivateScene}
+              emptyMessage={
+                activePageTab === "shades"
+                  ? "No shades, blinds, blackouts or curtains found in the parsed Integration Report."
+                  : "No light zones found in the parsed Integration Report."
+              }
             />
           )}
         </div>
@@ -630,6 +752,9 @@ export default function LightingPage() {
                   connection={connection}
                   lutronConn={lutronConn}
                 />
+                <div className="p-3 border-t border-border">
+                  <LightingEventLogPanel limit={15} />
+                </div>
               </div>
 
               <div className="flex-1 flex flex-col overflow-hidden">
@@ -728,6 +853,10 @@ export default function LightingPage() {
                           pendingZones={pendingZones}
                           selectedHref={selectedZoneHref}
                           onSelectZone={setSelectedZoneHref}
+                          onZoneLevel={handleZoneLevel}
+                          onZoneToggle={handleZoneToggle}
+                          onStopShade={handleStopShade}
+                          onEditZone={handleEditZone}
                         />
                       </motion.div>
                     ) : (
@@ -747,6 +876,7 @@ export default function LightingPage() {
                           onZoneLevel={handleZoneLevel}
                           onZoneToggle={handleZoneToggle}
                           onStopShade={handleStopShade}
+                          onEditZone={handleEditZone}
                         />
                       </motion.div>
                     )}
@@ -758,20 +888,10 @@ export default function LightingPage() {
         </div>
       )}
 
-      {/* ── Lighting Map tab (whole-house topology) ── */}
-      {activePageTab === "topology" && (
+      {/* ── Scenes tab (user-authored scene library) ── */}
+      {activePageTab === "scenes" && (
         <div className="flex-1 overflow-hidden">
-          <LightingMapTab
-            hierarchy={hierarchy}
-            scenes={house?.scenes || []}
-            zoneState={zoneState}
-            pendingZones={pendingZones}
-            pendingScene={pendingScene}
-            onZoneLevel={handleZoneLevel}
-            onZoneToggle={handleZoneToggle}
-            onStopShade={handleStopShade}
-            onActivateScene={handleActivateScene}
-          />
+          <ScenesPanel embedded />
         </div>
       )}
 
@@ -787,6 +907,16 @@ export default function LightingPage() {
         onClose={() => setConnectionOpen(false)}
         onSave={handleSaveConnection}
       />
+
+      <AnimatePresence>
+        {editingZone && (
+          <LightingZoneEditModal
+            zone={editingZone}
+            onSave={handleSaveZoneEdit}
+            onClose={() => setEditingZone(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import CablesPage from './pages/CablesPage';
 import InventoryPage from './pages/InventoryPage';
 import ReportsPage from './pages/ReportsPage';
 import LightingPage from './pages/LightingPage';
+import ScenesPage from './pages/ScenesPage';
 import NetworkDiscoveryPage from './pages/NetworkDiscoveryPage';
 
 // Layout
@@ -65,6 +66,7 @@ function App() {
             <Route path="/inventory" element={<Navigate to="/equipment" replace />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/lighting" element={<LightingPage />} />
+            <Route path="/scenes" element={<ScenesPage />} />
             <Route path="/discovery" element={<NetworkDiscoveryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>

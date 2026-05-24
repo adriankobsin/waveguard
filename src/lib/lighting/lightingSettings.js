@@ -8,10 +8,14 @@
  * persist the most recent commanded value without rewriting the whole house.
  */
 
+import { classifyZoneKind } from "./parseLutronIntegrationReport";
+
 export const LIGHTING_HOUSE_SETTINGS_KEY = "lighting-house";
 export const LIGHTING_ZONE_STATE_SETTINGS_KEY = "lighting-zone-state";
 export const LIGHTING_LUTRON_CONNECTION_KEY = "lighting-lutron-connection";
 export const LIGHTING_CONNECTION_KEY = "lighting-connection";
+export const LIGHTING_CUSTOM_SCENES_KEY = "lighting-custom-scenes";
+export const LIGHTING_EVENT_LOG_KEY = "lighting-event-log";
 
 export const LIGHTING_HOUSE_CHANGED_EVENT = "waveguard-lighting-house-changed";
 export const LIGHTING_ZONE_STATE_CHANGED_EVENT = "waveguard-lighting-zone-state-changed";
@@ -19,12 +23,27 @@ export const LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT =
   "waveguard-lighting-lutron-connection-changed";
 export const LIGHTING_CONNECTION_CHANGED_EVENT =
   "waveguard-lighting-connection-changed";
+export const LIGHTING_CUSTOM_SCENES_CHANGED_EVENT =
+  "waveguard-lighting-custom-scenes-changed";
+export const LIGHTING_EVENT_LOG_CHANGED_EVENT =
+  "waveguard-lighting-event-log-changed";
 
 const HOUSE_LOCAL_KEY = "waveguard:lighting:house";
 const ZONE_STATE_LOCAL_KEY = "waveguard:lighting:zone-state";
 const ACTIVE_SCENE_LOCAL_KEY = "waveguard:lighting:active-scene";
 const LUTRON_CONNECTION_LOCAL_KEY = "waveguard:lighting:lutron-connection";
 const LIGHTING_CONNECTION_LOCAL_KEY = "waveguard:lighting:connection";
+const CUSTOM_SCENES_LOCAL_KEY = "waveguard:lighting:custom-scenes";
+const EVENT_LOG_LOCAL_KEY = "waveguard:lighting:event-log";
+
+// Maximum number of recent commands kept on the ring buffer.
+export const LIGHTING_EVENT_LOG_MAX = 200;
+
+// User-authored scene shapes — each kind needs a different integration
+// address shape, so the helpers below normalise + validate accordingly.
+export const CUSTOM_SCENE_KINDS = ["area_scene", "leap_href", "phantom_button"];
+export const DEFAULT_CUSTOM_SCENES = { scenes: [] };
+export const DEFAULT_LIGHTING_EVENT_LOG = { events: [] };
 
 export const DEFAULT_LIGHTING_HOUSE = {
   house: null,
@@ -147,12 +166,39 @@ function safeLocalStorage() {
   }
 }
 
+/**
+ * Re-run the path-aware classifier against an existing zone record so
+ * that a previously-parsed zone whose leaf name is just an index ("1")
+ * but whose area path mentions "Curtains" / "Drapery" / "Shades" gets
+ * upgraded from the legacy `kind: "load"` to the correct shade-family
+ * kind. Returns the zone unchanged when the classifier can't improve
+ * on what's already there.
+ */
+function reclassifyZoneKind(zone) {
+  if (!zone || typeof zone !== "object") return zone;
+  const parts = String(zone.fullPath || "")
+    .split("\\")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const context = parts.slice(1).join(" ") || zone.area || "";
+  const detected = classifyZoneKind(zone.name || "", context);
+  // Only override `load` (the parser's "no-op" classification). If the
+  // zone is already classified as a specific light/shade/blind we trust
+  // that — it was either the original parser or the live LEAP probe.
+  if (!zone.kind || zone.kind === "load") {
+    return { ...zone, kind: detected };
+  }
+  return zone;
+}
+
 export function normalizeLightingHouse(value) {
   if (!value || typeof value !== "object") return { ...DEFAULT_LIGHTING_HOUSE };
   return {
     house: value.house || null,
     areas: Array.isArray(value.areas) ? value.areas : [],
-    zones: Array.isArray(value.zones) ? value.zones : [],
+    zones: Array.isArray(value.zones)
+      ? value.zones.map(reclassifyZoneKind)
+      : [],
     scenes: Array.isArray(value.scenes) ? value.scenes : [],
     devices: Array.isArray(value.devices) ? value.devices : [],
     hvacZones: Array.isArray(value.hvacZones) ? value.hvacZones : [],
@@ -374,6 +420,146 @@ export function redactLightingConnection(conn) {
   return { ...c, password: c.password ? "••••••••" : "" };
 }
 
+// ── User-authored scenes (Scenes page) ────────────────────────────────
+
+/**
+ * Normalise a single scene record. We accept any combination of fields
+ * because the same shape is shared by the three "scene kinds":
+ *   - area_scene     → areaId + sceneN
+ *   - leap_href      → href (typically /area/<id>/scene/<n>)
+ *   - phantom_button → deviceHref + componentNumber
+ *
+ * Any unrecognised kind defaults to "leap_href".
+ */
+export function normalizeCustomScene(value) {
+  if (!value || typeof value !== "object") return null;
+  const kind = CUSTOM_SCENE_KINDS.includes(value.kind) ? value.kind : "leap_href";
+  const name = String(value.name || "").trim();
+  if (!name) return null;
+  const out = {
+    id:
+      value.id ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `scene-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`),
+    name,
+    kind,
+    createdAt: value.createdAt || new Date().toISOString(),
+    lastRunAt: value.lastRunAt || null,
+    lastResult: value.lastResult || null,
+  };
+  if (kind === "area_scene") {
+    out.areaId = String(value.areaId || "").trim();
+    const sceneN = Number(value.sceneN);
+    out.sceneN = Number.isFinite(sceneN) ? sceneN : null;
+  } else if (kind === "phantom_button") {
+    out.deviceHref = String(value.deviceHref || "").trim();
+    const comp = Number(value.componentNumber);
+    out.componentNumber = Number.isFinite(comp) ? comp : null;
+  } else {
+    out.href = String(value.href || "").trim();
+  }
+  return out;
+}
+
+export function normalizeCustomScenes(value) {
+  const arr = Array.isArray(value?.scenes)
+    ? value.scenes
+    : Array.isArray(value)
+    ? value
+    : [];
+  const out = [];
+  for (const s of arr) {
+    const n = normalizeCustomScene(s);
+    if (n) out.push(n);
+  }
+  return { scenes: out };
+}
+
+export function loadCustomScenesLocal() {
+  const ls = safeLocalStorage();
+  if (!ls) return { ...DEFAULT_CUSTOM_SCENES };
+  try {
+    const raw = ls.getItem(CUSTOM_SCENES_LOCAL_KEY);
+    if (!raw) return { ...DEFAULT_CUSTOM_SCENES };
+    return normalizeCustomScenes(JSON.parse(raw));
+  } catch (_e) {
+    return { ...DEFAULT_CUSTOM_SCENES };
+  }
+}
+
+export function saveCustomScenesLocal(payload) {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    ls.setItem(CUSTOM_SCENES_LOCAL_KEY, JSON.stringify(normalizeCustomScenes(payload)));
+  } catch (_e) {
+    /* quota */
+  }
+}
+
+// ── Lighting event log (Recent activity / event log) ──────────────────
+
+export function normalizeLightingEvent(value) {
+  if (!value || typeof value !== "object") return null;
+  const ts = value.ts || new Date().toISOString();
+  return {
+    id:
+      value.id ||
+      (typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `evt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`),
+    ts,
+    kind: String(value.kind || "command"),
+    severity: ["info", "warning", "critical"].includes(value.severity)
+      ? value.severity
+      : "info",
+    zoneHref: value.zoneHref || null,
+    zoneName: value.zoneName || null,
+    action: value.action || null,
+    level: value.level != null ? Number(value.level) : null,
+    result: String(value.result || "success"),
+    message: value.message || null,
+  };
+}
+
+export function normalizeLightingEventLog(value) {
+  const arr = Array.isArray(value?.events)
+    ? value.events
+    : Array.isArray(value)
+    ? value
+    : [];
+  const out = [];
+  for (const e of arr) {
+    const n = normalizeLightingEvent(e);
+    if (n) out.push(n);
+  }
+  // Cap to ring-buffer length, keeping the most recent entries.
+  return { events: out.slice(-LIGHTING_EVENT_LOG_MAX) };
+}
+
+export function loadLightingEventLogLocal() {
+  const ls = safeLocalStorage();
+  if (!ls) return { ...DEFAULT_LIGHTING_EVENT_LOG };
+  try {
+    const raw = ls.getItem(EVENT_LOG_LOCAL_KEY);
+    if (!raw) return { ...DEFAULT_LIGHTING_EVENT_LOG };
+    return normalizeLightingEventLog(JSON.parse(raw));
+  } catch (_e) {
+    return { ...DEFAULT_LIGHTING_EVENT_LOG };
+  }
+}
+
+export function saveLightingEventLogLocal(payload) {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    ls.setItem(EVENT_LOG_LOCAL_KEY, JSON.stringify(normalizeLightingEventLog(payload)));
+  } catch (_e) {
+    /* quota */
+  }
+}
+
 const SHADE_KINDS = new Set([
   // From the Integration Report parser (zone-name heuristics).
   "shade",
@@ -384,14 +570,55 @@ const SHADE_KINDS = new Set([
   "shadeAndTilt",
   "tilt",
 ]);
-const SHADE_NAME_KEYWORDS = ["shade", "blind", "blackout", "venetian", "roman", "curtain"];
+// Substring keywords that flag a zone as a window-treatment even when the
+// parser couldn't pin down a specific kind (kind: "load"). This catches
+// houses parsed before classifyZoneKind learned about drape/sheer/voile/etc.
+// without having to re-import the Integration Report.
+const SHADE_NAME_KEYWORDS = [
+  "shade",
+  "blind",
+  "blackout",
+  "venetian",
+  "roman",
+  "curtain",
+  "drape",
+  "drapery",
+  "sheer",
+  "voile",
+  "roller",
+  "zebra",
+  "silhouette",
+  "honeycomb",
+  "cellular",
+  "shutter",
+];
 
-/** Returns true if the zone is a shade/blind/curtain based on kind or name. */
+/**
+ * Returns true if the zone is a shade/blind/curtain. We check (in order):
+ *   1. The parser-assigned kind (covers freshly-imported houses).
+ *   2. The zone's leaf name (covers obvious cases like "ROLLER 1").
+ *   3. The area name and the full hierarchy path (covers zones named
+ *      just "1", "2", … inside an area like `…\Curtains\1` where the
+ *      meaningful classifier sits in the parent area).
+ *
+ * Checking the area/path is essential because many Lutron Designer
+ * projects keep zone leaves as bare indices and put the descriptive
+ * word ("Curtains", "Drapery", "Shades") on the area.
+ */
 export function isShadeZone(zone) {
   if (!zone) return false;
   if (SHADE_KINDS.has(zone.kind)) return true;
-  const name = (zone.name || "").toLowerCase();
-  return SHADE_NAME_KEYWORDS.some((kw) => name.includes(kw));
+  const haystacks = [
+    zone.name,
+    zone.area,
+    zone.areaFullPath,
+    zone.fullPath,
+  ]
+    .filter(Boolean)
+    .map((s) => String(s).toLowerCase());
+  return haystacks.some((s) =>
+    SHADE_NAME_KEYWORDS.some((kw) => s.includes(kw))
+  );
 }
 
 /** Group zones for the UI: floors → areas → zones. */

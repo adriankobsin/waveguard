@@ -1,6 +1,7 @@
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Lightbulb, Moon, MapPin, Loader2, PanelTop, Blinds, Zap } from "lucide-react";
 import { isShadeZone } from "@/lib/lighting/lightingSettings";
+import ZoneInlineControls from "./ZoneInlineControls";
 
 const KIND_ACCENT = {
   light:    { color: "#f59e0b", tone: "amber" },
@@ -115,9 +116,14 @@ function AreaCard({
   pendingZones,
   selectedHref,
   onSelectZone,
+  onZoneLevel,
+  onZoneToggle,
+  onStopShade,
+  onEditZone,
 }) {
   const zones = area.zones || [];
   const onCount = zones.filter((z) => zoneState?.[z.href]?.on).length;
+  const selectedZone = zones.find((z) => z.href === selectedHref) || null;
   return (
     <div
       className={`rounded-2xl border bg-card/40 p-3 transition-colors ${
@@ -164,6 +170,21 @@ function AreaCard({
           ))}
         </div>
       )}
+      <AnimatePresence initial={false}>
+        {selectedZone && onZoneLevel && (
+          <ZoneInlineControls
+            key={selectedZone.href}
+            zone={selectedZone}
+            state={zoneState?.[selectedZone.href]}
+            pending={pendingZones?.[selectedZone.href]}
+            onLevelChange={onZoneLevel}
+            onToggle={onZoneToggle}
+            onStopShade={onStopShade}
+            onEditZone={onEditZone}
+            variant="card"
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -174,6 +195,10 @@ export default function LightingZoneMap({
   pendingZones,
   selectedHref,
   onSelectZone,
+  onZoneLevel,
+  onZoneToggle,
+  onStopShade,
+  onEditZone,
 }) {
   if (!floor) {
     return (
@@ -225,6 +250,10 @@ export default function LightingZoneMap({
                 pendingZones={pendingZones}
                 selectedHref={selectedHref}
                 onSelectZone={onSelectZone}
+                onZoneLevel={onZoneLevel}
+                onZoneToggle={onZoneToggle}
+                onStopShade={onStopShade}
+                onEditZone={onEditZone}
               />
             ))}
           </div>

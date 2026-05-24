@@ -23,7 +23,7 @@ const NAV = [
   { to: "/cables", icon: Cable, label: "Cables" },
   { to: "/documents", icon: BookOpen, label: "Documents" },
   { to: "/assistant", icon: Bot, label: "AI Assistant" },
-  { to: "/lighting", icon: Lightbulb, label: "Lighting" },
+  { to: "/lighting", icon: Lightbulb, label: "Lights and Shades" },
   { to: "/automation", icon: Zap, label: "Automation" },
   { to: "/reports", icon: FileText, label: "Reports" },
   { to: "/help", icon: HelpCircle, label: "Help" },

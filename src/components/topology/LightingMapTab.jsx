@@ -20,6 +20,7 @@ import {
   Zap,
 } from "lucide-react";
 import { isShadeZone } from "@/lib/lighting/lightingSettings";
+import SmoothLevelSlider from "@/components/lighting/SmoothLevelSlider";
 
 const KIND_ACCENT = {
   light:    { label: "Lights",    color: "#f59e0b", bg: "bg-amber-500/15",  text: "text-amber-400",   border: "border-amber-500/30" },
@@ -301,15 +302,12 @@ function ZonePanel({
                   {level}%
                 </p>
               </div>
-              <input
-                type="range"
-                min={0}
-                max={100}
+              <SmoothLevelSlider
                 value={level}
-                disabled={busy}
-                onChange={(e) => onZoneLevel(zone, Number(e.target.value))}
-                className="w-full h-1.5 rounded-full appearance-none cursor-pointer disabled:opacity-40"
-                style={{ accentColor: a.color }}
+                busy={busy}
+                onChange={(v) => onZoneLevel(zone, v)}
+                className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
+                accentColor={a.color}
               />
               <div className="flex justify-between mt-2 gap-1">
                 {[0, 25, 50, 75, 100].map((v) => (

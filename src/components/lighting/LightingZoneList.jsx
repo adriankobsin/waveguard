@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
-import { Lightbulb, Moon, Loader2, ChevronUp, ChevronDown, Square, PanelTop, Blinds, Zap } from "lucide-react";
+import { Lightbulb, Moon, Loader2, ChevronUp, ChevronDown, Square, PanelTop, Blinds, Zap, Pencil } from "lucide-react";
 import { isShadeZone } from "@/lib/lighting/lightingSettings";
+import SmoothLevelSlider from "./SmoothLevelSlider";
 
 const KIND_META = {
   light:    { label: "Light",    Icon: Lightbulb, tone: "amber" },
@@ -30,6 +31,7 @@ export default function LightingZoneList({
   onZoneLevel,
   onZoneToggle,
   onStopShade,
+  onEditZone,
 }) {
   if (!zones || zones.length === 0) {
     return (
@@ -144,17 +146,11 @@ export default function LightingZoneList({
                     {isOn ? `${level}%` : "Off"}
                   </span>
                 </div>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
+                <SmoothLevelSlider
                   value={level}
-                  disabled={isBusy}
-                  onChange={(e) =>
-                    onZoneLevel(zone, Number(e.target.value))
-                  }
-                  className="w-full h-1.5 cursor-pointer disabled:opacity-50"
-                  style={{ accentColor: "#f59e0b" }}
+                  busy={isBusy}
+                  onChange={(v) => onZoneLevel(zone, v)}
+                  className="w-full h-1.5 cursor-pointer"
                 />
               </div>
             )}
@@ -183,6 +179,20 @@ export default function LightingZoneList({
                 size={12}
                 className="text-amber-400 animate-spin flex-shrink-0"
               />
+            )}
+
+            {onEditZone && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditZone(zone);
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                title="Edit name or integration address"
+                type="button"
+              >
+                <Pencil size={12} />
+              </button>
             )}
           </motion.div>
         );

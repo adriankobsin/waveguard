@@ -1,10 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Lightbulb,
-  Moon,
   ChevronDown,
-  ChevronUp,
   ChevronRight,
   Power,
   PlayCircle,
@@ -12,168 +10,11 @@ import {
   Building2,
   MapPin,
   Wand2,
-  Square,
-  PanelTop,
-  Blinds,
-  Zap,
 } from "lucide-react";
-import { isShadeZone } from "@/lib/lighting/lightingSettings";
+import ZoneInlineControls from "./ZoneInlineControls";
 
-const KIND_META = {
-  light: {
-    label: "Light",
-    icon: Lightbulb,
-    accent: "text-amber-400 bg-amber-500/12 border-amber-500/30",
-    onIcon: "text-amber-400",
-    offIcon: "text-muted-foreground",
-  },
-  shade: {
-    label: "Shade",
-    icon: PanelTop,
-    accent: "text-sky-400 bg-sky-500/12 border-sky-500/30",
-    onIcon: "text-sky-400",
-    offIcon: "text-muted-foreground",
-  },
-  blind: {
-    label: "Blind",
-    icon: Blinds,
-    accent: "text-indigo-400 bg-indigo-500/12 border-indigo-500/30",
-    onIcon: "text-indigo-400",
-    offIcon: "text-muted-foreground",
-  },
-  blackout: {
-    label: "Blackout",
-    icon: Moon,
-    accent: "text-violet-400 bg-violet-500/12 border-violet-500/30",
-    onIcon: "text-violet-400",
-    offIcon: "text-muted-foreground",
-  },
-  load: {
-    label: "Load",
-    icon: Zap,
-    accent: "text-emerald-400 bg-emerald-500/12 border-emerald-500/30",
-    onIcon: "text-emerald-400",
-    offIcon: "text-muted-foreground",
-  },
-};
-
-function kindMeta(kind) {
-  return KIND_META[kind] || KIND_META.load;
-}
-
-function ZoneRow({ zone, state, pending, onLevelChange, onToggle, onStopShade }) {
-  const meta = kindMeta(zone.kind);
-  const Icon = meta.icon;
-  const level = state?.level ?? 0;
-  const isOn = state?.on ?? false;
-  const isBusy = !!pending;
-  const shade = isShadeZone(zone);
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-colors ${
-        isOn
-          ? "border-amber-500/25 bg-amber-500/5"
-          : "border-border bg-muted/30"
-      }`}
-    >
-      <div
-        className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-          isOn ? "bg-amber-500/15" : "bg-secondary"
-        }`}
-      >
-        <Icon size={14} className={isOn ? meta.onIcon : meta.offIcon} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-0.5">
-          <p className="text-sm font-semibold text-foreground truncate">{zone.name}</p>
-          <span
-            className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${meta.accent}`}
-          >
-            {meta.label}
-          </span>
-        </div>
-        <p className="text-[11px] text-muted-foreground truncate font-mono">
-          {zone.href}
-        </p>
-      </div>
-
-      {shade ? (
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          <button
-            onClick={() => onLevelChange(zone, 100)}
-            disabled={isBusy}
-            className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
-            title="Open"
-          >
-            <ChevronUp size={14} className="text-sky-400" />
-          </button>
-          <button
-            onClick={() => onLevelChange(zone, 0)}
-            disabled={isBusy}
-            className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
-            title="Close"
-          >
-            <ChevronDown size={14} className="text-sky-400" />
-          </button>
-          {onStopShade && (
-            <button
-              onClick={() => onStopShade(zone)}
-              disabled={isBusy}
-              className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
-              title="Stop"
-            >
-              <Square size={12} className="text-muted-foreground" />
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="hidden sm:block w-36 flex-shrink-0">
-            <div className="flex justify-between text-[10px] mb-0.5">
-              <span className="text-muted-foreground">Level</span>
-              <span
-                className={isOn ? "text-amber-400 font-bold" : "text-muted-foreground"}
-              >
-                {isOn ? `${level}%` : "Off"}
-              </span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              value={level}
-              disabled={isBusy}
-              onChange={(e) => onLevelChange(zone, Number(e.target.value))}
-              className="w-full h-1.5 cursor-pointer disabled:opacity-50"
-              style={{ accentColor: "#f59e0b" }}
-            />
-          </div>
-
-          <button
-            onClick={() => onToggle(zone, !isOn)}
-            disabled={isBusy}
-            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
-              isOn ? "bg-amber-500" : "bg-muted"
-            }`}
-            title={isOn ? "Turn off" : "Turn on"}
-          >
-            <span
-              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                isOn ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </>
-      )}
-
-      {isBusy && (
-        <Loader2 size={12} className="text-amber-400 animate-spin flex-shrink-0" />
-      )}
-    </motion.div>
-  );
+function ZoneRow(props) {
+  return <ZoneInlineControls {...props} variant="row" />;
 }
 
 function AreaCard({
@@ -183,6 +24,7 @@ function AreaCard({
   onZoneLevel,
   onZoneToggle,
   onStopShade,
+  onEditZone,
   onActivateScene,
   pendingScene,
   expanded,
@@ -296,6 +138,7 @@ function AreaCard({
                       onLevelChange={onZoneLevel}
                       onToggle={onZoneToggle}
                       onStopShade={onStopShade}
+                      onEditZone={onEditZone}
                     />
                   ))}
                 </div>
@@ -316,14 +159,48 @@ export default function LutronAreaLoads({
   onZoneLevel,
   onZoneToggle,
   onStopShade,
+  onEditZone,
   onActivateScene,
   defaultFloor,
+  emptyMessage,
 }) {
-  const [openFloors, setOpenFloors] = useState(() => {
-    const ids = (hierarchy || []).map((f) => f.id);
-    return new Set(defaultFloor ? [defaultFloor] : ids.slice(0, 1));
-  });
-  const [openAreas, setOpenAreas] = useState(() => new Set());
+  // Open every floor and every area by default so the user lands on a
+  // page that already shows controls. Previously only the first floor
+  // was open and *no* areas were expanded, which made the Shades tab
+  // look empty even when zones existed — the user had to discover
+  // they needed to click through two levels of disclosure before any
+  // Open/Close button appeared.
+  const allFloorIds = useMemo(
+    () => (hierarchy || []).map((f) => f.id),
+    [hierarchy]
+  );
+  const allAreaIds = useMemo(
+    () =>
+      (hierarchy || []).flatMap((f) =>
+        (f.areas || []).map((a) => a.fullPath || a.id)
+      ),
+    [hierarchy]
+  );
+  const [openFloors, setOpenFloors] = useState(() =>
+    new Set(defaultFloor ? [defaultFloor] : allFloorIds)
+  );
+  const [openAreas, setOpenAreas] = useState(() => new Set(allAreaIds));
+
+  // When the hierarchy changes (e.g. Lights ↔ Shades tab switch, or a
+  // fresh Integration Report import) expand any newly-introduced floors
+  // and areas without collapsing whatever the user had manually opened.
+  useEffect(() => {
+    setOpenFloors((prev) => {
+      const next = new Set(prev);
+      for (const id of allFloorIds) next.add(id);
+      return next;
+    });
+    setOpenAreas((prev) => {
+      const next = new Set(prev);
+      for (const id of allAreaIds) next.add(id);
+      return next;
+    });
+  }, [allFloorIds, allAreaIds]);
 
   const floorTotals = useMemo(() => {
     const t = new Map();
@@ -363,12 +240,11 @@ export default function LutronAreaLoads({
           <Wand2 size={28} className="text-amber-400" />
         </div>
         <h3 className="text-sm font-bold text-foreground mb-1">
-          No lighting house loaded
+          {emptyMessage ? "Nothing to show here" : "No lighting house loaded"}
         </h3>
         <p className="text-xs text-muted-foreground max-w-md">
-          Import a Lutron Integration Report to populate areas, loads (zones)
-          and scenes. The report is generated by Lutron Designer for
-          HomeWorks QSX, Athena and RadioRA 3 systems.
+          {emptyMessage ||
+            "Import a Lutron Integration Report to populate areas, loads (zones) and scenes. The report is generated by Lutron Designer for HomeWorks QSX, Athena and RadioRA 3 systems."}
         </p>
       </div>
     );
@@ -435,6 +311,7 @@ export default function LutronAreaLoads({
                         onZoneLevel={onZoneLevel}
                         onZoneToggle={onZoneToggle}
                         onStopShade={onStopShade}
+                        onEditZone={onEditZone}
                         onActivateScene={onActivateScene}
                         expanded={openAreas.has(area.fullPath || area.id)}
                         onToggleExpanded={() =>

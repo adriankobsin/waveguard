@@ -1312,6 +1312,7 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
       level,
       fadeSeconds,
       sceneZones,
+      scene,
       hrefs,
       host,
       port,
@@ -1510,6 +1511,116 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
         }
         const entry = engine.pressButton(targetHref);
         return res.json({ success: true, mode: "mock", ...entry });
+      }
+
+      case "customScene": {
+        // User-authored scene from the Scenes page. Three kinds:
+        //   area_scene     → { areaId, sceneN }
+        //   leap_href      → { href: "/area/<id>/scene/<n>" }
+        //   phantom_button → { deviceHref, componentNumber }
+        if (!scene || typeof scene !== "object") {
+          return res
+            .status(400)
+            .json({ success: false, error: "scene payload required" });
+        }
+        const kind = scene.kind || "leap_href";
+
+        // Derive (areaId, sceneN) for area_scene + leap_href dispatch.
+        let areaId = null;
+        let sceneN = null;
+        if (kind === "area_scene") {
+          areaId = scene.areaId ? String(scene.areaId).trim() : null;
+          sceneN = Number(scene.sceneN);
+        } else if (kind === "leap_href") {
+          const m = String(scene.href || "").match(/\/area\/(\d+)\/scene\/(\d+)/i);
+          if (m) {
+            areaId = m[1];
+            sceneN = Number(m[2]);
+          }
+        }
+
+        if (kind === "area_scene" || kind === "leap_href") {
+          if (!areaId || !Number.isFinite(sceneN)) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "area_scene / leap_href requires an Area ID and Scene number (got href '" +
+                (scene.href || `${scene.areaId}/${scene.sceneN}`) +
+                "').",
+            });
+          }
+          if (liveClient) {
+            try {
+              await liveClient.activateAreaScene(areaId, sceneN);
+              return res.json({
+                success: true,
+                mode: "live",
+                scene,
+                areaId,
+                sceneN,
+              });
+            } catch (err) {
+              console.warn("[lutronCommand] customScene activateAreaScene failed:", err.message);
+              return res.json({
+                success: false,
+                mode: "live",
+                scene,
+                error: err.message || "Processor rejected scene activation",
+              });
+            }
+          }
+          // No live client — simulate via the local engine if it has
+          // a matching scene href, otherwise just report success.
+          const fakeHref = `/area/${areaId}/scene/${sceneN}`;
+          try {
+            const result = engine.activateScene(fakeHref, []);
+            return res.json({ success: true, mode: "mock", scene, ...result });
+          } catch {
+            return res.json({ success: true, mode: "mock", scene });
+          }
+        }
+
+        if (kind === "phantom_button") {
+          const deviceId = scene.deviceHref
+            ? integrationIdFromHref(scene.deviceHref)
+            : null;
+          const componentId =
+            scene.componentNumber != null ? String(scene.componentNumber) : null;
+          if (!deviceId || !componentId) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "phantom_button requires a Device href and Component number",
+            });
+          }
+          if (liveClient) {
+            try {
+              const entry = await liveClient.pressButton(deviceId, componentId);
+              return res.json({
+                success: true,
+                mode: "live",
+                scene,
+                deviceId,
+                componentId,
+                ...entry,
+              });
+            } catch (err) {
+              console.warn("[lutronCommand] customScene pressButton failed:", err.message);
+              return res.json({
+                success: false,
+                mode: "live",
+                scene,
+                error: err.message || "Processor rejected button press",
+              });
+            }
+          }
+          const entry = engine.pressButton(scene.deviceHref || `/device/${deviceId}`);
+          return res.json({ success: true, mode: "mock", scene, ...entry });
+        }
+
+        return res
+          .status(400)
+          .json({ success: false, error: `Unknown scene kind '${kind}'` });
       }
 
       case "pollZones": {

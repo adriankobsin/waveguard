@@ -7,17 +7,22 @@ import {
   LIGHTING_ZONE_STATE_SETTINGS_KEY,
   LIGHTING_LUTRON_CONNECTION_KEY,
   LIGHTING_CONNECTION_KEY,
+  LIGHTING_CUSTOM_SCENES_KEY,
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
   LIGHTING_CONNECTION_CHANGED_EVENT,
+  LIGHTING_CUSTOM_SCENES_CHANGED_EVENT,
   DEFAULT_LIGHTING_HOUSE,
   DEFAULT_LUTRON_CONNECTION,
   DEFAULT_LIGHTING_CONNECTION,
+  DEFAULT_CUSTOM_SCENES,
   normalizeLightingHouse,
   normalizeZoneState,
   normalizeLutronConnection,
   normalizeLightingConnection,
+  normalizeCustomScene,
+  normalizeCustomScenes,
   loadLightingHouseLocal,
   saveLightingHouseLocal,
   loadZoneStateLocal,
@@ -26,11 +31,26 @@ import {
   saveLutronConnectionLocal,
   loadLightingConnectionLocal,
   saveLightingConnectionLocal,
+  loadCustomScenesLocal,
+  saveCustomScenesLocal,
   defaultPortForProtocol,
   setActiveSceneLocal,
 } from "@/lib/lighting/lightingSettings";
 import { buildMockLutronEngine } from "@/lib/integrations/lutron/lutronAdapter";
 import { getDemoLightingHouse } from "@/lib/demo/demoSystemSnapshot";
+import { recordLightingEvent } from "@/lib/lighting/lightingEventLog";
+
+// Best-effort fire-and-forget logger. We intentionally don't await
+// recordLightingEvent inside command handlers because (a) it has its own
+// persistence retry and (b) we never want a slider drag to stall on a
+// SystemSettings round-trip.
+function logEvent(payload) {
+  try {
+    recordLightingEvent(payload);
+  } catch (err) {
+    console.warn("[lightingApi] event log failed (ignored):", err);
+  }
+}
 
 // ── Lighting house (parsed integration report) ───────────────────────────────
 
@@ -117,6 +137,146 @@ export async function clearLightingHouse() {
     }
   }
   return empty;
+}
+
+/**
+ * Validate that an integration address looks like a Lutron `/zone/<digits>`
+ * href. Accepts a bare numeric id (we normalise to `/zone/<id>`) or a
+ * fully-qualified href. Returns the canonical href on success or null if
+ * the input is malformed.
+ */
+function normalizeZoneHref(input) {
+  const s = String(input || "").trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) return `/zone/${s}`;
+  const m = /^\/zone\/(\d+)$/i.exec(s);
+  return m ? `/zone/${m[1]}` : null;
+}
+
+/**
+ * Rename a lighting zone and/or move it to a different integration
+ * address (Lutron href). Persists the change to the lighting-house
+ * SystemSettings record, dispatches a `LIGHTING_HOUSE_CHANGED_EVENT`
+ * so every consumer (LightingPage, Diagnoses, Event log filters, …)
+ * picks the update up live, and migrates any per-zone state stored
+ * under the old href so the new row keeps its commanded level / on
+ * indicator without an extra processor round-trip.
+ *
+ * Throws when the new href is malformed or already belongs to another
+ * zone. Returns the updated zone.
+ */
+export async function updateLightingZone({ originalHref, name, href }) {
+  if (!originalHref) throw new Error("originalHref required");
+  const cleanName = String(name || "").trim();
+  if (!cleanName) throw new Error("Zone name cannot be empty");
+
+  const normalizedHref = normalizeZoneHref(href || originalHref);
+  if (!normalizedHref) {
+    throw new Error(
+      "Integration address must look like /zone/<number> (e.g. /zone/5714) or just the numeric id."
+    );
+  }
+
+  const house = await loadLightingHouse();
+  const idx = (house.zones || []).findIndex((z) => z.href === originalHref);
+  if (idx < 0) throw new Error(`Zone ${originalHref} not found in lighting house`);
+
+  const target = house.zones[idx];
+  const hrefChanged = normalizedHref !== originalHref;
+  if (hrefChanged) {
+    const clash = house.zones.find(
+      (z, i) => i !== idx && z.href === normalizedHref
+    );
+    if (clash) {
+      throw new Error(
+        `Integration address ${normalizedHref} already belongs to "${clash.name}". Pick a different address or edit that zone first.`
+      );
+    }
+  }
+
+  const updatedZone = {
+    ...target,
+    name: cleanName,
+    href: normalizedHref,
+    id: normalizedHref.replace(/^.*\//, ""),
+  };
+  const nextZones = [...house.zones];
+  nextZones[idx] = updatedZone;
+
+  // Mirror the rename / re-address into the load-schedule entries that
+  // reference this zone by zoneName + areaFullPath. We only touch the
+  // zoneName field — the schedule's own loadNumber/panel/module/output
+  // come from the original parsed report and stay accurate.
+  const nextSchedule = (house.loadSchedule || []).map((row) => {
+    if (
+      row.zoneName === target.name &&
+      row.areaFullPath === target.areaFullPath
+    ) {
+      return { ...row, zoneName: cleanName };
+    }
+    return row;
+  });
+
+  const nextHouse = {
+    ...house,
+    zones: nextZones,
+    loadSchedule: nextSchedule,
+  };
+
+  await saveLightingHouse(nextHouse);
+
+  // Migrate the per-zone live state (level / on / kind / updatedAt)
+  // from the old href bucket to the new one so the slider doesn't snap
+  // back to zero after the user closes the modal.
+  if (hrefChanged) {
+    try {
+      const currentState = await loadZoneState();
+      if (currentState && currentState[originalHref]) {
+        const next = { ...currentState };
+        next[normalizedHref] = next[originalHref];
+        delete next[originalHref];
+        await persistZoneStateToSettings(next);
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent(LIGHTING_ZONE_STATE_CHANGED_EVENT, {
+              detail: next,
+            })
+          );
+        }
+      }
+    } catch (err) {
+      console.warn("[lightingApi] zone state migration failed:", err);
+    }
+
+    // Also forget any cached OpenCloseStop discovery against the old
+    // href so the new address gets re-discovered cleanly.
+    try {
+      if (ocsDiscoveredZones.has(originalHref)) {
+        ocsDiscoveredZones.delete(originalHref);
+        if (typeof window !== "undefined" && window.localStorage) {
+          window.localStorage.setItem(
+            OCS_DISCOVERED_KEY,
+            JSON.stringify([...ocsDiscoveredZones])
+          );
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  logEvent({
+    kind: "zone",
+    severity: "info",
+    zoneHref: normalizedHref,
+    action: "edit",
+    result: "success",
+    message: hrefChanged
+      ? `Renamed "${target.name}" → "${cleanName}" and moved address ${originalHref} → ${normalizedHref}`
+      : `Renamed "${target.name}" → "${cleanName}"`,
+  });
+
+  return updatedZone;
 }
 
 // ── Zone live state (commanded levels) ───────────────────────────────────────
@@ -371,6 +531,83 @@ function shouldSurfaceLiveError(remote, liveEnabled) {
   return remote.success === false || remote.mode === "live";
 }
 
+// Shade-family kind hints we may receive from the UI. Used by
+// `setZoneLevel` to decide whether a "GoToLevel not supported for the
+// specified ZoneType" rejection should trigger a `raiseLowerStop`
+// retry. The list matches the hints accepted by the LEAP client's
+// `_kindFromHint` so we never double-classify here.
+const SHADE_FAMILY_HINTS = new Set([
+  "shade",
+  "blind",
+  "blackout",
+  "curtain",
+  "drape",
+  "drapery",
+  "sheer",
+  "voile",
+  "roller",
+  "zebra",
+  "silhouette",
+  "honeycomb",
+  "cellular",
+  "shutter",
+  "roman",
+  "venetian",
+  "openCloseStop",
+  "openclosestop",
+  "openclose",
+  "shadeAndTilt",
+  "shadeandtilt",
+  "tilt",
+]);
+
+function isShadeFamilyHint(zoneKind) {
+  if (!zoneKind) return false;
+  return SHADE_FAMILY_HINTS.has(String(zoneKind));
+}
+
+function isZoneTypeMismatchError(err = "") {
+  const s = String(err || "");
+  if (!s) return false;
+  return (
+    /not supported.*zonetype/i.test(s) ||
+    /BadRequest/i.test(s) ||
+    /400\s*BadRequest/i.test(s)
+  );
+}
+
+// In-process memo of zones the processor revealed as OpenCloseStop the
+// first time we got the ZoneType-mismatch rejection. Persisted to
+// `localStorage` so the discovery survives a browser reload — the next
+// click on the same zone routes straight to `raiseLowerStop` without
+// the one-off retry storm.
+const OCS_DISCOVERED_KEY = "waveguard:lighting:ocs-zones";
+function loadOcsDiscoveredZones() {
+  try {
+    if (typeof window === "undefined" || !window.localStorage) return new Set();
+    const raw = window.localStorage.getItem(OCS_DISCOVERED_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+const ocsDiscoveredZones = loadOcsDiscoveredZones();
+function rememberOcsZone(zoneHref) {
+  ocsDiscoveredZones.add(zoneHref);
+  try {
+    if (typeof window !== "undefined" && window.localStorage) {
+      window.localStorage.setItem(
+        OCS_DISCOVERED_KEY,
+        JSON.stringify([...ocsDiscoveredZones])
+      );
+    }
+  } catch {
+    /* quota */
+  }
+}
+
 /**
  * Set a zone level (0-100). Returns the new commanded state.
  *
@@ -387,11 +624,30 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind 
   if (isDemoModeActive() || !isMockServer) {
     const result = getLocalEngine().setZoneLevel(zoneHref, clamped, fadeSeconds);
     await broadcastZoneUpdate([result]);
+    logEvent({
+      kind: "zone",
+      severity: "info",
+      zoneHref,
+      action: "setLevel",
+      level: clamped,
+      result: "success",
+      message: `Mock engine set ${zoneHref} to ${clamped}%`,
+    });
     return result;
   }
 
   const conn = await loadLutronConnection();
   const liveEnabled = !!(conn?.enabled && conn?.host);
+  const shadeFamily = isShadeFamilyHint(zoneKind);
+
+  // Zones we previously learned are OpenCloseStop skip the GoToLevel
+  // round-trip entirely. The processor would reject every level-based
+  // command on these blinds/curtains and force us into the retry path
+  // anyway — translating Open/Close → Raise/Lower up front is both
+  // faster and keeps the event log clean.
+  if (shadeFamily && ocsDiscoveredZones.has(zoneHref)) {
+    return _setShadeViaRaiseLower(zoneHref, clamped, zoneKind);
+  }
 
   const remote = await callMockLutron("setZoneLevel", {
     zoneHref,
@@ -401,17 +657,123 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind 
   });
   if (remote?.success) {
     await broadcastZoneUpdate([remote.zone]);
+    logEvent({
+      kind: "zone",
+      severity: "info",
+      zoneHref,
+      action: "setLevel",
+      level: clamped,
+      result: "success",
+      message: `${remote.mode === "live" ? "Processor" : "Mock"} set ${zoneHref} to ${clamped}%`,
+    });
     return remote.zone;
   }
+
+  // Client-side OpenCloseStop fallback. When the processor rejects a
+  // level command on a shade-family zone with a "GoToLevel not
+  // supported for the specified ZoneType" exception (or any 400
+  // BadRequest), the zone is almost certainly an OpenCloseStop blind /
+  // curtain motor and the Lutron LEAP `_probeZoneKind` couldn't pin it
+  // down. Retry the same gesture as `raiseLowerStop` (raise for
+  // level ≥50, lower otherwise) so the user's Open / Close button
+  // wires through anyway, then remember the discovery so subsequent
+  // clicks skip the level dance entirely.
+  if (
+    shadeFamily &&
+    remote?.success === false &&
+    isZoneTypeMismatchError(remote?.error)
+  ) {
+    try {
+      const result = await _setShadeViaRaiseLower(zoneHref, clamped, zoneKind);
+      rememberOcsZone(zoneHref);
+      return result;
+    } catch (raiseErr) {
+      // Both level command and raiseLowerStop failed — surface the
+      // original (more descriptive) error to the operator.
+      const msg =
+        remote?.error ||
+        raiseErr?.message ||
+        "Lutron processor rejected the command.";
+      logEvent({
+        kind: "zone",
+        severity: "warning",
+        zoneHref,
+        action: "setLevel",
+        level: clamped,
+        result: "failed",
+        message: `${msg} · Raise/Lower fallback also failed: ${raiseErr?.message || "unknown"}`,
+      });
+      throw new Error(msg);
+    }
+  }
+
   if (shouldSurfaceLiveError(remote, liveEnabled)) {
     const msg =
       remote?.error ||
       "Lutron processor rejected the command. Check the connection and integration credentials.";
+    logEvent({
+      kind: "zone",
+      severity: "warning",
+      zoneHref,
+      action: "setLevel",
+      level: clamped,
+      result: "failed",
+      message: msg,
+    });
     throw new Error(msg);
   }
   const fallback = getLocalEngine().setZoneLevel(zoneHref, clamped, fadeSeconds);
   await broadcastZoneUpdate([fallback]);
+  logEvent({
+    kind: "zone",
+    severity: "info",
+    zoneHref,
+    action: "setLevel",
+    level: clamped,
+    result: "fallback",
+    message: "Processor unreachable — applied to local mock engine instead.",
+  });
   return fallback;
+}
+
+/**
+ * Implementation detail of `setZoneLevel`: translate a 0-100 target
+ * level into the matching `raiseLowerStop` command for an OpenCloseStop
+ * blind/curtain and feed the resulting state back through
+ * `broadcastZoneUpdate` so the UI converges. Used both as the recovery
+ * path after a ZoneType-mismatch rejection and as the cached fast path
+ * for zones we previously discovered to be OpenCloseStop.
+ */
+async function _setShadeViaRaiseLower(zoneHref, clamped, zoneKind) {
+  const action = clamped >= 50 ? "raise" : "lower";
+  const remote = await callMockLutron("raiseLowerStop", {
+    zoneHref,
+    zoneKind: zoneKind || "openCloseStop",
+    action,
+  });
+  if (remote?.success) {
+    const next = {
+      href: zoneHref,
+      level: clamped,
+      on: clamped > 0,
+      kind: "openCloseStop",
+      updatedAt: new Date().toISOString(),
+    };
+    await broadcastZoneUpdate([next]);
+    logEvent({
+      kind: "zone",
+      severity: "info",
+      zoneHref,
+      action: "setLevel",
+      level: clamped,
+      result: "success",
+      message: `Processor ${action === "raise" ? "opened" : "closed"} ${zoneHref} (OpenCloseStop)`,
+    });
+    return next;
+  }
+  const errMsg =
+    remote?.error || `Processor rejected ${action} on ${zoneHref}`;
+  throw new Error(errMsg);
 }
 
 /**
@@ -432,6 +794,13 @@ export async function activateScene({
   if (isDemoModeActive() || !isMockServer) {
     const result = getLocalEngine().activateScene(sceneHref, sceneZones);
     await broadcastZoneUpdate(result.zones);
+    logEvent({
+      kind: "scene",
+      severity: "info",
+      action: "activateScene",
+      result: "success",
+      message: `Mock engine activated scene ${sceneName || sceneHref}`,
+    });
     return result;
   }
 
@@ -446,16 +815,37 @@ export async function activateScene({
   });
   if (remote?.success) {
     await broadcastZoneUpdate(remote.zones || []);
+    logEvent({
+      kind: "scene",
+      severity: "info",
+      action: "activateScene",
+      result: "success",
+      message: `${remote.mode === "live" ? "Processor" : "Mock"} activated scene ${sceneName || sceneHref}`,
+    });
     return remote;
   }
   if (shouldSurfaceLiveError(remote, liveEnabled)) {
     const msg =
       remote?.error ||
       "Lutron processor rejected the scene command. Check the connection and integration credentials.";
+    logEvent({
+      kind: "scene",
+      severity: "warning",
+      action: "activateScene",
+      result: "failed",
+      message: `${sceneName || sceneHref}: ${msg}`,
+    });
     throw new Error(msg);
   }
   const fallback = getLocalEngine().activateScene(sceneHref, sceneZones);
   await broadcastZoneUpdate(fallback.zones);
+  logEvent({
+    kind: "scene",
+    severity: "info",
+    action: "activateScene",
+    result: "fallback",
+    message: `Processor unreachable — scene ${sceneName || sceneHref} applied to mock engine.`,
+  });
   return fallback;
 }
 
@@ -630,7 +1020,9 @@ export function subscribeLutronEvents(onUpdate) {
 export async function stopShade({ zoneHref, zoneKind = "shade" } = {}) {
   if (!zoneHref) throw new Error("zoneHref required");
   if (isDemoModeActive() || !isMockServer) {
-    return getLocalEngine().raiseLower(zoneHref, "stop");
+    const r = getLocalEngine().raiseLower(zoneHref, "stop");
+    logEvent({ kind: "zone", zoneHref, action: "stop", result: "success", message: "Mock engine stopped shade" });
+    return r;
   }
 
   const remote = await callMockLutron("raiseLowerStop", {
@@ -638,7 +1030,20 @@ export async function stopShade({ zoneHref, zoneKind = "shade" } = {}) {
     zoneKind,
     action: "stop",
   });
-  if (remote?.success) return remote;
+  if (remote?.success) {
+    logEvent({ kind: "zone", zoneHref, action: "stop", result: "success", message: "Processor stopped shade" });
+    return remote;
+  }
+  if (remote && remote.success === false) {
+    logEvent({
+      kind: "zone",
+      severity: "warning",
+      zoneHref,
+      action: "stop",
+      result: "failed",
+      message: remote.error || "Processor rejected stop command",
+    });
+  }
   return getLocalEngine().raiseLower(zoneHref, "stop");
 }
 
@@ -653,7 +1058,9 @@ export async function raiseLowerShade({ zoneHref, action = "stop", zoneKind = "s
     throw new Error(`raiseLowerShade: invalid action "${action}"`);
   }
   if (isDemoModeActive() || !isMockServer) {
-    return getLocalEngine().raiseLower(zoneHref, action);
+    const r = getLocalEngine().raiseLower(zoneHref, action);
+    logEvent({ kind: "zone", zoneHref, action, result: "success", message: `Mock engine ${action} shade` });
+    return r;
   }
 
   const remote = await callMockLutron("raiseLowerStop", {
@@ -661,7 +1068,20 @@ export async function raiseLowerShade({ zoneHref, action = "stop", zoneKind = "s
     zoneKind,
     action,
   });
-  if (remote?.success) return remote;
+  if (remote?.success) {
+    logEvent({ kind: "zone", zoneHref, action, result: "success", message: `Processor ${action} shade` });
+    return remote;
+  }
+  if (remote && remote.success === false) {
+    logEvent({
+      kind: "zone",
+      severity: "warning",
+      zoneHref,
+      action,
+      result: "failed",
+      message: remote.error || `Processor rejected ${action}`,
+    });
+  }
   return getLocalEngine().raiseLower(zoneHref, action);
 }
 
@@ -741,6 +1161,187 @@ export async function testLightingProcessor(override = {}, systemType) {
       remote?.error ||
       `Unable to reach ${effectiveType.toUpperCase()} processor`,
   };
+}
+
+// ── User-authored scenes (Scenes page) ──────────────────────────────────
+
+async function loadCustomScenesFromSettings() {
+  try {
+    const records = await base44.entities.SystemSettings.filter({
+      key: LIGHTING_CUSTOM_SCENES_KEY,
+    });
+    if (records.length > 0 && records[0].value != null) {
+      return normalizeCustomScenes(parseSettingsValue(records[0].value));
+    }
+  } catch (err) {
+    console.warn("[lightingApi] custom scenes load failed:", err);
+  }
+  return loadCustomScenesLocal() || { ...DEFAULT_CUSTOM_SCENES };
+}
+
+async function persistCustomScenesToSettings(payload) {
+  const normalized = normalizeCustomScenes(payload);
+  saveCustomScenesLocal(normalized);
+  try {
+    const records = await base44.entities.SystemSettings.filter({
+      key: LIGHTING_CUSTOM_SCENES_KEY,
+    });
+    const body = { key: LIGHTING_CUSTOM_SCENES_KEY, value: normalized };
+    if (records.length > 0) {
+      await base44.entities.SystemSettings.update(records[0].id, body);
+    } else {
+      await base44.entities.SystemSettings.create(body);
+    }
+  } catch (err) {
+    console.warn("[lightingApi] custom scenes save failed:", err);
+  }
+  return normalized;
+}
+
+function broadcastCustomScenes(payload) {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(LIGHTING_CUSTOM_SCENES_CHANGED_EVENT, { detail: payload })
+    );
+  }
+}
+
+export async function loadCustomScenes() {
+  if (isDemoModeActive()) return loadCustomScenesLocal() || { ...DEFAULT_CUSTOM_SCENES };
+  return loadCustomScenesFromSettings();
+}
+
+export async function saveCustomScenes(payload) {
+  const normalized = normalizeCustomScenes(payload);
+  broadcastCustomScenes(normalized);
+  if (isDemoModeActive()) {
+    saveCustomScenesLocal(normalized);
+    return normalized;
+  }
+  return persistCustomScenesToSettings(normalized);
+}
+
+/** Add (or update by id) a single custom scene. */
+export async function addCustomScene(scene) {
+  const incoming = normalizeCustomScene(scene);
+  if (!incoming) throw new Error("Invalid scene payload");
+  const current = await loadCustomScenes();
+  const idx = current.scenes.findIndex((s) => s.id === incoming.id);
+  const next = { ...current };
+  if (idx >= 0) {
+    next.scenes = current.scenes.map((s, i) => (i === idx ? incoming : s));
+  } else {
+    next.scenes = [...current.scenes, incoming];
+  }
+  return saveCustomScenes(next);
+}
+
+export async function removeCustomScene(id) {
+  if (!id) return loadCustomScenes();
+  const current = await loadCustomScenes();
+  const next = {
+    ...current,
+    scenes: current.scenes.filter((s) => s.id !== id),
+  };
+  return saveCustomScenes(next);
+}
+
+/**
+ * Execute a user-authored scene against the live processor.
+ *
+ * Each scene kind dispatches differently:
+ *   - area_scene     → #AREA,<id>,6,<n> via liveClient.activateAreaScene().
+ *   - leap_href      → parsed as /area/<id>/scene/<n> and routed through
+ *                      activateAreaScene as well (a real LEAP processor
+ *                      only exposes scenes through an area context).
+ *   - phantom_button → CreateRequest /button/<comp> on a virtual phantom
+ *                      keypad device (#DEVICE on Telnet).
+ *
+ * Returns the mock-server response so the UI can record the result in the
+ * event log. Updates `lastRunAt` on the saved scene record on success.
+ */
+export async function runCustomScene(sceneOrId) {
+  const id = typeof sceneOrId === "string" ? sceneOrId : sceneOrId?.id;
+  if (!id) throw new Error("scene id required");
+  const current = await loadCustomScenes();
+  const scene = current.scenes.find((s) => s.id === id);
+  if (!scene) throw new Error(`Scene ${id} not found`);
+
+  if (isDemoModeActive() || !isMockServer) {
+    // Demo / no-server: just simulate success and bump lastRunAt so the
+    // UI still feels alive. The local engine doesn't know about user
+    // scenes, but it does know about parsed-report scenes; a custom
+    // scene typically references a real Lutron area scene so this is
+    // mainly a UX nicety.
+    const updated = {
+      ...scene,
+      lastRunAt: new Date().toISOString(),
+      lastResult: "success",
+    };
+    await addCustomScene(updated);
+    logEvent({
+      kind: "custom",
+      action: "runCustomScene",
+      result: "success",
+      message: `Mock engine ran scene ${scene.name}`,
+    });
+    return { success: true, mode: "mock", scene: updated };
+  }
+
+  const conn = await loadLutronConnection();
+  const liveEnabled = !!(conn?.enabled && conn?.host);
+
+  const remote = await callMockLutron("customScene", { scene });
+  if (remote?.success) {
+    const updated = {
+      ...scene,
+      lastRunAt: new Date().toISOString(),
+      lastResult: "success",
+    };
+    await addCustomScene(updated);
+    if (Array.isArray(remote.zones) && remote.zones.length > 0) {
+      await broadcastZoneUpdate(remote.zones);
+    }
+    logEvent({
+      kind: "custom",
+      action: "runCustomScene",
+      result: "success",
+      message: `Processor ran scene ${scene.name}`,
+    });
+    return remote;
+  }
+  if (shouldSurfaceLiveError(remote, liveEnabled)) {
+    const updated = {
+      ...scene,
+      lastRunAt: new Date().toISOString(),
+      lastResult: "failed",
+    };
+    await addCustomScene(updated);
+    const msg = remote?.error || "Lutron processor rejected the scene command.";
+    logEvent({
+      kind: "custom",
+      severity: "warning",
+      action: "runCustomScene",
+      result: "failed",
+      message: `${scene.name}: ${msg}`,
+    });
+    throw new Error(msg);
+  }
+  // Mock-server unreachable — record as unknown so the UI doesn't lie.
+  const updated = {
+    ...scene,
+    lastRunAt: new Date().toISOString(),
+    lastResult: "unreachable",
+  };
+  await addCustomScene(updated);
+  logEvent({
+    kind: "custom",
+    severity: "warning",
+    action: "runCustomScene",
+    result: "unreachable",
+    message: `${scene.name}: mock server unreachable`,
+  });
+  return { success: false, mode: "live", scene: updated, error: "Mock server unreachable" };
 }
 
 // ── LEAP certificate pairing ──────────────────────────────────────────────

@@ -853,10 +853,30 @@ class LutronLeapClientWrapper extends EventEmitter {
     if (h === "tilt" || h === "tiltonly") return "tilt";
     if (h === "shadeandtilt" || h === "liftandtilt") return "shadeAndTilt";
     if (h === "openclosestop" || h === "openclose") return "openCloseStop";
-    if (h === "shade" || h === "blind" || h === "blackout" || h === "curtain" || h === "roman") {
-      // Default shade-family hints to "shade"; the live probe will replace
-      // this with "openCloseStop" / "tilt" / etc. when the processor says
-      // otherwise.
+    // Treat every window-treatment hint we know about as a level-based
+    // Shade — `_probeZoneKind` will downgrade us to OpenCloseStop / tilt
+    // when the processor's ControlType says otherwise. Centralising the
+    // alias list here means the platform can hand us whatever string
+    // the parser produced (drape / roller / honeycomb / shutter / …)
+    // without breaking shade control.
+    if (
+      h === "shade" ||
+      h === "blind" ||
+      h === "blackout" ||
+      h === "curtain" ||
+      h === "roman" ||
+      h === "venetian" ||
+      h === "drape" ||
+      h === "drapery" ||
+      h === "sheer" ||
+      h === "voile" ||
+      h === "roller" ||
+      h === "zebra" ||
+      h === "silhouette" ||
+      h === "honeycomb" ||
+      h === "cellular" ||
+      h === "shutter"
+    ) {
       return "shade";
     }
     if (h === "dimmed" || h === "light" || h === "load") return "dimmed";
@@ -1137,6 +1157,54 @@ class LutronLeapClientWrapper extends EventEmitter {
         }
       }
     }
+
+    // Final safety net: when every level-based command is rejected for
+    // a shade-family hint, the zone is almost certainly OpenCloseStop
+    // (e.g. a motorised curtain whose live probe came back ambiguous and
+    // landed us on the "shade" hint). The processor signals this with
+    // a `BadRequest :: GoToLevel not supported for the specified
+    // ZoneType` exception. Convert the requested level into a Raise /
+    // Lower so the user's Open / Close button still wires through, and
+    // remember the discovery in `_kindByZone` so the next click skips
+    // the level attempts entirely.
+    if (lastError && this._looksLikeShadeFamily(kindHint, kind)) {
+      const reason = lastError?.message || "";
+      const looksLikeZoneTypeMismatch =
+        /not supported.*zonetype/i.test(reason) ||
+        /BadRequest/i.test(reason) ||
+        lastError?.leapStatus?.startsWith?.("400");
+      if (looksLikeZoneTypeMismatch) {
+        const action = lvl >= 50 ? "raise" : "lower";
+        log(
+          `[${this.host}:${this.port}] zone=${id}: level-based commands rejected (${reason}); retrying as OpenCloseStop ${action.toUpperCase()}`
+        );
+        try {
+          await this.raiseLower(id, action, "openCloseStop");
+          // Pin the cache so subsequent setOutput calls early-return
+          // through the openCloseStop branch instead of repeating the
+          // GoToShadeLevel/GoToLevel/Raise dance every click.
+          this._kindByZone.set(String(id), "openCloseStop");
+          lastError = null;
+          const updatedAt = new Date().toISOString();
+          const next = {
+            id: String(id),
+            level: lvl,
+            on: lvl > 0,
+            kind: "openCloseStop",
+            updatedAt,
+          };
+          this.lastLevels.set(String(id), next);
+          this.emit("zoneLevel", next);
+          return next;
+        } catch (raiseErr) {
+          logWarn(
+            `[${this.host}:${this.port}] zone=${id}: Raise/Lower fallback also failed: ${raiseErr.message}`
+          );
+          lastError = raiseErr;
+        }
+      }
+    }
+
     if (lastError) {
       logError(
         `[${this.host}:${this.port}] setOutput FAILED zone=${id} level=${lvl} kind=${kind}: ${lastError.message}`
@@ -1158,6 +1226,24 @@ class LutronLeapClientWrapper extends EventEmitter {
     this.lastLevels.set(String(id), next);
     this.emit("zoneLevel", next);
     return next;
+  }
+
+  /**
+   * True when either the probed kind or the original UI hint belongs to
+   * the shade / blind / curtain family. Used by `setOutput` to decide
+   * whether a "GoToLevel not supported for ZoneType" exception should
+   * trigger a Raise / Lower fallback.
+   */
+  _looksLikeShadeFamily(kindHint, resolvedKind) {
+    const isShadeKind = (k) =>
+      k === "shade" ||
+      k === "shadeAndTilt" ||
+      k === "tilt" ||
+      k === "openCloseStop";
+    if (isShadeKind(resolvedKind)) return true;
+    const fromHint = this._kindFromHint(kindHint);
+    if (isShadeKind(fromHint)) return true;
+    return false;
   }
 
   async raiseLower(id, action, kindHint = null) {

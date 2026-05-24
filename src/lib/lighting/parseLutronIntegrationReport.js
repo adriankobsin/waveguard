@@ -52,14 +52,32 @@ function pathSegments(rawPath) {
 /**
  * Heuristic for what kind of load a zone is. Useful for grouping the UI by
  * light vs shade vs blind.
+ *
+ * Window-treatment naming varies a lot between Lutron Designer projects —
+ * the same physical drape can be tagged "DRAPE", "DRAPERY", "SHEER",
+ * "VOILE", "ROLLER", "ZEBRA", "SILHOUETTE", "HONEYCOMB", "CELLULAR",
+ * "SHUTTER" or simply "MOTOR". We classify them all into the existing
+ * shade-family kinds (shade / blind / blackout) so they end up on the
+ * Shades tab with Open/Close/Stop controls instead of getting dropped
+ * into "load" and falling out to the Lights tab.
+ *
+ * Many Designer projects also strip the leaf zone name down to a bare
+ * index ("1", "2", "3") inside an area like `…\Curtains\1`. To catch
+ * those we accept an optional `context` string (the area name or full
+ * path) and apply the same keyword test against it. A leaf name that
+ * already matches wins over the context.
  */
-export function classifyZoneKind(name = "") {
-  const n = String(name).toLowerCase();
-  if (/blackout/.test(n)) return "blackout";
-  if (/shade|curtain/.test(n)) return "shade";
-  if (/blind|roman/.test(n)) return "blind";
-  if (/pendant|niche|coffer|skylight|cabinet|strip|uplight|wall lamp|wall light|downlight|spot|chandelier|light/.test(n)) return "light";
-  return "load";
+export function classifyZoneKind(name = "", context = "") {
+  const test = (str) => {
+    const n = String(str || "").toLowerCase();
+    if (!n) return null;
+    if (/blackout/.test(n)) return "blackout";
+    if (/\b(shades?|curtains?|drapes?|drapery|draperies|sheers?|voile|rollers?|zebra|silhouettes?|honeycombs?|cellulars?|skylight\s*shades?|skylight-shades?|shadeband|skybands?)\b/.test(n)) return "shade";
+    if (/\b(blinds?|romans?|venetians?|shutters?|panel\s*tracks?|panel-tracks?)\b/.test(n)) return "blind";
+    if (/pendant|niche|coffer|skylight|cabinet|strip|uplight|wall lamp|wall light|downlight|spot|chandelier|light/.test(n)) return "light";
+    return null;
+  };
+  return test(name) || test(context) || "load";
 }
 
 function buildArea(fullPath, href) {
@@ -86,6 +104,10 @@ function buildZone(fullPath, href) {
   const areaName = parts[1] || "Area";
   const zoneName = parts[parts.length - 1] || "Zone";
   const areaFullPath = parts.slice(0, parts.length - 1).join("\\");
+  // Combine every path segment except the floor as classification
+  // context so a zone named just "1" inside `…\Curtains\1` still
+  // resolves to "shade".
+  const context = parts.slice(1).join(" ");
   return {
     href,
     id: hrefId(href),
@@ -94,7 +116,7 @@ function buildZone(fullPath, href) {
     area: areaName,
     areaFullPath,
     name: zoneName,
-    kind: classifyZoneKind(zoneName),
+    kind: classifyZoneKind(zoneName, context),
   };
 }
 

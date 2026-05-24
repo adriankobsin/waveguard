@@ -74,6 +74,18 @@ Individual zone diagnostics are available through the Lighting system:
 - **Scene activation** — activates an area scene with per-zone level targets
 - **Snapshot** — captures the full current state of all zones
 
+### Generated Lighting Diagnoses
+
+`src/lib/lighting/lightingDiagnoses.js` reads the lighting event log ring buffer (`lighting-event-log` in SystemSettings) and produces structured diagnoses surfaced on the Diagnoses page and counted in the sidebar badge:
+
+| ID prefix | Severity | When it fires |
+|---|---|---|
+| `lighting-processor-offline` | critical | The configured Lutron processor stops responding to the periodic probe in `SystemDataContext` (60s cadence). |
+| `lighting-zone-rejected-<href>` | warning | A single zone command is rejected by the processor within the last 5 minutes. |
+| `lighting-zone-unreachable-<href>` | critical | Three or more consecutive failures on the same zone within the last 5 minutes. |
+
+The generator is re-run on every `LIGHTING_EVENT_LOG_CHANGED_EVENT` and `LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT` dispatch, so diagnoses appear and clear in real time without page reloads.
+
 ### Mock Engine Mode
 
 When no live processor is configured, the mock engine provides simulated responses for all lighting operations. This allows the full UI to be tested and demonstrated without any physical hardware.
