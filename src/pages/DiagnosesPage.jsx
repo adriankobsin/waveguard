@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Activity, RefreshCw, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import DiagnosisCard from "../components/DiagnosisCard";
 import { useSystemData } from "@/contexts/SystemDataContext";
 import { getDiagnosisCounts } from "@/lib/systemData/generateDiagnoses";

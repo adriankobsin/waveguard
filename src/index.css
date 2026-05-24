@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,64 +6,76 @@
 
 @layer base {
   :root {
-    --background: 224 28% 5%;
-    --foreground: 210 20% 92%;
-    --card: 224 24% 7%;
-    --card-foreground: 210 20% 92%;
-    --popover: 224 24% 7%;
-    --popover-foreground: 210 20% 92%;
-    --primary: 187 100% 42%;
-    --primary-foreground: 224 28% 5%;
-    --secondary: 224 20% 11%;
-    --secondary-foreground: 210 20% 75%;
-    --muted: 224 20% 11%;
-    --muted-foreground: 215 15% 42%;
-    --accent: 187 80% 16%;
-    --accent-foreground: 187 100% 65%;
+    /* ── Superyacht Dark Gold + Teal Mix ── */
+    --background: 24 12% 5%;
+    --foreground: 42 30% 92%;
+    --card: 24 10% 7%;
+    --card-foreground: 42 30% 92%;
+    --popover: 24 10% 7%;
+    --popover-foreground: 42 30% 92%;
+
+    /* Gold primary */
+    --primary: 42 65% 52%;
+    --primary-foreground: 24 12% 5%;
+
+    --secondary: 24 10% 10%;
+    --secondary-foreground: 42 20% 68%;
+    --muted: 24 10% 10%;
+    --muted-foreground: 42 12% 42%;
+
+    /* Teal accent */
+    --accent: 172 60% 14%;
+    --accent-foreground: 172 80% 62%;
+
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 224 18% 13%;
-    --input: 224 20% 11%;
-    --ring: 187 100% 42%;
-    --radius: 1rem;
 
-    --status-online: 145 65% 45%;
-    --status-offline: 0 75% 55%;
-    --status-warning: 38 92% 50%;
-    --status-unknown: 220 15% 45%;
+    --border: 42 15% 12%;
+    --input: 24 10% 10%;
+    --ring: 42 65% 52%;
+    --radius: 0.75rem;
 
-    --chart-1: 192 100% 48%;
-    --chart-2: 145 65% 45%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 270 70% 60%;
-    --chart-5: 0 75% 55%;
+    --status-online: 145 55% 42%;
+    --status-offline: 0 72% 51%;
+    --status-warning: 38 90% 50%;
+    --status-unknown: 220 12% 40%;
+
+    --chart-1: 42 65% 52%;
+    --chart-2: 172 60% 45%;
+    --chart-3: 38 90% 50%;
+    --chart-4: 270 55% 60%;
+    --chart-5: 0 72% 51%;
+
+    /* Gold shimmer for decorative lines */
+    --gold: 42 65% 52%;
+    --gold-dim: 42 40% 30%;
+    --teal: 172 60% 42%;
   }
 
   .light {
-    --background: 0 0% 100%;
-    --foreground: 224 28% 5%;
-    --card: 0 0% 98%;
-    --card-foreground: 224 28% 5%;
-    --popover: 0 0% 98%;
-    --popover-foreground: 224 28% 5%;
-    --primary: 187 100% 42%;
+    --background: 42 30% 96%;
+    --foreground: 24 20% 10%;
+    --card: 42 20% 99%;
+    --card-foreground: 24 20% 10%;
+    --popover: 42 20% 99%;
+    --popover-foreground: 24 20% 10%;
+    --primary: 42 65% 42%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 224 20% 96%;
-    --secondary-foreground: 224 28% 15%;
-    --muted: 224 20% 96%;
-    --muted-foreground: 224 15% 35%;
-    --accent: 187 80% 92%;
-    --accent-foreground: 187 100% 30%;
+    --secondary: 42 15% 92%;
+    --secondary-foreground: 24 15% 25%;
+    --muted: 42 15% 92%;
+    --muted-foreground: 24 12% 45%;
+    --accent: 172 40% 88%;
+    --accent-foreground: 172 60% 28%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 224 15% 88%;
-    --input: 224 20% 92%;
-    --ring: 187 100% 42%;
-
-    --status-online: 145 65% 35%;
-    --status-offline: 0 75% 45%;
-    --status-warning: 38 92% 40%;
-    --status-unknown: 220 15% 35%;
+    --border: 42 15% 84%;
+    --input: 42 15% 90%;
+    --ring: 42 65% 42%;
+    --status-online: 145 55% 35%;
+    --status-offline: 0 72% 45%;
+    --status-warning: 38 90% 40%;
+    --status-unknown: 220 12% 38%;
   }
 }
 
@@ -74,44 +86,56 @@
   body {
     @apply bg-background text-foreground font-inter;
   }
-  
-  /* Hide scrollbars globally while maintaining scroll functionality */
+
+  /* Refined thin scrollbar */
   * {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
   }
-  *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  *::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  *::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 3px;
-  }
-  *::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.3);
-  }
+  *::-webkit-scrollbar { width: 5px; height: 5px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+  *::-webkit-scrollbar-thumb:hover { background: hsl(42 40% 30% / 0.4); }
 }
 
 @layer utilities {
-  .font-mono { font-family: 'JetBrains Mono', monospace; }
-  .font-inter { font-family: 'Inter', sans-serif; }
+  .font-mono    { font-family: 'JetBrains Mono', monospace; }
+  .font-inter   { font-family: 'Inter', sans-serif; }
+  .font-serif   { font-family: 'Playfair Display', serif; }
 
-  .glow-cyan {
-    box-shadow: 0 0 20px hsl(192 100% 48% / 0.25), 0 0 40px hsl(192 100% 48% / 0.1);
+  /* Gold shimmer glow */
+  .glow-gold {
+    box-shadow: 0 0 24px hsl(42 65% 52% / 0.18), 0 0 48px hsl(42 65% 52% / 0.07);
+  }
+  .glow-teal {
+    box-shadow: 0 0 20px hsl(172 60% 42% / 0.2), 0 0 40px hsl(172 60% 42% / 0.08);
   }
   .glow-red {
-    box-shadow: 0 0 20px hsl(0 75% 55% / 0.3), 0 0 40px hsl(0 75% 55% / 0.1);
-  }
-  .glow-green {
-    box-shadow: 0 0 20px hsl(145 65% 45% / 0.25), 0 0 40px hsl(145 65% 45% / 0.1);
+    box-shadow: 0 0 20px hsl(0 72% 51% / 0.25), 0 0 40px hsl(0 72% 51% / 0.08);
   }
 
+  /* Frosted glass card */
   .glass {
-    @apply bg-card/80 backdrop-blur-md border border-border/50;
+    @apply bg-card/75 backdrop-blur-md border border-border/60;
+  }
+
+  /* Luxury gold top-edge card accent */
+  .card-gold-edge {
+    position: relative;
+  }
+  .card-gold-edge::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 16px; right: 16px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(42 65% 52% / 0.6), transparent);
+    border-radius: 1px;
+  }
+
+  /* Subtle gold divider */
+  .divider-gold {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, hsl(42 65% 52% / 0.35), transparent);
   }
 
   .status-dot-online  { @apply w-2 h-2 rounded-full bg-green-500; }
@@ -123,52 +147,28 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 }
 
-/* react-grid-layout — dashboard edit mode */
-.dashboard-grid {
-  min-height: 200px;
-}
-
-.dashboard-grid .react-grid-item {
-  transition: box-shadow 0.15s ease;
-}
-
-.dashboard-grid--editing .react-grid-item > div {
-  touch-action: none;
-}
-
+/* ── Dashboard grid ────────────────────────────────────────────────── */
+.dashboard-grid { min-height: 200px; }
+.dashboard-grid .react-grid-item { transition: box-shadow 0.15s ease; }
+.dashboard-grid--editing .react-grid-item > div { touch-action: none; }
 .dashboard-grid--editing .react-grid-item {
-  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 0 1px hsl(42 65% 52% / 0.2);
 }
-
 .dashboard-grid .react-grid-item.react-grid-placeholder {
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px dashed rgba(6, 182, 212, 0.45);
-  border-radius: 1rem;
+  background: hsl(42 65% 52% / 0.08);
+  border: 1px dashed hsl(42 65% 52% / 0.4);
+  border-radius: 0.75rem;
   opacity: 1;
 }
-
-.dashboard-grid--editing .react-resizable-handle {
-  opacity: 0.35;
-}
-
-.dashboard-grid--editing .react-grid-item:hover .react-resizable-handle {
-  opacity: 1;
-}
-
+.dashboard-grid--editing .react-resizable-handle { opacity: 0.3; }
+.dashboard-grid--editing .react-grid-item:hover .react-resizable-handle { opacity: 1; }
 .dashboard-grid--editing .react-resizable-handle::after {
-  border-color: rgba(255, 255, 255, 0.55);
-  width: 10px;
-  height: 10px;
-  right: 4px;
-  bottom: 4px;
+  border-color: hsl(42 65% 52% / 0.6);
+  width: 10px; height: 10px; right: 4px; bottom: 4px;
 }
-
 .dashboard-grid .react-grid-item.react-draggable-dragging {
-  z-index: 10;
-  opacity: 0.92;
+  z-index: 10; opacity: 0.92;
 }

@@ -59,8 +59,13 @@ export default function CustomizableDashboard() {
   const { width, containerRef, mounted } = useContainerWidth();
 
   useEffect(() => {
-    if (!loading && savedLayout?.layout?.length) {
-      setLayout(savedLayout.layout);
+    if (!loading) {
+      const saved = savedLayout?.layout?.filter(w => WIDGET_COMPONENTS[w.type]);
+      if (saved?.length) {
+        setLayout(saved);
+      } else {
+        setLayout(DEFAULT_DASHBOARD_LAYOUT);
+      }
     }
   }, [loading, savedLayout]);
 
@@ -111,8 +116,8 @@ export default function CustomizableDashboard() {
         animate={{ opacity: 1, y: 0 }}
       >
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-xs md:text-sm text-muted-foreground">System overview</p>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>Dashboard</h1>
+          <p className="text-xs md:text-sm text-muted-foreground uppercase tracking-widest" style={{ fontSize: "10px", letterSpacing: "0.15em" }}>System Overview</p>
           {editMode && (
             <p className="hidden md:block text-xs text-primary/80 mt-1">
               Drag widgets to move · corner handle to resize

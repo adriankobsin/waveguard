@@ -1,807 +1,362 @@
-import { useState, useEffect, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import {
-  Wifi, Camera, Monitor, Zap, AlertTriangle,
-  WifiOff, Globe, BarChart3, Server, Clock, Bot,
-  Sliders, Lightbulb, Loader2, Cable, Unplug, ArrowRight,
-  Gauge, ChevronDown, RefreshCw,
+  Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
+  WifiOff, Activity, Globe, ArrowDownToLine, ArrowUpFromLine,
+  Radio, BarChart3, Server, Clock, X
 } from "lucide-react";
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer
+  AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, ResponsiveContainer, ReferenceLine
 } from "recharts";
 import StatusPulse from "../../StatusPulse";
-import { useSystemData } from "@/contexts/SystemDataContext";
-import { buildWanSnapshot } from "@/lib/wan/buildWanSnapshot";
-import {
-  loadWanWidgetSelection,
-  saveWanWidgetSelection,
-  getWanSpeedTestForPort,
-  saveWanSpeedTestResult,
-} from "@/lib/wan/wanWidgetStorage";
-import { runWanSpeedTest } from "@/api/wanApi";
-import { formatRelativeTime } from "@/lib/systemData/formatRelativeTime";
 
-function WidgetLoading() {
+// ─── Mock Data ────────────────────────────────────────────────────────────────
+const STATS = { online: 47, offline: 3, warning: 5, alarms: 8 };
+
+const ALARMS = [
+  { id: "a1", title: "Cam-Bridge-01 offline", severity: "critical", time: "14m ago" },
+  { id: "a2", title: "SW-Deck-Lower CPU >80%", severity: "warning", time: "3h ago" },
+  { id: "a3", title: "WAN speed degraded (12 Mbps)", severity: "warning", time: "6h ago" },
+  { id: "a4", title: "UPS battery at 42%", severity: "warning", time: "1d ago" },
+];
+
+const CATEGORIES = [
+  { label: "Network", icon: Wifi, count: 18, online: 16, color: "#C9A84C" },
+  { label: "Cameras", icon: Camera, count: 14, online: 13, color: "#a78bfa" },
+  { label: "AV Systems", icon: Monitor, count: 9, online: 8, color: "#60a5fa" },
+  { label: "Power", icon: Zap, count: 6, online: 6, color: "#2dd4bf" },
+];
+
+const TRAFFIC = Array.from({ length: 48 }, (_, i) => ({
+  time: `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}`,
+  inMbps: Math.round((Math.random() * 45 + 8) * 10) / 10,
+  outMbps: Math.round((Math.random() * 30 + 5) * 10) / 10,
+}));
+
+const WAN_LATENCY = Array.from({ length: 24 }, (_, i) => ({
+  hour: `${String(i).padStart(2, "0")}:00`,
+  latency: Math.round(Math.random() * 60 + 8),
+}));
+WAN_LATENCY[18].latency = 210;
+
+// ─── Widget Types ─────────────────────────────────────────────────────────────
+export const WIDGET_TYPES = {
+  stats_grid: {
+    id: "stats_grid",
+    name: "System Stats",
+    description: "Online, offline, warnings, and alarms overview",
+    icon: Activity,
+    minSize: { w: 2, h: 1 },
+    defaultSize: { w: 4, h: 1 },
+  },
+  alarms: {
+    id: "alarms",
+    name: "Active Alarms",
+    description: "List of current system alarms",
+    icon: AlertTriangle,
+    minSize: { w: 1, h: 1 },
+    defaultSize: { w: 1, h: 2 },
+  },
+  categories: {
+    id: "categories",
+    name: "System Categories",
+    description: "Device categories with online counts",
+    icon: Server,
+    minSize: { w: 1, h: 1 },
+    defaultSize: { w: 1, h: 2 },
+  },
+  wan_status: {
+    id: "wan_status",
+    name: "WAN Connection",
+    description: "WAN status and bandwidth metrics",
+    icon: Globe,
+    minSize: { w: 1, h: 1 },
+    defaultSize: { w: 1, h: 2 },
+  },
+  traffic_chart: {
+    id: "traffic_chart",
+    name: "Network Traffic",
+    description: "24-hour network traffic visualization",
+    icon: BarChart3,
+    minSize: { w: 2, h: 1 },
+    defaultSize: { w: 3, h: 2 },
+  },
+  wan_latency: {
+    id: "wan_latency",
+    name: "WAN Latency",
+    description: "24-hour WAN latency chart",
+    icon: Radio,
+    minSize: { w: 2, h: 1 },
+    defaultSize: { w: 2, h: 2 },
+  },
+};
+
+// ─── Luxury Card Wrapper ──────────────────────────────────────────────────────
+function LuxCard({ children, className = "" }) {
   return (
-    <div className="flex items-center justify-center h-full min-h-[80px] text-muted-foreground text-xs gap-2">
-      <Loader2 size={14} className="animate-spin" />
-      Loading…
+    <div
+      className={`rounded-xl h-full relative overflow-hidden card-gold-edge ${className}`}
+      style={{
+        background: "linear-gradient(145deg, hsl(24 12% 8%), hsl(24 10% 5%))",
+        border: "1px solid hsl(42 25% 13% / 0.9)",
+      }}
+    >
+      {children}
     </div>
   );
 }
 
-function WidgetEmpty({ message = "No data" }) {
-  return (
-    <p className="text-xs text-muted-foreground text-center py-4">{message}</p>
-  );
-}
-
-function WidgetShell({ title, icon: Icon, iconClass = "text-cyan-400", badge, children }) {
-  return (
-    <div className="rounded-2xl border border-border bg-card p-4 h-full flex flex-col shadow-sm">
-      <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2 shrink-0">
-        {Icon && <Icon size={14} className={iconClass} />}
-        {title}
-        {badge != null && (
-          <span className="ml-auto text-xs bg-primary/15 text-primary px-2 py-0.5 rounded-full">{badge}</span>
-        )}
-      </h3>
-      <div className="flex-1 min-h-0 overflow-auto">{children}</div>
-    </div>
-  );
-}
-
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
 const ChartTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-popover border border-border rounded-xl px-3 py-2 text-xs shadow-lg">
-      <p className="text-muted-foreground mb-1">{label}</p>
-      {payload.map((p) => (
-        <p key={p.name} style={{ color: p.color }} className="font-medium">
-          {p.name}: {p.value}
-          {p.unit || ""}
-        </p>
+    <div className="rounded-lg px-3 py-2 text-xs shadow-2xl"
+      style={{ background: "hsl(24 14% 7%)", border: "1px solid hsl(42 40% 20% / 0.6)" }}>
+      <p className="mb-1" style={{ color: "hsl(42 20% 45%)" }}>{label}</p>
+      {payload.map(p => (
+        <p key={p.name} style={{ color: p.color }} className="font-medium">{p.name}: {p.value}{p.unit || ""}</p>
       ))}
     </div>
   );
 };
 
-export const WIDGET_TYPES = {
-  network_traffic: {
-    id: "network_traffic",
-    name: "Network traffic",
-    description: "24-hour inbound and outbound traffic",
-    icon: BarChart3,
-    minSize: { w: 4, h: 3 },
-    maxSize: { w: 12, h: 6 },
-    defaultSize: { w: 6, h: 4 },
-  },
-  critical_alarms: {
-    id: "critical_alarms",
-    name: "Critical alarms",
-    description: "Active critical severity alarms",
-    icon: AlertTriangle,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 6 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  warning_alarms: {
-    id: "warning_alarms",
-    name: "Warning alarms",
-    description: "Active warning severity alarms",
-    icon: AlertTriangle,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 6 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  network: {
-    id: "network",
-    name: "Network",
-    description: "Equipment health and SNMP switch fleet status",
-    icon: Wifi,
-    minSize: { w: 2, h: 3 },
-    maxSize: { w: 6, h: 6 },
-    defaultSize: { w: 3, h: 4 },
-  },
-  av: {
-    id: "av",
-    name: "AV",
-    description: "AV systems online status",
-    icon: Monitor,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 4 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  control: {
-    id: "control",
-    name: "Control",
-    description: "Control processors and touch panels",
-    icon: Sliders,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 4 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  lighting: {
-    id: "lighting",
-    name: "Lighting",
-    description: "Lighting zones and scenes",
-    icon: Lightbulb,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 4 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  cctv: {
-    id: "cctv",
-    name: "CCTV",
-    description: "Camera online counts",
-    icon: Camera,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 4 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  ups_power: {
-    id: "ups_power",
-    name: "UPS / power",
-    description: "UPS and power distribution status",
-    icon: Zap,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 4 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  wan_internet: {
-    id: "wan_internet",
-    name: "WAN / internet",
-    description: "Live WAN throughput, ISP details, and speed tests",
-    icon: Globe,
-    minSize: { w: 3, h: 3 },
-    maxSize: { w: 6, h: 6 },
-    defaultSize: { w: 3, h: 4 },
-  },
-  offline_devices: {
-    id: "offline_devices",
-    name: "Offline devices",
-    description: "Devices currently unreachable",
-    icon: WifiOff,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 5 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  recent_events: {
-    id: "recent_events",
-    name: "Recent events",
-    description: "Latest platform events",
-    icon: Clock,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 5 },
-    defaultSize: { w: 3, h: 3 },
-  },
-  ai_recommendations: {
-    id: "ai_recommendations",
-    name: "AI recommendations",
-    description: "Suggested actions from AI analysis",
-    icon: Bot,
-    minSize: { w: 2, h: 2 },
-    maxSize: { w: 6, h: 5 },
-    defaultSize: { w: 3, h: 3 },
-  },
-};
-
-function CategoryWidget({ label, online, total, icon: Icon, color }) {
-  const pct = total > 0 ? (online / total) * 100 : 0;
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+function StatCard({ label, value, icon: Icon, iconColor, iconBg, glowColor }) {
   return (
-    <div className="flex items-center gap-3">
-      <Icon size={15} className={color} />
-      <div className="flex-1">
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-foreground font-medium">{label}</span>
-          <span className="text-muted-foreground">{online}/{total}</span>
-        </div>
-        <div className="h-1 bg-muted rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-primary"
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export function NetworkTrafficWidget() {
-  const { snapshot, loading } = useSystemData();
-  const traffic = snapshot?.traffic || [];
-  if (loading && !snapshot) return <WidgetShell title="Network traffic" icon={BarChart3}><WidgetLoading /></WidgetShell>;
-  return (
-    <WidgetShell title="Network traffic" icon={BarChart3}>
-      <ResponsiveContainer width="100%" height="100%" minHeight={160}>
-        <AreaChart data={traffic} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-          <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-          <XAxis dataKey="time" tick={{ fontSize: 9 }} interval={7} />
-          <YAxis tick={{ fontSize: 9 }} unit="M" />
-          <Tooltip content={<ChartTooltip />} />
-          <Area type="monotone" dataKey="inMbps" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" name="In" unit=" Mbps" dot={false} />
-          <Area type="monotone" dataKey="outMbps" stroke="hsl(var(--status-online))" fill="hsl(var(--status-online) / 0.15)" name="Out" unit=" Mbps" dot={false} />
-        </AreaChart>
-      </ResponsiveContainer>
-    </WidgetShell>
-  );
-}
-
-function AlarmListWidget({ title, alarms, severity, emptyMessage }) {
-  const iconClass = severity === "critical" ? "text-red-400" : "text-amber-400";
-  return (
-    <WidgetShell title={title} icon={AlertTriangle} iconClass={iconClass} badge={alarms.length || undefined}>
-      <div className="space-y-3">
-        {alarms.length === 0 && <WidgetEmpty message={emptyMessage} />}
-        {alarms.map((a) => (
-          <div key={a.id} className="flex items-start gap-2">
-            <span className={`w-1.5 h-1.5 rounded-full mt-1.5 ${severity === "critical" ? "bg-red-400" : "bg-amber-400"}`} />
-            <div>
-              <p className="text-xs font-medium text-foreground">{a.title}</p>
-              <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
-                <Clock size={9} /> {a.time}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </WidgetShell>
-  );
-}
-
-export function CriticalAlarmsWidget() {
-  const { snapshot, loading } = useSystemData();
-  if (loading && !snapshot) return <WidgetShell title="Critical alarms" icon={AlertTriangle} iconClass="text-red-400"><WidgetLoading /></WidgetShell>;
-  return (
-    <AlarmListWidget
-      title="Critical alarms"
-      alarms={snapshot?.criticalAlarms || []}
-      severity="critical"
-      emptyMessage="No critical alarms"
-    />
-  );
-}
-
-export function WarningAlarmsWidget() {
-  const { snapshot, loading } = useSystemData();
-  if (loading && !snapshot) return <WidgetShell title="Warning alarms" icon={AlertTriangle} iconClass="text-amber-400"><WidgetLoading /></WidgetShell>;
-  return (
-    <AlarmListWidget
-      title="Warning alarms"
-      alarms={snapshot?.warningAlarms || []}
-      severity="warning"
-      emptyMessage="No warnings"
-    />
-  );
-}
-
-function CategoryStatusWidget({ title, icon, categoryKey, iconColor }) {
-  const { snapshot, loading } = useSystemData();
-  const cat = snapshot?.categories?.[categoryKey];
-  if (loading && !snapshot) return <WidgetShell title={title} icon={icon}><WidgetLoading /></WidgetShell>;
-  if (!cat?.total) return <WidgetShell title={title} icon={icon}><WidgetEmpty message="No devices in this category" /></WidgetShell>;
-  return (
-    <WidgetShell title={title} icon={icon}>
-      <CategoryWidget label={cat.label} online={cat.online} total={cat.total} icon={icon} color={iconColor} />
-    </WidgetShell>
-  );
-}
-
-const HEALTH_DOT = {
-  healthy: "bg-emerald-500",
-  warning: "bg-amber-500",
-  critical: "bg-red-500",
-  unknown: "bg-muted-foreground",
-  disabled: "bg-muted-foreground/50",
-};
-
-function SnmpStat({ label, value, valueClass = "text-foreground" }) {
-  return (
-    <div className="flex justify-between gap-2 text-xs">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={`font-medium tabular-nums ${valueClass}`}>{value}</span>
-    </div>
-  );
-}
-
-export function NetworkWidget() {
-  const { snapshot, loading } = useSystemData();
-  const cat = snapshot?.categories?.network;
-  const snmp = snapshot?.snmpFleet;
-  const hasEquipment = (cat?.total || 0) > 0;
-  const hasSnmp = (snmp?.registered || 0) > 0;
-
-  if (loading && !snapshot) {
-    return (
-      <WidgetShell title="Network" icon={Wifi}>
-        <WidgetLoading />
-      </WidgetShell>
-    );
-  }
-
-  if (!hasEquipment && !hasSnmp) {
-    return (
-      <WidgetShell title="Network" icon={Wifi}>
-        <WidgetEmpty message="No network devices or SNMP switches" />
-        <Link
-          to="/snmp"
-          className="mt-3 inline-flex items-center gap-1 text-xs text-primary hover:underline"
-        >
-          Core Network <ArrowRight size={11} />
-        </Link>
-      </WidgetShell>
-    );
-  }
-
-  return (
-    <WidgetShell
-      title="Network"
-      icon={Wifi}
-      badge={hasSnmp ? `${snmp.registered} SW` : undefined}
+    <motion.div
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="relative overflow-hidden rounded-xl px-4 py-3 flex items-center gap-3 card-gold-edge"
+      style={{ background: "linear-gradient(135deg, hsl(24 12% 8%), hsl(24 10% 6%))", border: "1px solid hsl(42 25% 13% / 0.9)" }}
     >
-      <div className="space-y-3">
-        {hasEquipment && (
-          <CategoryWidget
-            label={cat.label}
-            online={cat.online}
-            total={cat.total}
-            icon={Wifi}
-            color="text-cyan-400"
-          />
-        )}
-
-        {hasSnmp ? (
-          <div className={hasEquipment ? "border-t border-border/60 pt-3" : ""}>
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2 flex items-center gap-1.5">
-              <Server size={10} className="text-primary" />
-              SNMP switch fleet
-            </p>
-            <div className="space-y-1 mb-2">
-              <SnmpStat label="Registered" value={snmp.registered} />
-              <SnmpStat
-                label="Polled"
-                value={`${snmp.polledCount}/${snmp.registered}`}
-                valueClass={snmp.polledCount < snmp.registered ? "text-amber-500" : "text-foreground"}
-              />
-              <SnmpStat
-                label="Ports up / down"
-                value={`${snmp.portsUp} / ${snmp.portsDown}`}
-                valueClass={snmp.portsDown > 0 ? "text-amber-500" : "text-emerald-500"}
-              />
-              <SnmpStat
-                label="Active links"
-                value={snmp.activeConnections}
-                valueClass="text-emerald-500"
-              />
-              <SnmpStat
-                label="Cable faults"
-                value={snmp.cableFaults}
-                valueClass={snmp.cableFaults > 0 ? "text-red-500 font-semibold" : "text-foreground"}
-              />
-              {(snmp.trafficInMbps > 0 || snmp.trafficOutMbps > 0) && (
-                <SnmpStat
-                  label="Switch traffic"
-                  value={`↓${snmp.trafficInMbps} ↑${snmp.trafficOutMbps} Mbps`}
-                />
-              )}
-              {snmp.poeWatts > 0 && (
-                <SnmpStat label="PoE load" value={`${snmp.poeWatts} W`} valueClass="text-amber-500" />
-              )}
-            </div>
-
-            {snmp.lastPollRelative && (
-              <p className="text-[10px] text-muted-foreground flex items-center gap-1 mb-2">
-                <Clock size={9} />
-                Last SNMP poll {snmp.lastPollRelative}
-              </p>
-            )}
-
-            <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
-              {snmp.switches.map((sw) => (
-                <Link
-                  key={sw.id}
-                  to="/snmp"
-                  className="flex items-center gap-2 text-xs py-1 rounded-lg hover:bg-secondary/40 px-1 -mx-1 transition-colors group"
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${HEALTH_DOT[sw.healthStatus] || HEALTH_DOT.unknown}`}
-                    title={sw.healthLabel}
-                  />
-                  <span className="text-foreground truncate flex-1 group-hover:text-primary">
-                    {sw.name}
-                  </span>
-                  <span className="text-muted-foreground tabular-nums shrink-0">
-                    {sw.lastPollAt
-                      ? sw.portsTotal > 0
-                        ? `${sw.portsUp}/${sw.portsTotal}`
-                        : "—"
-                      : "—"}
-                  </span>
-                  {sw.cableFaults > 0 && (
-                    <Unplug size={10} className="text-red-500 shrink-0" title={`${sw.cableFaults} fault(s)`} />
-                  )}
-                </Link>
-              ))}
-            </div>
-
-            {snmp.topFaults?.length > 0 && (
-              <div className="mt-2 pt-2 border-t border-border/60 space-y-1">
-                {snmp.topFaults.map((f, i) => (
-                  <p key={i} className="text-[10px] text-red-500/90 truncate">
-                    {f.switchName} P{f.portIndex} → {f.connectedDevice || "unknown"}
-                  </p>
-                ))}
-              </div>
-            )}
-
-            <Link
-              to="/snmp"
-              className="mt-2 inline-flex items-center gap-1 text-[10px] text-primary hover:underline"
-            >
-              <Cable size={10} />
-              Connections & poll
-              <ArrowRight size={10} />
-            </Link>
-          </div>
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            Register switches in{" "}
-            <Link to="/snmp" className="text-primary hover:underline">
-              Core Network
-            </Link>{" "}
-            for port and cable monitoring.
-          </p>
-        )}
+      <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
+        style={{ background: iconBg, border: `1px solid ${iconColor}28` }}>
+        <Icon size={15} style={{ color: iconColor }} />
       </div>
-    </WidgetShell>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold leading-none tracking-tight"
+          style={{ color: "hsl(42 50% 88%)", fontFamily: "'Playfair Display', serif" }}>{value}</p>
+        <p className="text-[9px] mt-1 font-medium uppercase tracking-[0.15em] truncate"
+          style={{ color: "hsl(42 20% 42%)" }}>{label}</p>
+      </div>
+      <div className="absolute bottom-0 left-4 right-4 h-px"
+        style={{ background: `linear-gradient(90deg, transparent, ${glowColor}45, transparent)` }} />
+    </motion.div>
   );
 }
 
-export function AvWidget() {
-  return <CategoryStatusWidget title="AV" icon={Monitor} categoryKey="av" iconColor="text-blue-400" />;
-}
-
-export function ControlWidget() {
-  return <CategoryStatusWidget title="Control" icon={Sliders} categoryKey="control" iconColor="text-purple-400" />;
-}
-
-export function LightingWidget() {
-  return <CategoryStatusWidget title="Lighting" icon={Lightbulb} categoryKey="lighting" iconColor="text-amber-400" />;
-}
-
-export function CctvWidget() {
-  return <CategoryStatusWidget title="CCTV" icon={Camera} categoryKey="cctv" iconColor="text-purple-400" />;
-}
-
-export function UpsPowerWidget() {
-  const { snapshot, loading } = useSystemData();
-  const ups = snapshot?.ups;
-  if (loading && !snapshot) return <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400"><WidgetLoading /></WidgetShell>;
-  if (!ups) return <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400"><WidgetEmpty message="No UPS equipment registered" /></WidgetShell>;
+// ─── Widget Components ────────────────────────────────────────────────────────
+export function StatsGridWidget() {
   return (
-    <WidgetShell title="UPS / power" icon={Zap} iconClass="text-amber-400">
-      <div className="space-y-2 text-xs">
-        <div className="flex justify-between"><span className="text-muted-foreground">{ups.name}</span><span className="text-emerald-400 font-medium">{ups.status}</span></div>
-         <div className="flex justify-between"><span className="text-muted-foreground">Battery</span><span className={`${ups.battery < 50 ? "text-amber-400" : "text-foreground"} font-medium`}>{ups.battery}%</span></div>
-        <div className="flex justify-between"><span className="text-muted-foreground">Load</span><span className="text-foreground font-medium">{ups.load}%</span></div>
-      </div>
-    </WidgetShell>
-  );
-}
-
-function WanInfoRow({ label, value, mono }) {
-  if (value == null || value === "") return null;
-  return (
-    <div className="flex justify-between gap-2 text-[11px]">
-      <span className="text-muted-foreground shrink-0">{label}</span>
-      <span className={`text-foreground font-medium text-right truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+    <div className="grid grid-cols-2 gap-3 h-full">
+      <StatCard label="Online" value={STATS.online} icon={CheckCircle2} iconColor="#4ade80" iconBg="hsl(145 55% 10%)" glowColor="#4ade80" />
+      <StatCard label="Offline" value={STATS.offline} icon={WifiOff} iconColor="#f87171" iconBg="hsl(0 72% 10%)" glowColor="#f87171" />
+      <StatCard label="Warnings" value={STATS.warning} icon={AlertTriangle} iconColor="#fbbf24" iconBg="hsl(38 90% 10%)" glowColor="#fbbf24" />
+      <StatCard label="Open Alarms" value={STATS.alarms} icon={Activity} iconColor="hsl(42,65%,58%)" iconBg="hsl(42 50% 9%)" glowColor="hsl(42,65%,52%)" />
     </div>
   );
 }
 
-export function WanInternetWidget() {
-  const { snapshot, loading, sources, refresh } = useSystemData();
-  const [selection, setSelection] = useState(() => loadWanWidgetSelection());
-  const [testing, setTesting] = useState(false);
-  const [testError, setTestError] = useState(null);
-  const [speedTest, setSpeedTest] = useState(null);
-
-  const wanData = useMemo(() => {
-    if (!sources) return null;
-    return buildWanSnapshot(
-      sources.snmpSwitches,
-      sources.equipment,
-      selection,
-      sources.wanManagement
-    );
-  }, [sources, selection]);
-
-  const selected = wanData?.selected;
-  const portsForRouter = useMemo(() => {
-    if (!wanData?.ports?.length) return [];
-    const pid = selection?.profileId || selected?.profileId;
-    if (!pid) return wanData.ports;
-    return wanData.ports.filter((p) => p.profileId === pid);
-  }, [wanData?.ports, selection?.profileId, selected?.profileId]);
-
-  useEffect(() => {
-    if (!selected) return;
-    setSpeedTest(getWanSpeedTestForPort(selected.profileId, selected.index));
-  }, [selected?.profileId, selected?.index]);
-
-  const handleRouterChange = (profileId) => {
-    const next = { profileId, portIndex: null };
-    setSelection(next);
-    saveWanWidgetSelection(next);
-  };
-
-  const handlePortChange = (portIndex) => {
-    const profileId = selection?.profileId || selected?.profileId;
-    if (!profileId) return;
-    const next = { profileId, portIndex: Number(portIndex) };
-    setSelection(next);
-    saveWanWidgetSelection(next);
-  };
-
-  const handleSpeedTest = async () => {
-    if (!selected || testing) return;
-    setTesting(true);
-    setTestError(null);
-    try {
-      const result = await runWanSpeedTest({
-        profileId: selected.profileId,
-        portIndex: selected.index,
-        portName: selected.name,
-      });
-      const saved = saveWanSpeedTestResult({
-        ...result,
-        profileId: selected.profileId,
-        portIndex: selected.index,
-        portName: selected.name,
-      });
-      setSpeedTest(saved);
-    } catch (err) {
-      setTestError(err.message || "Speed test failed");
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  if (loading && !snapshot) {
-    return (
-      <WidgetShell title="WAN / internet" icon={Globe}>
-        <WidgetLoading />
-      </WidgetShell>
-    );
-  }
-
-  if (!wanData?.configured || !selected) {
-    return (
-      <WidgetShell title="WAN / internet" icon={Globe}>
-        <div className="space-y-3 text-xs">
-          <p className="text-muted-foreground leading-relaxed">
-            Register your WAN router or firewall in Core Network and poll it to see live throughput,
-            public IP, and ISP details here.
-          </p>
-          <Link to="/snmp" className="inline-flex items-center gap-1 text-primary hover:underline">
-            Core Network → WAN Management <ArrowRight size={11} />
-          </Link>
-        </div>
-      </WidgetShell>
-    );
-  }
-
-  const pulseStatus =
-    selected.status === "online" ? "online" : selected.status === "offline" ? "offline" : "warning";
-  const showTest = speedTest && !testing;
-  const downloadMbps = showTest ? speedTest.downloadMbps : selected.downloadMbps;
-  const uploadMbps = showTest ? speedTest.uploadMbps : selected.uploadMbps;
-
+export function AlarmsWidget() {
   return (
-    <WidgetShell title="WAN / internet" icon={Globe}>
-      <div className="space-y-3 text-xs">
-        {wanData.synthetic && (
-          <p className="text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-2.5 py-1.5 leading-relaxed">
-            Preview data — assign and poll a WAN router in{" "}
-            <Link to="/snmp" className="underline font-medium">Core Network → WAN Management</Link> for live telemetry.
-          </p>
-        )}
-
-        {(wanData.availableRouters?.length || 0) > 1 && (
-          <div>
-            <label className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 block">
-              Router
-            </label>
-            <div className="relative">
-              <select
-                value={selection?.profileId || selected.profileId}
-                onChange={(e) => handleRouterChange(e.target.value)}
-                className="w-full appearance-none bg-secondary border border-border rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-              >
-                {wanData.availableRouters.map((r) => (
-                  <option key={r.profileId} value={r.profileId}>
-                    {r.name} {r.ip ? `(${r.ip})` : ""}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+    <LuxCard>
+      <div className="p-5 h-full flex flex-col">
+        <h3 className="text-xs font-semibold mb-4 flex items-center gap-2 uppercase tracking-[0.12em]"
+          style={{ color: "hsl(42 50% 70%)", fontFamily: "'Inter', sans-serif" }}>
+          <AlertTriangle size={12} style={{ color: "#fbbf24" }} />
+          Active Alarms
+          <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+            style={{ background: "hsl(38 90% 50% / 0.12)", color: "hsl(38 90% 60%)", border: "1px solid hsl(38 90% 50% / 0.2)" }}>
+            {ALARMS.length}
+          </span>
+        </h3>
+        <div className="space-y-3 flex-1">
+          {ALARMS.map(alarm => (
+            <div key={alarm.id} className="flex items-start gap-3">
+              <span className="w-1 h-1 rounded-full mt-2 flex-shrink-0"
+                style={{ background: alarm.severity === "critical" ? "#f87171" : "#fbbf24" }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium leading-snug" style={{ color: "hsl(42 30% 80%)" }}>{alarm.title}</p>
+                <p className="text-[10px] mt-0.5 flex items-center gap-1" style={{ color: "hsl(42 15% 38%)" }}>
+                  <Clock size={8} />{alarm.time}
+                </p>
+              </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
+      </div>
+    </LuxCard>
+  );
+}
 
-        {portsForRouter.length > 1 && (
-          <div>
-            <label className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1 block">
-              WAN link
-            </label>
-            <div className="relative">
-              <select
-                value={selected.index}
-                onChange={(e) => handlePortChange(e.target.value)}
-                className="w-full appearance-none bg-secondary border border-border rounded-lg pl-2.5 pr-7 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40"
-              >
-                {portsForRouter.map((p) => (
-                  <option key={`${p.profileId}-${p.index}`} value={p.index}>
-                    {p.name} — {p.status === "online" ? "Up" : p.status === "offline" ? "Down" : "Idle"}
-                    {p.isp ? ` · ${p.isp}` : ""}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+export function CategoriesWidget() {
+  return (
+    <LuxCard>
+      <div className="p-5 h-full flex flex-col">
+        <h3 className="text-xs font-semibold mb-4 uppercase tracking-[0.12em] flex items-center gap-2"
+          style={{ color: "hsl(42 50% 70%)" }}>
+          <Server size={12} style={{ color: "hsl(42 65% 52%)" }} />
+          System Categories
+        </h3>
+        <div className="space-y-4 flex-1">
+          {CATEGORIES.map(cat => (
+            <div key={cat.label} className="flex items-center gap-3">
+              <cat.icon size={13} style={{ color: cat.color, flexShrink: 0 }} />
+              <div className="flex-1">
+                <div className="flex justify-between text-[10px] mb-1.5">
+                  <span style={{ color: "hsl(42 25% 68%)" }}>{cat.label}</span>
+                  <span style={{ color: "hsl(42 15% 40%)" }}>{cat.online}/{cat.count}</span>
+                </div>
+                <div className="h-px rounded-full overflow-hidden" style={{ background: "hsl(42 15% 12%)" }}>
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(cat.online / cat.count) * 100}%` }}
+                    transition={{ duration: 1, ease: "easeOut" }}
+                    className="h-full rounded-full"
+                    style={{ background: `linear-gradient(90deg, ${cat.color}90, ${cat.color})` }}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="font-semibold text-foreground truncate">{selected.name}</p>
-            <p className="text-[10px] text-muted-foreground truncate">
-              {selected.routerName}
-              {selected.routerIp ? ` · ${selected.routerIp}` : ""}
-            </p>
-          </div>
-          <StatusPulse status={pulseStatus} />
+          ))}
         </div>
+      </div>
+    </LuxCard>
+  );
+}
 
-        <div className="rounded-xl bg-secondary/60 border border-border/60 p-2.5 space-y-1.5">
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground mb-1">
-            <span>{showTest ? "Speed test result" : "Live throughput"}</span>
-            {showTest && speedTest.testedAt && (
-              <span>{formatRelativeTime(speedTest.testedAt)}</span>
-            )}
-            {!showTest && selected.lastPollAt && (
-              <span>Poll {formatRelativeTime(selected.lastPollAt)}</span>
-            )}
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">↓ Down</span>
-            <span className="text-primary font-bold tabular-nums">{downloadMbps ?? 0} Mbps</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">↑ Up</span>
-            <span className="text-emerald-500 font-bold tabular-nums">{uploadMbps ?? 0} Mbps</span>
-          </div>
-          {showTest && speedTest.latencyMs != null && (
-            <div className="flex justify-between pt-1 border-t border-border/50">
-              <span className="text-muted-foreground">Latency</span>
-              <span className="text-foreground tabular-nums">{speedTest.latencyMs} ms</span>
+export function WanStatusWidget() {
+  return (
+    <LuxCard>
+      <div className="p-5 h-full flex flex-col">
+        <h3 className="text-xs font-semibold mb-4 uppercase tracking-[0.12em] flex items-center gap-2"
+          style={{ color: "hsl(42 50% 70%)" }}>
+          <Globe size={12} style={{ color: "hsl(42 65% 52%)" }} />
+          WAN Connection
+          <StatusPulse status="online" />
+        </h3>
+        <div className="space-y-2.5 mb-4 flex-1">
+          {[
+            { label: "Provider", value: "Starlink VSAT" },
+            { label: "Public IP", value: "185.234.10.91", mono: true },
+            { label: "Latency", value: "38 ms", good: true },
+            { label: "Packet Loss", value: "0.1%", good: true },
+            { label: "Uptime", value: "99.7%" },
+          ].map(r => (
+            <div key={r.label} className="flex justify-between text-xs">
+              <span style={{ color: "hsl(42 15% 38%)" }}>{r.label}</span>
+              <span style={{
+                fontFamily: r.mono ? "'JetBrains Mono', monospace" : "'Inter', sans-serif",
+                color: r.good ? "#4ade80" : "hsl(42 30% 78%)",
+                fontWeight: 500,
+              }}>{r.value}</span>
             </div>
-          )}
+          ))}
         </div>
-
-        <div className="space-y-1 pt-1 border-t border-border/50">
-          <WanInfoRow label="ISP / provider" value={selected.isp} />
-          <WanInfoRow label="Public IP" value={selected.publicIp} mono />
-          <WanInfoRow label="Gateway" value={selected.gateway} mono />
-          <WanInfoRow label="DNS" value={selected.dns} mono />
-          <WanInfoRow label="Link speed" value={selected.linkSpeedMbps ? `${selected.linkSpeedMbps} Mbps` : null} />
-          {selected.carrier && <WanInfoRow label="Carrier" value={selected.carrier} />}
-          {selected.signalDbm != null && (
-            <WanInfoRow label="Signal" value={`${selected.signalDbm} dBm`} />
-          )}
-          {selected.vpnUp != null && (
-            <WanInfoRow label="VPN" value={selected.vpnUp ? "Connected" : "Down"} />
-          )}
-        </div>
-
-        {testError && (
-          <p className="text-[10px] text-red-500">{testError}</p>
-        )}
-
-        <div className="flex gap-2 pt-1">
-          <button
-            type="button"
-            onClick={handleSpeedTest}
-            disabled={testing || selected.status === "offline"}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            {testing ? <Loader2 size={12} className="animate-spin" /> : <Gauge size={12} />}
-            {testing ? "Testing…" : "Speed test"}
-          </button>
-          <button
-            type="button"
-            onClick={() => refresh?.()}
-            title="Refresh poll data"
-            className="px-3 py-2 rounded-xl border border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          >
-            <RefreshCw size={12} />
-          </button>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg p-3 text-center"
+            style={{ background: "hsl(42 50% 9%)", border: "1px solid hsl(42 40% 18% / 0.5)" }}>
+            <ArrowDownToLine size={11} style={{ color: "hsl(42 65% 55%)", margin: "0 auto 4px" }} />
+            <p className="text-base font-bold" style={{ color: "hsl(42 65% 62%)", fontFamily: "'Playfair Display', serif" }}>47.2</p>
+            <p className="text-[9px] uppercase tracking-wider" style={{ color: "hsl(42 20% 38%)" }}>Mbps ↓</p>
+          </div>
+          <div className="rounded-lg p-3 text-center"
+            style={{ background: "hsl(172 50% 8%)", border: "1px solid hsl(172 40% 18% / 0.5)" }}>
+            <ArrowUpFromLine size={11} style={{ color: "#2dd4bf", margin: "0 auto 4px" }} />
+            <p className="text-base font-bold" style={{ color: "#2dd4bf", fontFamily: "'Playfair Display', serif" }}>18.6</p>
+            <p className="text-[9px] uppercase tracking-wider" style={{ color: "hsl(172 20% 38%)" }}>Mbps ↑</p>
+          </div>
         </div>
       </div>
-    </WidgetShell>
+    </LuxCard>
   );
 }
 
-export function OfflineDevicesWidget() {
-  const { snapshot, loading } = useSystemData();
-  const offline = snapshot?.offlineDevices || [];
-  if (loading && !snapshot) return <WidgetShell title="Offline devices" icon={WifiOff} iconClass="text-red-400"><WidgetLoading /></WidgetShell>;
+export function TrafficChartWidget() {
   return (
-    <WidgetShell title="Offline devices" icon={WifiOff} iconClass="text-red-400" badge={offline.length || undefined}>
-      <div className="space-y-2">
-        {offline.length === 0 && <WidgetEmpty message="All monitored devices online" />}
-        {offline.map((d) => (
-          <div key={d.id || d.ip} className="flex justify-between text-xs py-1 border-b border-border/50 last:border-0">
-            <span className="text-foreground">{d.name}</span>
-            <span className="text-muted-foreground font-mono">{d.ip}</span>
+    <LuxCard>
+      <div className="p-5 h-full flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xs font-semibold uppercase tracking-[0.12em] flex items-center gap-2"
+            style={{ color: "hsl(42 50% 70%)" }}>
+            <BarChart3 size={12} style={{ color: "hsl(42 65% 52%)" }} />
+            Network Traffic (24h)
+          </h3>
+          <div className="flex gap-3 text-[10px]" style={{ color: "hsl(42 15% 40%)" }}>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full" style={{ background: "hsl(42 65% 52%)" }} />In
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />Out
+            </span>
           </div>
-        ))}
+        </div>
+        <div className="flex-1 min-h-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={TRAFFIC} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
+              <defs>
+                <linearGradient id="gGold" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#C9A84C" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="#C9A84C" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="gTeal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(42 15% 12% / 0.8)" />
+              <XAxis dataKey="time" tick={{ fontSize: 8, fill: "hsl(42 15% 35%)" }} interval={7} />
+              <YAxis tick={{ fontSize: 8, fill: "hsl(42 15% 35%)" }} unit="M" />
+              <Tooltip content={<ChartTooltip />} />
+              <Area type="monotone" dataKey="inMbps" stroke="#C9A84C" fill="url(#gGold)" strokeWidth={1.5} name="In" unit=" Mbps" dot={false} />
+              <Area type="monotone" dataKey="outMbps" stroke="#2dd4bf" fill="url(#gTeal)" strokeWidth={1.5} name="Out" unit=" Mbps" dot={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
       </div>
-    </WidgetShell>
+    </LuxCard>
   );
 }
 
-export function RecentEventsWidget() {
-  const { snapshot, loading } = useSystemData();
-  const events = snapshot?.recentEvents || [];
-  if (loading && !snapshot) return <WidgetShell title="Recent events" icon={Clock}><WidgetLoading /></WidgetShell>;
+export function WanLatencyWidget() {
   return (
-    <WidgetShell title="Recent events" icon={Clock}>
-      <div className="space-y-2">
-        {events.length === 0 && <WidgetEmpty message="No recent events" />}
-        {events.map((e) => (
-          <div key={e.id} className="text-xs">
-            <p className="text-foreground">{e.text}</p>
-            <p className="text-muted-foreground text-[10px]">{e.time}</p>
-          </div>
-        ))}
+    <LuxCard>
+      <div className="p-5 h-full flex flex-col">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.12em] flex items-center gap-2 mb-4"
+          style={{ color: "hsl(42 50% 70%)" }}>
+          <Radio size={12} style={{ color: "#fbbf24" }} />
+          WAN Latency (24h)
+        </h3>
+        <div className="flex-1 min-h-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={WAN_LATENCY} margin={{ top: 4, right: 4, bottom: 0, left: -24 }} barSize={5}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(42 15% 12% / 0.8)" vertical={false} />
+              <XAxis dataKey="hour" tick={{ fontSize: 8, fill: "hsl(42 15% 35%)" }} interval={5} />
+              <YAxis tick={{ fontSize: 8, fill: "hsl(42 15% 35%)" }} unit="ms" />
+              <Tooltip content={<ChartTooltip />} />
+              <ReferenceLine y={100} stroke="#fbbf24" strokeDasharray="4 2" strokeWidth={1} opacity={0.5} />
+              <Bar dataKey="latency" radius={[2, 2, 0, 0]} name="Latency" unit="ms"
+                shape={props => {
+                  const { x, y, width, height, value } = props;
+                  return <rect x={x} y={y} width={width} height={height} rx={2} ry={2}
+                    fill={value > 100 ? "#f87171" : "#C9A84C"} opacity={0.8} />;
+                }}
+              />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
-    </WidgetShell>
+    </LuxCard>
   );
 }
 
-export function AiRecommendationsWidget() {
-  const { snapshot, loading } = useSystemData();
-  const recs = snapshot?.recommendations || [];
-  if (loading && !snapshot) return <WidgetShell title="AI recommendations" icon={Bot} iconClass="text-primary"><WidgetLoading /></WidgetShell>;
-  return (
-    <WidgetShell title="AI recommendations" icon={Bot} iconClass="text-primary">
-      <div className="space-y-2">
-        {recs.length === 0 && <WidgetEmpty message="No recommendations — system healthy" />}
-        {recs.map((r) => (
-          <div key={r.id} className="p-2 rounded-lg bg-secondary border border-border text-xs">
-            <span className={`text-[10px] uppercase font-semibold ${r.priority === "high" ? "text-red-400" : "text-amber-400"}`}>{r.priority}</span>
-            <p className="text-foreground mt-1">{r.text}</p>
-          </div>
-        ))}
-      </div>
-    </WidgetShell>
-  );
-}
-
+// Map widget IDs to components
 export const WIDGET_COMPONENTS = {
-  network_traffic: NetworkTrafficWidget,
-  critical_alarms: CriticalAlarmsWidget,
-  warning_alarms: WarningAlarmsWidget,
-  network: NetworkWidget,
-  av: AvWidget,
-  control: ControlWidget,
-  lighting: LightingWidget,
-  cctv: CctvWidget,
-  ups_power: UpsPowerWidget,
-  wan_internet: WanInternetWidget,
-  offline_devices: OfflineDevicesWidget,
-  recent_events: RecentEventsWidget,
-  ai_recommendations: AiRecommendationsWidget,
+  stats_grid: StatsGridWidget,
+  alarms: AlarmsWidget,
+  categories: CategoriesWidget,
+  wan_status: WanStatusWidget,
+  traffic_chart: TrafficChartWidget,
+  wan_latency: WanLatencyWidget,
 };

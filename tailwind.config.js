@@ -7,6 +7,7 @@ module.exports = {
       fontFamily: {
         inter: ['Inter', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
+        serif: ['Playfair Display', 'serif'],
       },
       borderRadius: {
         lg: 'var(--radius)',

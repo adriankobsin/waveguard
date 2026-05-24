@@ -58,50 +58,59 @@ function AppLayoutContent() {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-30
-        w-60 bg-card border-r border-border flex flex-col
+        w-60 flex flex-col
         transition-transform duration-300
+        border-r border-border
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-      `}>
+      `} style={{ background: "linear-gradient(180deg, hsl(24,14%,6%) 0%, hsl(24,12%,4%) 100%)" }}>
+
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500/12 flex items-center justify-center ring-1 ring-cyan-500/20 overflow-hidden flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-5" style={{ borderBottom: "1px solid hsl(42 40% 20% / 0.4)" }}>
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, hsl(42 50% 18%), hsl(42 40% 12%))", border: "1px solid hsl(42 65% 40% / 0.5)" }}>
               {b.logoUrl ? (
                 <img src={b.logoUrl} alt="" className="max-w-full max-h-full object-contain p-0.5" />
               ) : (
-                <Wifi size={15} className="text-cyan-400" />
+                <Wifi size={14} style={{ color: "hsl(42 65% 58%)" }} />
               )}
             </div>
             <div>
-              <p className="text-sm font-bold text-foreground leading-none tracking-tight">{b.appTitle || DEFAULT_BRANDING.appTitle}</p>
+              <p className="text-sm font-semibold leading-none tracking-wide" style={{ color: "hsl(42 55% 88%)", fontFamily: "'Playfair Display', serif" }}>
+                {b.appTitle || DEFAULT_BRANDING.appTitle}
+              </p>
               {(b.appSubtitle ?? DEFAULT_BRANDING.appSubtitle) ? (
-                <p className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-widest">
+                <p className="text-[9px] mt-1 uppercase tracking-[0.18em]" style={{ color: "hsl(42 30% 45%)" }}>
                   {b.appSubtitle || DEFAULT_BRANDING.appSubtitle}
                 </p>
               ) : null}
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground transition-colors">
-            <X size={16} />
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden transition-colors" style={{ color: "hsl(42 30% 45%)" }}>
+            <X size={15} />
           </button>
         </div>
 
         {/* Vessel badge */}
-        <div className="mx-4 mt-3 mb-2 px-3 py-2.5 bg-secondary rounded-xl border border-border">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500/50" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+        <div className="mx-4 mt-4 mb-2 px-3.5 py-3 rounded-lg"
+          style={{ background: "hsl(42 20% 8%)", border: "1px solid hsl(42 40% 18% / 0.8)" }}>
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full" style={{ background: "hsl(145 55% 42% / 0.5)" }} />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: "hsl(145 55% 42%)" }} />
             </span>
-            <p className="text-xs font-semibold text-foreground">{b.name || DEFAULT_BRANDING.name}</p>
+            <p className="text-xs font-medium" style={{ color: "hsl(42 40% 78%)" }}>{b.name || DEFAULT_BRANDING.name}</p>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5 ml-4">
-            {monitoredCount != null ? `${monitoredCount} devices monitored` : "Loading devices…"}
+          <p className="text-[10px] mt-1 ml-4" style={{ color: "hsl(42 20% 40%)" }}>
+            {monitoredCount != null ? `${monitoredCount} devices monitored` : "Loading…"}
           </p>
         </div>
 
+        {/* Thin gold rule */}
+        <div className="mx-4 my-2 divider-gold" />
+
         {/* Nav */}
-        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto scrollbar-hide">
           {NAV.map(item => (
             <NavLink
               key={item.to}
@@ -109,75 +118,94 @@ function AppLayoutContent() {
               end={item.to === "/"}
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
-                  isActive
-                    ? "bg-primary/15 text-primary ring-1 ring-primary/30"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${
+                  isActive ? "nav-active" : "nav-inactive"
                 }`
               }
+              style={({ isActive }) => isActive
+                ? { background: "linear-gradient(90deg, hsl(42 65% 52% / 0.12), transparent)", color: "hsl(42 65% 68%)", borderLeft: "2px solid hsl(42 65% 52%)", paddingLeft: "10px" }
+                : { color: "hsl(42 20% 45%)", borderLeft: "2px solid transparent" }
+              }
             >
-              <item.icon size={15} />
-              {item.label}
-              {item.to === "/diagnoses" && diagCounts.active > 0 && (
-                <span className="ml-auto text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full">
-                  {diagCounts.active}
-                </span>
-              )}
-              {item.to === "/maintenance" && maintenanceOverdue > 0 && (
-                <span className="ml-auto text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-full">
-                  {maintenanceOverdue}
-                </span>
+              {({ isActive }) => (
+                <>
+                  <item.icon size={13} style={isActive ? { color: "hsl(42 65% 58%)" } : {}} />
+                  <span className="tracking-wide">{item.label}</span>
+                  {item.to === "/diagnoses" && diagCounts.active > 0 && (
+                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+                      style={{ background: "hsl(38 90% 50% / 0.15)", color: "hsl(38 90% 60%)" }}>
+                      {diagCounts.active}
+                    </span>
+                  )}
+                  {item.to === "/maintenance" && maintenanceOverdue > 0 && (
+                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
+                      style={{ background: "hsl(0 72% 51% / 0.15)", color: "hsl(0 72% 65%)" }}>
+                      {maintenanceOverdue}
+                    </span>
+                  )}
+                </>
               )}
             </NavLink>
           ))}
         </nav>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-border">
-          <p className="text-xs text-muted-foreground">v1.0.0 · Wave Guard</p>
+        <div className="px-5 py-3.5" style={{ borderTop: "1px solid hsl(42 30% 12% / 0.8)" }}>
+          <p className="text-[9px] uppercase tracking-[0.15em]" style={{ color: "hsl(42 20% 32%)" }}>v1.0.0 · Wave Guard</p>
         </div>
       </aside>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         {/* Topbar */}
-        <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/80 backdrop-blur-xl flex-shrink-0">
+        <header className="flex items-center gap-3 px-5 py-3 flex-shrink-0 backdrop-blur-xl"
+          style={{ borderBottom: "1px solid hsl(42 30% 12% / 0.7)", background: "hsl(24 12% 5% / 0.85)" }}>
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground"
+            aria-label="Open menu"
+            className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+            style={{ color: "hsl(42 30% 50%)" }}
           >
-            <Menu size={16} />
+            <Menu size={15} />
           </button>
-          <div className="flex-1 flex items-center gap-2 max-w-xs bg-secondary border border-border rounded-xl px-3 py-1.5 min-w-0">
-            <Search size={13} className="text-muted-foreground flex-shrink-0" />
+          <div className="flex-1 flex items-center gap-2.5 max-w-sm min-w-0 rounded-lg px-3 py-1.5"
+            style={{ background: "hsl(42 15% 8%)", border: "1px solid hsl(42 30% 14% / 0.8)" }}>
+            <Search size={12} style={{ color: "hsl(42 30% 40%)", flexShrink: 0 }} />
             <input
               placeholder="Search…"
-              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none min-w-0"
+              className="flex-1 bg-transparent text-sm focus:outline-none min-w-0"
+              style={{ color: "hsl(42 30% 80%)", fontFamily: "'Inter', sans-serif" }}
             />
           </div>
-          <div className="flex items-center gap-2 ml-auto">
+          <div className="flex items-center gap-1.5 ml-auto">
             {isDemo && (
               <NavLink
                 to="/settings"
-                title="Demo mode is active — click to manage in Settings"
-                className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-purple-500/15 border border-purple-500/30 text-[11px] font-semibold text-purple-300 hover:bg-purple-500/25 transition-colors"
+                title="Demo mode active"
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-semibold tracking-wide transition-colors"
+                style={{ background: "hsl(270 50% 50% / 0.12)", border: "1px solid hsl(270 50% 50% / 0.25)", color: "hsl(270 70% 75%)" }}
               >
-                <FlaskConical size={12} />
-                Demo mode
+                <FlaskConical size={11} />
+                Demo
               </NavLink>
             )}
             <button
               type="button"
               onClick={toggleTheme}
-              title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+              style={{ color: "hsl(42 30% 42%)" }}
             >
-              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+              {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </button>
-            <button className="relative w-8 h-8 flex items-center justify-center rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-              <Bell size={15} />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-red-500 rounded-full" />
+            <button
+              aria-label="Notifications"
+              className="relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+              style={{ color: "hsl(42 30% 42%)" }}
+            >
+              <Bell size={14} />
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: "hsl(0 72% 55%)" }} />
             </button>
           </div>
         </header>
