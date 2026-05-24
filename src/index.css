@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,72 +6,57 @@
 
 @layer base {
   :root {
-    /* ── Superyacht Dark Gold + Teal Mix ── */
-    --background: 24 12% 5%;
-    --foreground: 42 30% 92%;
-    --card: 24 10% 7%;
-    --card-foreground: 42 30% 92%;
-    --popover: 24 10% 7%;
-    --popover-foreground: 42 30% 92%;
-
-    /* Gold primary */
-    --primary: 42 65% 52%;
-    --primary-foreground: 24 12% 5%;
-
-    --secondary: 24 10% 10%;
-    --secondary-foreground: 42 20% 68%;
-    --muted: 24 10% 10%;
-    --muted-foreground: 42 12% 42%;
-
-    /* Teal accent */
-    --accent: 172 60% 14%;
-    --accent-foreground: 172 80% 62%;
-
+    --background: 222 47% 7%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 186 100% 42%;
+    --primary-foreground: 222 47% 7%;
+    --secondary: 217 33% 14%;
+    --secondary-foreground: 210 40% 80%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 50%;
+    --accent: 217 33% 18%;
+    --accent-foreground: 210 40% 98%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-
-    --border: 42 15% 12%;
-    --input: 24 10% 10%;
-    --ring: 42 65% 52%;
+    --border: 217 33% 17%;
+    --input: 217 33% 14%;
+    --ring: 186 100% 42%;
     --radius: 0.75rem;
-
     --status-online: 145 55% 42%;
     --status-offline: 0 72% 51%;
     --status-warning: 38 90% 50%;
     --status-unknown: 220 12% 40%;
-
-    --chart-1: 42 65% 52%;
-    --chart-2: 172 60% 45%;
+    --chart-1: 186 100% 42%;
+    --chart-2: 270 55% 60%;
     --chart-3: 38 90% 50%;
-    --chart-4: 270 55% 60%;
+    --chart-4: 145 55% 42%;
     --chart-5: 0 72% 51%;
-
-    /* Gold shimmer for decorative lines */
-    --gold: 42 65% 52%;
-    --gold-dim: 42 40% 30%;
-    --teal: 172 60% 42%;
   }
 
   .light {
-    --background: 42 30% 96%;
-    --foreground: 24 20% 10%;
-    --card: 42 20% 99%;
-    --card-foreground: 24 20% 10%;
-    --popover: 42 20% 99%;
-    --popover-foreground: 24 20% 10%;
-    --primary: 42 65% 42%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 186 100% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 42 15% 92%;
-    --secondary-foreground: 24 15% 25%;
-    --muted: 42 15% 92%;
-    --muted-foreground: 24 12% 45%;
-    --accent: 172 40% 88%;
-    --accent-foreground: 172 60% 28%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 222 47% 25%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 20% 45%;
+    --accent: 210 40% 90%;
+    --accent-foreground: 222 47% 15%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 42 15% 84%;
-    --input: 42 15% 90%;
-    --ring: 42 65% 42%;
+    --border: 214 32% 88%;
+    --input: 214 32% 92%;
+    --ring: 186 100% 36%;
     --status-online: 145 55% 35%;
     --status-offline: 0 72% 45%;
     --status-warning: 38 90% 40%;
@@ -87,7 +72,6 @@
     @apply bg-background text-foreground font-inter;
   }
 
-  /* Refined thin scrollbar */
   * {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
@@ -95,47 +79,22 @@
   *::-webkit-scrollbar { width: 5px; height: 5px; }
   *::-webkit-scrollbar-track { background: transparent; }
   *::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
-  *::-webkit-scrollbar-thumb:hover { background: hsl(42 40% 30% / 0.4); }
+  *::-webkit-scrollbar-thumb:hover { background: hsl(217 33% 25% / 0.6); }
 }
 
 @layer utilities {
-  .font-mono    { font-family: 'JetBrains Mono', monospace; }
-  .font-inter   { font-family: 'Inter', sans-serif; }
-  .font-serif   { font-family: 'Playfair Display', serif; }
+  .font-mono  { font-family: 'JetBrains Mono', monospace; }
+  .font-inter { font-family: 'Inter', sans-serif; }
 
-  /* Gold shimmer glow */
-  .glow-gold {
-    box-shadow: 0 0 24px hsl(42 65% 52% / 0.18), 0 0 48px hsl(42 65% 52% / 0.07);
-  }
-  .glow-teal {
-    box-shadow: 0 0 20px hsl(172 60% 42% / 0.2), 0 0 40px hsl(172 60% 42% / 0.08);
+  .glow-cyan {
+    box-shadow: 0 0 20px hsl(186 100% 42% / 0.2), 0 0 40px hsl(186 100% 42% / 0.08);
   }
   .glow-red {
     box-shadow: 0 0 20px hsl(0 72% 51% / 0.25), 0 0 40px hsl(0 72% 51% / 0.08);
   }
 
-  /* Frosted glass card */
   .glass {
     @apply bg-card/75 backdrop-blur-md border border-border/60;
-  }
-
-  /* Luxury gold top-edge card accent */
-  .card-gold-edge {
-    position: relative;
-  }
-  .card-gold-edge::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 16px; right: 16px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, hsl(42 65% 52% / 0.6), transparent);
-    border-radius: 1px;
-  }
-
-  /* Subtle gold divider */
-  .divider-gold {
-    height: 1px;
-    background: linear-gradient(90deg, transparent, hsl(42 65% 52% / 0.35), transparent);
   }
 
   .status-dot-online  { @apply w-2 h-2 rounded-full bg-green-500; }
@@ -150,23 +109,23 @@
   .scrollbar-hide::-webkit-scrollbar { display: none; }
 }
 
-/* ── Dashboard grid ────────────────────────────────────────────────── */
+/* ── Dashboard grid ── */
 .dashboard-grid { min-height: 200px; }
 .dashboard-grid .react-grid-item { transition: box-shadow 0.15s ease; }
 .dashboard-grid--editing .react-grid-item > div { touch-action: none; }
 .dashboard-grid--editing .react-grid-item {
-  box-shadow: 0 0 0 1px hsl(42 65% 52% / 0.2);
+  box-shadow: 0 0 0 1px hsl(186 100% 42% / 0.2);
 }
 .dashboard-grid .react-grid-item.react-grid-placeholder {
-  background: hsl(42 65% 52% / 0.08);
-  border: 1px dashed hsl(42 65% 52% / 0.4);
+  background: hsl(186 100% 42% / 0.08);
+  border: 1px dashed hsl(186 100% 42% / 0.4);
   border-radius: 0.75rem;
   opacity: 1;
 }
 .dashboard-grid--editing .react-resizable-handle { opacity: 0.3; }
 .dashboard-grid--editing .react-grid-item:hover .react-resizable-handle { opacity: 1; }
 .dashboard-grid--editing .react-resizable-handle::after {
-  border-color: hsl(42 65% 52% / 0.6);
+  border-color: hsl(186 100% 42% / 0.6);
   width: 10px; height: 10px; right: 4px; bottom: 4px;
 }
 .dashboard-grid .react-grid-item.react-draggable-dragging {

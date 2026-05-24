@@ -116,8 +116,8 @@ export default function CustomizableDashboard() {
         animate={{ opacity: 1, y: 0 }}
       >
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>Dashboard</h1>
-          <p className="text-xs md:text-sm text-muted-foreground uppercase tracking-widest" style={{ fontSize: "10px", letterSpacing: "0.15em" }}>System Overview</p>
+          <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">System Overview</p>
           {editMode && (
             <p className="hidden md:block text-xs text-primary/80 mt-1">
               Drag widgets to move · corner handle to resize

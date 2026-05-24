@@ -60,57 +60,52 @@ function AppLayoutContent() {
         fixed lg:static inset-y-0 left-0 z-30
         w-60 flex flex-col
         transition-transform duration-300
-        border-r border-border
+        bg-card border-r border-border
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
-      `} style={{ background: "linear-gradient(180deg, hsl(24,14%,6%) 0%, hsl(24,12%,4%) 100%)" }}>
+      `}>
 
         {/* Logo */}
-        <div className="flex items-center justify-between px-5 py-5" style={{ borderBottom: "1px solid hsl(42 40% 20% / 0.4)" }}>
+        <div className="flex items-center justify-between px-5 py-5 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0"
-              style={{ background: "linear-gradient(135deg, hsl(42 50% 18%), hsl(42 40% 12%))", border: "1px solid hsl(42 65% 40% / 0.5)" }}>
+            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden flex-shrink-0">
               {b.logoUrl ? (
                 <img src={b.logoUrl} alt="" className="max-w-full max-h-full object-contain p-0.5" />
               ) : (
-                <Wifi size={14} style={{ color: "hsl(42 65% 58%)" }} />
+                <Wifi size={14} className="text-primary" />
               )}
             </div>
             <div>
-              <p className="text-sm font-semibold leading-none tracking-wide" style={{ color: "hsl(42 55% 88%)", fontFamily: "'Playfair Display', serif" }}>
+              <p className="text-sm font-semibold text-foreground leading-none">
                 {b.appTitle || DEFAULT_BRANDING.appTitle}
               </p>
               {(b.appSubtitle ?? DEFAULT_BRANDING.appSubtitle) ? (
-                <p className="text-[9px] mt-1 uppercase tracking-[0.18em]" style={{ color: "hsl(42 30% 45%)" }}>
+                <p className="text-[10px] text-muted-foreground mt-0.5">
                   {b.appSubtitle || DEFAULT_BRANDING.appSubtitle}
                 </p>
               ) : null}
             </div>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden transition-colors" style={{ color: "hsl(42 30% 45%)" }}>
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground">
             <X size={15} />
           </button>
         </div>
 
         {/* Vessel badge */}
-        <div className="mx-4 mt-4 mb-2 px-3.5 py-3 rounded-lg"
-          style={{ background: "hsl(42 20% 8%)", border: "1px solid hsl(42 40% 18% / 0.8)" }}>
+        <div className="mx-4 mt-4 mb-2 px-3.5 py-3 rounded-lg bg-secondary border border-border">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-1.5 w-1.5 flex-shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full" style={{ background: "hsl(145 55% 42% / 0.5)" }} />
-              <span className="relative inline-flex rounded-full h-1.5 w-1.5" style={{ background: "hsl(145 55% 42%)" }} />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500/50" />
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
             </span>
-            <p className="text-xs font-medium" style={{ color: "hsl(42 40% 78%)" }}>{b.name || DEFAULT_BRANDING.name}</p>
+            <p className="text-xs font-medium text-foreground">{b.name || DEFAULT_BRANDING.name}</p>
           </div>
-          <p className="text-[10px] mt-1 ml-4" style={{ color: "hsl(42 20% 40%)" }}>
+          <p className="text-[10px] text-muted-foreground mt-1 ml-4">
             {monitoredCount != null ? `${monitoredCount} devices monitored` : "Loading…"}
           </p>
         </div>
 
-        {/* Thin gold rule */}
-        <div className="mx-4 my-2 divider-gold" />
-
         {/* Nav */}
-        <nav className="flex-1 px-3 py-1 space-y-0.5 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto scrollbar-hide">
           {NAV.map(item => (
             <NavLink
               key={item.to}
@@ -119,27 +114,23 @@ function AppLayoutContent() {
               onClick={() => setSidebarOpen(false)}
               className={({ isActive }) =>
                 `flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 ${
-                  isActive ? "nav-active" : "nav-inactive"
+                  isActive
+                    ? "bg-primary/10 text-primary border border-primary/20"
+                    : "text-muted-foreground hover:text-foreground hover:bg-secondary border border-transparent"
                 }`
-              }
-              style={({ isActive }) => isActive
-                ? { background: "linear-gradient(90deg, hsl(42 65% 52% / 0.12), transparent)", color: "hsl(42 65% 68%)", borderLeft: "2px solid hsl(42 65% 52%)", paddingLeft: "10px" }
-                : { color: "hsl(42 20% 45%)", borderLeft: "2px solid transparent" }
               }
             >
               {({ isActive }) => (
                 <>
-                  <item.icon size={13} style={isActive ? { color: "hsl(42 65% 58%)" } : {}} />
-                  <span className="tracking-wide">{item.label}</span>
+                  <item.icon size={13} />
+                  <span>{item.label}</span>
                   {item.to === "/diagnoses" && diagCounts.active > 0 && (
-                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
-                      style={{ background: "hsl(38 90% 50% / 0.15)", color: "hsl(38 90% 60%)" }}>
+                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400">
                       {diagCounts.active}
                     </span>
                   )}
                   {item.to === "/maintenance" && maintenanceOverdue > 0 && (
-                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full"
-                      style={{ background: "hsl(0 72% 51% / 0.15)", color: "hsl(0 72% 65%)" }}>
+                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">
                       {maintenanceOverdue}
                     </span>
                   )}
@@ -150,31 +141,27 @@ function AppLayoutContent() {
         </nav>
 
         {/* Footer */}
-        <div className="px-5 py-3.5" style={{ borderTop: "1px solid hsl(42 30% 12% / 0.8)" }}>
-          <p className="text-[9px] uppercase tracking-[0.15em]" style={{ color: "hsl(42 20% 32%)" }}>v1.0.0 · Wave Guard</p>
+        <div className="px-5 py-3.5 border-t border-border">
+          <p className="text-[10px] text-muted-foreground">v1.0.0 · Wave Guard</p>
         </div>
       </aside>
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-background">
         {/* Topbar */}
-        <header className="flex items-center gap-3 px-5 py-3 flex-shrink-0 backdrop-blur-xl"
-          style={{ borderBottom: "1px solid hsl(42 30% 12% / 0.7)", background: "hsl(24 12% 5% / 0.85)" }}>
+        <header className="flex items-center gap-3 px-5 py-3 flex-shrink-0 bg-card/80 backdrop-blur-xl border-b border-border">
           <button
             onClick={() => setSidebarOpen(true)}
             aria-label="Open menu"
-            className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
-            style={{ color: "hsl(42 30% 50%)" }}
+            className="lg:hidden w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground"
           >
             <Menu size={15} />
           </button>
-          <div className="flex-1 flex items-center gap-2.5 max-w-sm min-w-0 rounded-lg px-3 py-1.5"
-            style={{ background: "hsl(42 15% 8%)", border: "1px solid hsl(42 30% 14% / 0.8)" }}>
-            <Search size={12} style={{ color: "hsl(42 30% 40%)", flexShrink: 0 }} />
+          <div className="flex-1 flex items-center gap-2.5 max-w-sm min-w-0 bg-secondary border border-border rounded-lg px-3 py-1.5">
+            <Search size={12} className="text-muted-foreground flex-shrink-0" />
             <input
               placeholder="Search…"
-              className="flex-1 bg-transparent text-sm focus:outline-none min-w-0"
-              style={{ color: "hsl(42 30% 80%)", fontFamily: "'Inter', sans-serif" }}
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none min-w-0"
             />
           </div>
           <div className="flex items-center gap-1.5 ml-auto">
@@ -194,18 +181,16 @@ function AppLayoutContent() {
               onClick={toggleTheme}
               title={theme === "dark" ? "Light mode" : "Dark mode"}
               aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
-              style={{ color: "hsl(42 30% 42%)" }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             >
               {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
             </button>
             <button
               aria-label="Notifications"
-              className="relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
-              style={{ color: "hsl(42 30% 42%)" }}
+              className="relative w-8 h-8 flex items-center justify-center rounded-lg transition-colors text-muted-foreground hover:text-foreground"
             >
               <Bell size={14} />
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full" style={{ background: "hsl(0 72% 55%)" }} />
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
             </button>
           </div>
         </header>
