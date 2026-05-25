@@ -9,7 +9,7 @@ export function getScannerBaseUrl(agentUrl) {
   const fromEnv = import.meta.env.VITE_SCANNER_URL || import.meta.env.VITE_API_URL;
   if (fromEnv) return String(fromEnv).replace(/\/$/, "");
   if (isMockServer && import.meta.env.DEV) return "";
-  if (isMockServer) return "http://localhost:3002";
+  if (isMockServer) return typeof window !== "undefined" ? window.location.origin : "http://localhost:3002";
   return "";
 }
 

@@ -18,6 +18,7 @@ import {
 import { DEVICE_ROLE_LABELS, getVendorInfo } from "@/lib/integrations/vendorRegistry";
 import WanLinkEditDrawer from "./WanLinkEditDrawer";
 import WanRouterDetailPanel from "./WanRouterDetailPanel";
+import { saveWanSpeedTestResult } from "@/lib/wan/wanWidgetStorage";
 
 const STATUS_DOT = {
   online: "bg-emerald-500",
@@ -170,6 +171,7 @@ export default function SnmpWanManagementPanel({
         portIndex: link.portIndex,
         portName: link.portName || link.name,
       });
+      saveWanSpeedTestResult({ ...result, profileId: link.profileId, portIndex: link.portIndex });
       setSpeedTests((prev) => ({ ...prev, [link.key]: result }));
       toast.success(`Speed test: ↓${result.downloadMbps} ↑${result.uploadMbps} Mbps`);
     } catch (err) {
@@ -272,15 +274,15 @@ export default function SnmpWanManagementPanel({
         <KpiCard label="Primary ISP" value={wan.summary.primaryIsp} sub="Active primary path" />
         <KpiCard
           label="Live download"
-          value={formatSpeedMbps(wan.summary.aggregateDownMbps)}
-          sub="Sum of online links"
-          accent="text-primary"
+          value={wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateDownMbps)}
+          sub={wan.synthetic ? "Poll router to measure" : "Sum of online links"}
+          accent={wan.synthetic ? "text-muted-foreground" : "text-primary"}
         />
         <KpiCard
           label="Live upload"
-          value={formatSpeedMbps(wan.summary.aggregateUpMbps)}
-          sub="Sum of online links"
-          accent="text-emerald-400"
+          value={wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateUpMbps)}
+          sub={wan.synthetic ? "Poll router to measure" : "Sum of online links"}
+          accent={wan.synthetic ? "text-muted-foreground" : "text-emerald-400"}
         />
       </div>
 
@@ -289,25 +291,8 @@ export default function SnmpWanManagementPanel({
           <Globe size={40} className="mx-auto text-muted-foreground mb-3 opacity-60" />
           <h3 className="text-base font-semibold text-foreground">No WAN links yet</h3>
           <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Assign one or more routers from your Equipment list, or add a manual WAN link for shore
-            circuits, VSAT, or LTE providers managed outside the platform.
+            Use the buttons in the top-right to assign a router or add a manual WAN link.
           </p>
-          <div className="mt-5 flex flex-wrap justify-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium"
-            >
-              <Plus size={14} /> Assign WAN router
-            </button>
-            <button
-              type="button"
-              onClick={handleAddManual}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-border text-sm hover:border-primary/40"
-            >
-              <Plus size={14} /> Add manual WAN link
-            </button>
-          </div>
         </div>
       ) : (
         <div className="space-y-5">
@@ -440,9 +425,11 @@ function WanRouterPickerModal({ equipment, assignedIds, onPick, onClose }) {
       return blob.includes(q);
     })
     .sort((a, b) => {
-      const aNet = (a.category || "").toLowerCase() === "network";
-      const bNet = (b.category || "").toLowerCase() === "network";
-      if (aNet !== bNet) return aNet ? -1 : 1;
+      const aCat = (a.category || "").toLowerCase();
+      const bCat = (b.category || "").toLowerCase();
+      const aPrio = aCat === "router" ? 0 : aCat === "network" ? 1 : 2;
+      const bPrio = bCat === "router" ? 0 : bCat === "network" ? 1 : 2;
+      if (aPrio !== bPrio) return aPrio - bPrio;
       return (a.name || "").localeCompare(b.name || "");
     });
 

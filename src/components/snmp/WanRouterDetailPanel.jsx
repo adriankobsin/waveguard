@@ -245,13 +245,13 @@ export default function WanRouterDetailPanel({
                         <div>
                           <span className="text-muted-foreground">Down </span>
                           <span className="text-primary font-medium">
-                            {test ? test.downloadMbps : link.downloadMbps} Mbps
+                            {link.synthetic && !test && !link.downloadMbps ? "—" : `${test ? test.downloadMbps : link.downloadMbps} Mbps`}
                           </span>
                         </div>
                         <div>
                           <span className="text-muted-foreground">Up </span>
                           <span className="text-emerald-500 font-medium">
-                            {test ? test.uploadMbps : link.uploadMbps} Mbps
+                            {link.synthetic && !test && !link.uploadMbps ? "—" : `${test ? test.uploadMbps : link.uploadMbps} Mbps`}
                           </span>
                         </div>
                         {link.linkSpeedMbps > 0 && (

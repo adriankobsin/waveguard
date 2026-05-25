@@ -32,13 +32,9 @@ import {
   CREDENTIALS_VAULT_KEY,
   normalizeCredentialsVault,
 } from "../src/lib/credentials/credentialsVault.js";
-import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
+import { mergePeplinkIntoPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
 import { fetchPeplinkStatus, testPeplinkConnection } from "../scanner/integrations/peplinkPoll.js";
 import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
-import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
-import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
-import { buildMockDaliEngine } from "../src/lib/integrations/dali/daliAdapter.js";
-import { buildMockDmxEngine } from "../src/lib/integrations/dmx/dmxAdapter.js";
 import {
   getLutronClient,
   closeLutronClient,
@@ -78,6 +74,8 @@ import {
   CISCO_BACKGROUND_POLL_INTERVAL_MS,
 } from "../src/lib/network/ciscoSwitchSettings.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
+import { loadPersistedDb, queueSave, pingAllOnStartup } from "./persistence.js";
+import { addClient, broadcast, clientCount } from "./events.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Set WAVEGUARD_USE_MOCK_SCAN=true only for demos without LAN access. */
@@ -102,6 +100,18 @@ const upload = multer({
 
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
+app.use((req, res, next) => {
+  if (req.method !== "GET") {
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      queueSave(db);
+      broadcast("data-changed", { method: req.method, path: req.path });
+      return originalJson(body);
+    };
+  }
+  next();
+});
+
 app.use("/uploads", express.static(uploadsDir));
 
 // ---- In-memory data store ----
@@ -137,13 +147,13 @@ const db = {
     { id: "group-2", name: "AV Rack", description: "Saloon AV equipment", color: "purple", icon: "av", device_ids: ["dev-4", "dev-5"], collapsed: false },
     { id: "group-3", name: "CCTV", description: "Camera system", color: "green", icon: "camera", device_ids: ["dev-6", "dev-7"], collapsed: true },
   ],
-  cables: generateMockCables(25),
-  maintenanceTasks: generateMockTasks(8),
+  cables: [],
+  maintenanceTasks: [],
   automationRules: [
     { id: "rule-1", name: "UPS Low Battery Alert", trigger: "event", condition: '{{event.type}} === "ups_low_battery"', action: "notify_all", enabled: true, fire_count: 12, created_date: new Date().toISOString() },
     { id: "rule-2", name: "Reboot Stuck Camera", trigger: "schedule", condition: "*/30 * * * *", action: "ping_check_cameras", enabled: false, fire_count: 3, created_date: new Date().toISOString() },
   ],
-  actionLogs: generateMockLogs(20),
+  actionLogs: [],
   systemSettings: [
     { id: "setting-1", key: "snmp_community", value: "public", category: "snmp" },
     { id: "setting-2", key: "scan_interval_minutes", value: "60", category: "discovery" },
@@ -196,67 +206,21 @@ const db = {
     },
   ],
   layoutTopology: [],
-  equipment: generateMockEquipment(23),
-  rackLayouts: [generateDefaultRackLayout()],
-  signalLinks: generateSignalLinks(),
+  equipment: [],
+  rackLayouts: [],
+  signalLinks: [],
+  speedTests: [],
 };
 
+// Persist / restore from file
+const persisted = loadPersistedDb();
+if (persisted) {
+  Object.assign(db, persisted);
+  db.equipment.forEach(e => { e.status = "unknown"; });
+  pingAllOnStartup(db.equipment).catch(() => {});
+}
+
 // ---- Helpers ----
-function generateMockCables(count) {
-  const types = ["Cat6", "Cat6A", "Cat7", "Fibre OM3", "HDMI 2.0", "SDI", "DMX", "Power IEC"];
-  const systems = ["Network", "AV", "CCTV", "Power", "Comms", "Lighting"];
-  const statuses = ["installed", "installed", "installed", "planned", "spare"];
-  const from = ["Router-WAN", "SW-Bridge", "SW-CCTV", "UPS-Main", "SW-AV-Rack", "SW-Saloon", "Q-SYS-Core"];
-  const to = ["SW-Bridge", "SW-CCTV", "Cam-Bow-01", "SW-AV-Rack", "SW-Saloon", "Cam-Stern-01", "AP-Bridge", "NAS-Main"];
-  return Array.from({ length: count }, (_, i) => ({
-    id: `cable-${i + 1}`,
-    label: `C-${String(i + 1).padStart(3, "0")}`,
-    type: types[i % types.length],
-    system_category: systems[i % systems.length],
-    from_equipment: from[i % from.length],
-    to_equipment: to[(i + 2) % to.length],
-    length: `${(Math.random() * 40 + 2).toFixed(1)}m`,
-    deck: ["Bridge", "Saloon", "Engine Room", "Upper Deck", "Crew Cabin"][i % 5],
-    status: statuses[i % statuses.length],
-    notes: Math.random() > 0.5 ? `Cable run #${i + 1}` : "",
-  }));
-}
-
-function generateMockTasks(count) {
-  const now = Date.now();
-  const tasks = [
-    { title: "Inspect Bridge Rack Cooling Fans", category: "inspection", priority: "high" },
-    { title: "Test UPS Battery Health", category: "test", priority: "critical" },
-    { title: "Update Camera Firmware (Bridge Deck)", category: "firmware", priority: "medium" },
-    { title: "Clean AV Rack Air Filters", category: "maintenance", priority: "low" },
-    { title: "Verify SNMP Community Strings", category: "audit", priority: "medium" },
-    { title: "Calibrate Gyro Stabilizer Interface", category: "calibration", priority: "high" },
-    { title: "Patch Cabling Audit - Engine Room", category: "inspection", priority: "medium" },
-    { title: "Replace UPS Battery Pack #2", category: "replacement", priority: "critical" },
-  ];
-  return tasks.map((t, i) => ({
-    id: `task-${i + 1}`,
-    title: t.title,
-    category: t.category,
-    priority: t.priority,
-    status: ["pending", "in_progress", "completed", "pending", "pending", "pending", "completed", "scheduled"][i],
-    next_due_at: new Date(now + (i + 1) * 7 * 86400000).toISOString(),
-    last_performed_at: i < 2 ? new Date(now - (i + 5) * 86400000).toISOString() : null,
-  }));
-}
-
-function generateMockLogs(count) {
-  const actions = ["rule_fired", "cable_created", "device_updated", "scan_completed", "snmp_poll", "user_login"];
-  const statuses = ["success", "success", "success", "error", "success"];
-  return Array.from({ length: count }, (_, i) => ({
-    id: `log-${i + 1}`,
-    action: actions[i % actions.length],
-    details: `Action #${i + 1} performed`,
-    status: statuses[i % statuses.length],
-    created_date: new Date(Date.now() - i * 3600000).toISOString(),
-  }));
-}
-
 function enrichEquipmentMeta(item) {
   const n = (item.name || "").toLowerCase();
   const m = (item.model || "").toLowerCase();
@@ -778,6 +742,7 @@ app.post("/api/apps/:appId/functions/snmpTopologyScan", async (req, res) => {
 });
 
 app.post("/api/apps/:appId/functions/registerDiscoveredDevice", (req, res) => {
+  queueSave(db);
   try {
     const { device, classification } = req.body || {};
     if (!device?.ip) {
@@ -872,43 +837,6 @@ function getSnmpSwitchesState() {
     }
   }
   return normalizeSnmpSwitchesState(raw || { profiles: [] });
-}
-
-/** Ensure Router-WAN is registered in Core Network with polled Peplink WAN ports. */
-function ensureDefaultWanRouterProfile() {
-  const routerEq = db.equipment.find((e) => /router-wan/i.test(e.name || ""));
-  if (!routerEq) return;
-
-  const state = getSnmpSwitchesState();
-  let profile = state.profiles.find((p) => p.equipmentId === routerEq.id);
-  if (!profile) {
-    const defaults = buildDefaultProfileFields(routerEq);
-    profile = normalizeSnmpSwitchProfile({
-      equipmentId: routerEq.id,
-      location: routerEq.location || "",
-      ...defaults,
-      enabled: true,
-    });
-    state.profiles.push(profile);
-  }
-
-  const hasWanPorts = (profile.lastPoll?.ports || []).some(
-    (p) => p.meta?.type === "wan" || p.meta?.type === "cellular" || /wan|cell/i.test(p.name || "")
-  );
-  if (!hasWanPorts) {
-    const ip = equipmentIp(routerEq);
-    const pep = buildMockPeplinkPoll(routerEq.model, ip);
-    const poll = {
-      ...pep,
-      sysName: routerEq.name,
-      ports: (pep.ports || []).map((p) => normalizeSnmpPort(p)).filter(Boolean),
-    };
-    const updated = mergePollIntoProfile(profile, poll, { equipment: routerEq });
-    const idx = state.profiles.findIndex((p) => p.id === updated.id);
-    if (idx >= 0) state.profiles[idx] = updated;
-    else state.profiles.push(updated);
-    saveSnmpSwitchesState(state);
-  }
 }
 
 function resolveWanProfile(profileId) {
@@ -1212,7 +1140,7 @@ app.post("/api/apps/:appId/functions/peplinkTestConnection", async (req, res) =>
       forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
       globalPeplinkCreds: getPeplinkCredentials(),
     });
-    res.json(result);
+    if (MUTATE_METHODS.has(method)) queueSave(db);
   } catch (err) {
     console.error("[peplinkTestConnection]", err);
     res.status(500).json({ success: false, error: err.message });
@@ -1242,11 +1170,27 @@ app.post("/api/apps/:appId/functions/wanSpeedTest", async (req, res) => {
   }
 });
 
+
+// ── Speed test persistence ──────────────────────────────────────
+app.get("/api/apps/:appId/speedTests", (req, res) => {
+  res.json(db.speedTests || []);
+});
+app.post("/api/apps/:appId/speedTests", (req, res) => {
+  const entry = {
+    ...req.body,
+    id: crypto.randomUUID(),
+    savedAt: new Date().toISOString(),
+  };
+  db.speedTests = (db.speedTests || []).concat(entry);
+  queueSave(db);
+  res.status(201).json(entry);
+});
+
 // ── Lighting engines (mock + live) ──────────────────────────────────────
-const lutronEngine = buildMockLutronEngine();
-const knxEngine = buildMockKnxEngine();
-const daliEngine = buildMockDaliEngine();
-const dmxEngine = buildMockDmxEngine();
+let lutronEngine = null;
+let knxEngine = null;
+let daliEngine = null;
+let dmxEngine = null;
 
 function engineForSystemType(systemType) {
   switch (systemType) {
@@ -2303,6 +2247,20 @@ app.get("/api/apps/:appId/functions/ciscoEvents", async (req, res) => {
   res.on("close", cleanup);
 });
 
+// ── Live data-change SSE ──────────────────────────────────────────────────
+// Generic SSE endpoint that broadcasts a "data-changed" event whenever any
+// non-GET API call mutates the in-memory db. All connected browser tabs
+// receive the event so they can refresh stale data.
+app.get("/api/apps/:appId/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+  addClient(res);
+  res.write(`event: connected\ndata: {"clientCount": ${clientCount()}}\n\n`);
+});
+
 // ── LEAP certificate pairing ──────────────────────────────────────────────
 
 // Start LEAP pairing — returns IMMEDIATELY ("pairing started"). The pairing
@@ -2962,6 +2920,7 @@ const entityHandlers = {
 };
 
 app.all("/api/apps/:appId/entities/:entityName/:id?", (req, res) => {
+  const MUTATE_METHODS = new Set(["POST", "PUT", "DELETE", "PATCH"]);
   const { entityName, id } = req.params;
   const handler = entityHandlers[entityName];
   if (!handler) return res.status(404).json({ message: `Unknown entity: ${entityName}` });
@@ -2989,6 +2948,7 @@ app.all("/api/apps/:appId/entities/:entityName/:id?", (req, res) => {
     } else {
       return res.status(405).json({ message: "Method not allowed" });
     }
+    if (MUTATE_METHODS.has(method)) queueSave(db);
     res.json(result);
   } catch (err) {
     res.status(500).json({ message: err.message, code: "server_error" });
@@ -2997,11 +2957,13 @@ app.all("/api/apps/:appId/entities/:entityName/:id?", (req, res) => {
 
 // Support PATCH for update-many
 app.patch("/api/apps/:appId/entities/:entityName/update-many", (req, res) => {
+  queueSave(db);
   res.json({ modifiedCount: 1 });
 });
 
 // Support PUT for bulk
 app.put("/api/apps/:appId/entities/:entityName/bulk", (req, res) => {
+  queueSave(db);
   res.json({ modifiedCount: (req.body || []).length });
 });
 
@@ -3363,7 +3325,6 @@ app.delete("/api/apps/:appId/users/:id", (req, res) => {
 });
 
 // ---- Start ----
-ensureDefaultWanRouterProfile();
 pollAllStoredCiscoSwitches().catch((err) => {
   console.warn("[ciscoPoll] initial fleet poll failed:", err?.message || err);
 });
@@ -3372,6 +3333,7 @@ setInterval(() => {
     console.warn("[ciscoPoll] background fleet poll failed:", err?.message || err);
   });
 }, CISCO_BACKGROUND_POLL_INTERVAL_MS);
+
 
 app.listen(PORT, () => {
   console.log(`[mock-base44] Server running at http://localhost:${PORT}`);
@@ -3384,7 +3346,4 @@ app.listen(PORT, () => {
   console.log(`  - Integrations: /api/apps/${APP_ID}/integration-endpoints/Core/*`);
   console.log(`  - Network scanner: ${USE_MOCK_SCAN ? "MOCK (demo devices only)" : "LIVE (ping/arp/full on this host)"}`);
   console.log(`  - Scanner health: GET /api/apps/${APP_ID}/scanner/health`);
-  console.log(`  - Mock devices: ${db.equipment.length} equipment items`);
-  console.log(`  - Mock cables: ${db.cables.length} cables`);
-  console.log(`  - Mock tasks: ${db.maintenanceTasks.length} maintenance tasks`);
 });

@@ -5,7 +5,6 @@ import {
   normalizeSnmpPort,
 } from "@/lib/snmp/snmpSwitchProfiles";
 import { buildMockPeplinkPoll } from "@/lib/integrations/peplink/peplinkAdapter";
-import { isDemoModeActive } from "@/lib/platformMode";
 
 export const WAN_MANAGEMENT_SETTINGS_KEY = "wan-management";
 export const WAN_MANAGEMENT_CHANGED_EVENT = "waveguard-wan-management-changed";
@@ -146,6 +145,7 @@ function isWanManagementProfile(profile, eq, assignedIds) {
   }
   if (["wan_router", "router", "firewall"].includes(profile.deviceRole)) return true;
   if (profile.integrationVendor === "peplink") return true;
+  if (eq?.category === "Router") return true;
   const blob = `${eq?.name || ""} ${eq?.model || ""} ${eq?.make || ""} ${eq?.vendor || ""}`.toLowerCase();
   return /peplink|balance|fortigate|firewall|router|gateway|starlink|udm|dream\s*machine/.test(blob);
 }
@@ -159,6 +159,7 @@ function isWanUplinkPort(port) {
 
 function isWanEquipment(eq) {
   if (!eq) return false;
+  if (eq.category === "Router") return true;
   const blob = `${eq.name || ""} ${eq.model || ""} ${eq.make || ""} ${eq.vendor || ""}`.toLowerCase();
   return /router-wan|starlink|peplink|balance\s*2500|max\s*br|fortigate|firewall|wan router|gateway|udm/.test(blob);
 }
@@ -194,14 +195,14 @@ function buildGenericMockWanPoll(eq) {
       index: 1,
       name: "WAN1",
       status: "up",
-      speedMbps: 1000,
-      inMbps: 32 + Math.random() * 40,
-      outMbps: 8 + Math.random() * 12,
+      speedMbps: 0,
+      inMbps: 0,
+      outMbps: 0,
       meta: {
         type: "wan",
-        publicIp: ip ? `203.0.113.${1 + Math.floor(Math.random() * 240)}` : null,
+        publicIp: null,
         gateway: null,
-        dns: "1.1.1.1",
+        dns: null,
         isp: eq?.make || "Internet",
       },
     },
@@ -211,13 +212,13 @@ function buildGenericMockWanPoll(eq) {
       index: 2,
       name: "Cellular",
       status: "up",
-      speedMbps: 150,
-      inMbps: 6 + Math.random() * 8,
-      outMbps: 1 + Math.random() * 3,
-      meta: { type: "cellular", carrier: "LTE", signalDbm: -78, isp: "Cellular" },
+      speedMbps: 0,
+      inMbps: 0,
+      outMbps: 0,
+      meta: { type: "cellular", carrier: "LTE", signalDbm: null, isp: "Cellular" },
     });
   }
-  ports.push({ index: ports.length + 1, name: "LAN", status: "up", speedMbps: 1000, meta: { type: "lan" } });
+  ports.push({ index: ports.length + 1, name: "LAN", status: "up", speedMbps: 0, meta: { type: "lan" } });
   return { sysName: eq?.name || "WAN router", polledAt, source: "synthetic", ports };
 }
 
@@ -227,11 +228,10 @@ function buildMockWanPollForEquipment(eq) {
   return buildGenericMockWanPoll(eq);
 }
 
-function buildSyntheticWanProfiles(equipment, existingProfileIds, assignedIds) {
+function buildSyntheticWanProfiles(equipment, assignedIds) {
   const useAssigned = assignedIds && assignedIds.size > 0;
   const candidates = (equipment || [])
     .filter((eq) => (useAssigned ? assignedIds.has(eq.id) : isWanEquipment(eq)))
-    .filter((eq) => !existingProfileIds.has(profileIdForEquipment(eq.id)))
     .sort((a, b) => {
       if (/router-wan/i.test(a.name || "")) return -1;
       if (/router-wan/i.test(b.name || "")) return 1;
@@ -357,8 +357,8 @@ function mapManualWanLink(link) {
  * Build unified WAN link list from polls, equipment, and management settings.
  *
  * When `assignedRouterEquipmentIds` is set, only those routers appear as WAN.
- * In Live mode, no synthetic WAN data is fabricated for unpolled assigned routers
- * so the UI shows an honest empty state. Demo mode allows synthetic preview data.
+ * Assigned routers without poll data get a synthetic preview so the UI is
+ * usable immediately. Real poll data replaces previews once available.
  */
 export function buildWanLinks(snmpSwitches, equipment = [], wanManagement = DEFAULT_WAN_MANAGEMENT) {
   const mgmt = normalizeWanManagement(wanManagement);
@@ -366,7 +366,7 @@ export function buildWanLinks(snmpSwitches, equipment = [], wanManagement = DEFA
   const byId = new Map((equipment || []).map((e) => [e.id, e]));
   const assignedSet = new Set(mgmt.assignedRouterEquipmentIds);
   const useAssignment = assignedSet.size > 0;
-  const allowSynthetic = isDemoModeActive() || !useAssignment;
+  const allowSynthetic = true;
   let synthetic = false;
 
   let enriched = enrichProfiles(profiles, byId);
@@ -382,10 +382,8 @@ export function buildWanLinks(snmpSwitches, equipment = [], wanManagement = DEFA
   }
 
   if (!links.length && allowSynthetic) {
-    const existingIds = new Set(profiles.map((p) => p.id));
     const syntheticProfiles = buildSyntheticWanProfiles(
       equipment,
-      existingIds,
       useAssignment ? assignedSet : null
     );
     if (syntheticProfiles.length) {

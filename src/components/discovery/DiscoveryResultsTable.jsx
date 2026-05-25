@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { Eye, EyeOff, Package, ChevronDown, ChevronRight, Wifi, Camera, Monitor, Zap, Server, Lightbulb, HelpCircle } from "lucide-react";
+import { Eye, EyeOff, Package, ChevronDown, ChevronRight, Wifi, Camera, Monitor, Zap, Server, Lightbulb, Router, HelpCircle } from "lucide-react";
 
 const CATEGORY_ICONS = {
   Network:  { icon: Wifi,      color: "text-cyan-400",   bg: "bg-cyan-500/12" },
@@ -8,6 +8,7 @@ const CATEGORY_ICONS = {
   AV:       { icon: Monitor,   color: "text-blue-400",   bg: "bg-blue-500/12" },
   Power:    { icon: Zap,       color: "text-amber-400",  bg: "bg-amber-500/12" },
   Server:   { icon: Server,    color: "text-emerald-400",bg: "bg-emerald-500/12" },
+  Router:   { icon: Router,    color: "text-orange-400", bg: "bg-orange-500/12" },
   Lighting: { icon: Lightbulb, color: "text-yellow-400", bg: "bg-yellow-500/12" },
   Unknown:  { icon: HelpCircle,color: "text-muted-foreground",  bg: "bg-slate-500/12" },
 };

@@ -57,7 +57,8 @@ export function mapSystemToCategory(system, type) {
   const t = String(type || "").toLowerCase();
   if (SYSTEM_TO_CATEGORY[sys]) return SYSTEM_TO_CATEGORY[sys];
   if (t.includes("camera") || t.includes("cctv")) return "Camera";
-  if (t.includes("access point") || t.includes("switch") || t.includes("router") || t.includes("firewall")) return "Network";
+  if (t.includes("router") || t.includes("gateway") || t.includes("firewall")) return "Router";
+  if (t.includes("access point") || t.includes("switch")) return "Network";
   if (t.includes("display") || t.includes("matrix") || t.includes("encoder") || t.includes("dsp")) return "AV";
   if (t.includes("ups") || t.includes("pdu") || t.includes("power")) return "Power";
   if (t.includes("light")) return "Lighting";

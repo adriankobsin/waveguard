@@ -6,7 +6,10 @@ const { appId, token, functionsVersion, appBaseUrl } = appParams;
 export const isMockServer =
   typeof window !== "undefined" && !window.location.host.includes("base44.app");
 
-export const MOCK_SERVER_URL = "http://localhost:3002";
+export const MOCK_SERVER_URL =
+  typeof window !== "undefined"
+    ? window.location.origin
+    : "http://localhost:3002";
 
 function resolveLocalServerUrl() {
   const envUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_SCANNER_URL;

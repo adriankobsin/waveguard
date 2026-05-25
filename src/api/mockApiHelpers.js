@@ -1,13 +1,10 @@
 import { getAccessToken } from "@base44/sdk";
-import { isMockServer, MOCK_SERVER_URL } from "@/api/base44Client";
+import { isMockServer } from "@/api/base44Client";
 
-/** Base URL for mock-app API calls (proxied in Vite dev). */
+/** Base URL for mock-app API calls (proxied via Nginx or Vite). */
 export function getMockAppApiBase() {
   if (!isMockServer) return "";
-  if (import.meta.env.DEV) {
-    return "/api/apps/mock-app";
-  }
-  return `${MOCK_SERVER_URL}/api/apps/mock-app`;
+  return "/api/apps/mock-app";
 }
 
 /** Auth header for direct mock API fetches (matches SDK token storage). */

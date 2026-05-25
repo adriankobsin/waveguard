@@ -31,6 +31,7 @@ export function inferLocationText(device) {
   if (blob.includes("aft") || blob.includes("stern")) return "Aft Deck · Aft Deck";
   if (blob.includes("upper")) return "Upper Deck · Upper Deck";
   if (device.category === "Camera") return "Fore Deck · Fore Deck";
+  if (device.category === "Router") return "Bridge · Bridge Rack";
   if (device.category === "Network") return "Bridge · Bridge Rack";
   if (device.category === "AV") return "Saloon · Saloon AV Rack";
   if (device.category === "Power") return "Engine Room · Engine Room";
@@ -100,6 +101,7 @@ export function matchMonitoringGroupIds(equipment, groups, decks = loadDecks()) 
     }
 
     if (cat === "camera" && (hay.includes("cctv") || hay.includes("camera"))) hit = true;
+    if (cat === "router" && (hay.includes("router") || hay.includes("network") || hay.includes("wan"))) hit = true;
     if (cat === "network" && hay.includes("network")) hit = true;
     if (cat === "av" && hay.includes("av")) hit = true;
     if (cat === "power" && hay.includes("power")) hit = true;

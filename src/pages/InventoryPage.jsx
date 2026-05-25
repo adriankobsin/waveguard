@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Package, Plus, Search, X, Pencil, Trash2,
-  Wifi, Camera, Monitor, Zap, Server, HardDrive,
+  Wifi, Camera, Monitor, Zap, Server, HardDrive, Router,
   LayoutGrid, List, Download, FileSpreadsheet, Lightbulb,
 } from "lucide-react";
 import InventoryExportModal from "../components/inventory/InventoryExportModal";
@@ -35,6 +35,7 @@ const TYPE_ICONS = {
   AV: { icon: Monitor, color: "text-blue-400", bg: "bg-blue-500/10" },
   Power: { icon: Zap, color: "text-yellow-400", bg: "bg-yellow-500/10" },
   Control: { icon: Server, color: "text-green-400", bg: "bg-green-500/10" },
+  Router: { icon: Router, color: "text-orange-400", bg: "bg-orange-500/10" },
   Server: { icon: Server, color: "text-slate-300", bg: "bg-slate-500/10" },
   Lighting: { icon: Lightbulb, color: "text-amber-400", bg: "bg-amber-500/10" },
   Other: { icon: HardDrive, color: "text-muted-foreground", bg: "bg-secondary" },

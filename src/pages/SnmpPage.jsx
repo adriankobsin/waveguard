@@ -670,13 +670,18 @@ export default function SnmpPage() {
                             {sw.roleLabel}
                           </span>
                         )}
+                        {sw.deviceRole === "wan_router" && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/25 shrink-0">
+                            WAN
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs font-mono text-muted-foreground">{sw.ip || "No IP"}</p>
                       {sw.model && (
                         <p className="text-xs font-mono text-muted-foreground/80 truncate">{sw.model}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-1">
-                        {sw.ports.length ? `${up}/${sw.ports.length} up` : "Not polled"}
+                        {sw.deviceRole === "wan_router" ? "Configured in WAN Management" : sw.ports.length ? `${up}/${sw.ports.length} up` : "Not polled"}
                         {sw.enabled === false && " · Disabled"}
                       </p>
                     </div>

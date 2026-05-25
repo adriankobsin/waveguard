@@ -153,6 +153,7 @@ export function detectIntegrationVendor(eq) {
 
 export function detectDeviceRole(eq) {
   if (!eq) return "switch";
+  if (eq.category === "Router") return "wan_router";
   const blob = `${eq.name || ""} ${eq.model || ""} ${eq.make || ""}`.toLowerCase();
   if (/peplink|balance\s*2500|max\s*br/i.test(blob)) return "wan_router";
   if (/fortigate|firewall|asa|ftd|kerio/i.test(blob)) return "firewall";

@@ -26,6 +26,7 @@ import NetworkDiscoveryPage from './pages/NetworkDiscoveryPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 import { BrandingProvider } from './contexts/BrandingContext';
 import { SiteLocationsProvider } from './contexts/SiteLocationsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -42,6 +43,7 @@ function App() {
       <SiteLocationsProvider>
       <BrandingProvider>
       <Router>
+        <ErrorBoundary>
         <Routes>
           {/* Setup wizard — standalone, no layout */}
           <Route path="/setup" element={<FirstBootWizard />} />
@@ -74,6 +76,7 @@ function App() {
 
           <Route path="*" element={<PageNotFound />} />
         </Routes>
+        </ErrorBoundary>
       </Router>
       <Toaster position="top-right" richColors closeButton />
       </BrandingProvider>

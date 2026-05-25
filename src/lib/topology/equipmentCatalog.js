@@ -4,6 +4,7 @@ const CATEGORY_COLORS = {
   AV: "#60a5fa",
   Server: "#34d399",
   Power: "#fbbf24",
+  Router: "#fb923c",
   Lighting: "#f472b6",
   Other: "#94a3b8",
 };
@@ -14,6 +15,7 @@ const DEFAULTS_BY_CATEGORY = {
   AV: { ruHeight: 2, defaultWatts: 85, controlType: "REST", avRole: "encoder" },
   Server: { ruHeight: 2, defaultWatts: 65, controlType: "REST", avRole: "none" },
   Power: { ruHeight: 2, defaultWatts: 25, controlType: "none", avRole: "none" },
+  Router: { ruHeight: 1, defaultWatts: 35, controlType: "none", avRole: "none" },
   Lighting: { ruHeight: 1, defaultWatts: 20, controlType: "KNX", avRole: "none" },
   Other: { ruHeight: 1, defaultWatts: 15, controlType: "none", avRole: "none" },
 };
