@@ -231,15 +231,22 @@ export async function pollCiscoSwitchSnapshot(draft) {
     return { success: true, host: conn.host, mode: "demo", snapshot: buildMockSnapshot(conn) };
   }
   const live = await callMockCisco("pollAll", redactForWire(conn));
-  if (live && live.snapshot) return live;
-  if (live && live.success === false) return live;
-  // Fall back to mock data if the server can't reach the switch.
+  if (live && (live.snapshot || live.success === false)) return live;
+  if (live?._httpError || live?._network) {
+    return {
+      success: false,
+      host: conn.host,
+      mode: "live",
+      snapshot: null,
+      message: live.error || "Could not reach WaveGuard scanner service",
+    };
+  }
   return {
-    success: true,
+    success: false,
     host: conn.host,
-    mode: "mock",
-    snapshot: buildMockSnapshot(conn),
-    message: "Mock snapshot (mock-server unavailable or returned no data)",
+    mode: "live",
+    snapshot: null,
+    message: live?.error || "No snapshot returned from scanner",
   };
 }
 

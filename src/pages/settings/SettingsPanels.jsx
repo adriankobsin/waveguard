@@ -91,20 +91,49 @@ export function DashboardWidgetsPanel() {
 
 const INTEGRATION_DEFS = [
   { key: "snmp", label: "SNMP", fields: [{ k: "host", l: "Host" }, { k: "community", l: "Community" }, { k: "version", l: "Version (2c/3)" }] },
-  { key: "crestron", label: "Crestron", fields: [{ k: "host", l: "Host" }, { k: "user", l: "API user" }, { k: "password", l: "Password", secret: true }] },
-  { key: "qsys", label: "Q-SYS", fields: [{ k: "host", l: "Host" }, { k: "port", l: "Port" }] },
+  {
+    key: "cisco",
+    label: "Cisco (SSH)",
+    hint: "Manage switches under Core Network → Cisco Switches. Test here verifies SSH login.",
+    fields: [
+      { k: "host", l: "Switch IP" },
+      { k: "user", l: "SSH user" },
+      { k: "password", l: "SSH password", secret: true },
+      { k: "enablePassword", l: "Enable password (optional)", secret: true },
+    ],
+  },
+  { key: "crestron", label: "Crestron (CIP / NVX)", fields: [{ k: "host", l: "Processor or NVX IP" }, { k: "user", l: "API user (optional)" }, { k: "password", l: "Password", secret: true }] },
+  { key: "qsys", label: "Q-SYS", fields: [{ k: "host", l: "Core IP" }, { k: "port", l: "QRC port (1702)" }] },
   { key: "dahua", label: "Dahua CCTV", fields: [{ k: "host", l: "Host" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
-  { key: "mqtt", label: "MQTT", fields: [{ k: "brokerUrl", l: "Broker URL" }, { k: "topicPrefix", l: "Topic prefix" }] },
-  { key: "dali", label: "DALI", fields: [{ k: "host", l: "Gateway host" }] },
+  { key: "mqtt", label: "MQTT", fields: [{ k: "brokerUrl", l: "Broker URL (mqtt://host:1883)" }, { k: "topicPrefix", l: "Topic prefix" }] },
+  { key: "knx", label: "KNX", fields: [{ k: "host", l: "Gateway IP" }, { k: "port", l: "Port (3671)" }] },
+  { key: "dali", label: "DALI", fields: [{ k: "host", l: "Gateway host" }, { k: "port", l: "Port (5582)" }] },
   { key: "dmx", label: "DMX / Art-Net", fields: [{ k: "host", l: "Art-Net host" }] },
-  { key: "knx", label: "KNX", fields: [{ k: "host", l: "Gateway host" }, { k: "port", l: "Port" }] },
-  { key: "cisco", label: "Cisco RESTCONF", fields: [{ k: "host", l: "RESTCONF host" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }, { k: "merakiApiKey", l: "Meraki API key", secret: true }] },
+  { key: "modbus", label: "Modbus TCP", fields: [{ k: "host", l: "Host" }, { k: "port", l: "Port (502)" }] },
+  { key: "unifi", label: "UniFi (Ubiquiti)", fields: [{ k: "host", l: "Controller IP" }, { k: "port", l: "HTTPS port (8443)" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
+  { key: "dante", label: "Dante AV", fields: [{ k: "host", l: "Device or controller IP" }] },
+  { key: "symetrix", label: "Symetrix DSP", fields: [{ k: "host", l: "Host" }, { k: "port", l: "TCP port (48630)" }] },
 ];
 
 const defaultIntegrations = () => {
   const cfg = {};
   INTEGRATION_DEFS.forEach((i) => {
-    cfg[i.key] = { enabled: i.key === "snmp", host: "", port: i.key === "qsys" ? "1710" : i.key === "knx" ? "3671" : "" };
+    cfg[i.key] = {
+      enabled: i.key === "snmp",
+      host: "",
+      port:
+        i.key === "qsys"
+          ? "1702"
+          : i.key === "knx"
+            ? "3671"
+            : i.key === "modbus"
+              ? "502"
+              : i.key === "unifi"
+                ? "8443"
+                : i.key === "symetrix"
+                  ? "48630"
+                  : "",
+    };
   });
   return cfg;
 };
@@ -140,6 +169,17 @@ export function IntegrationsPanel() {
           ok: true,
           message: `${res.processor} — ${res.message}${detail ? ` (${detail})` : ""}`,
         });
+      } else if (key === "cisco") {
+        const ic = cfg[key] || {};
+        const { testCiscoSwitch } = await import("@/api/ciscoApi");
+        const res = await testCiscoSwitch({
+          host: ic.host,
+          sshUsername: ic.user || "cisco",
+          sshPassword: ic.password,
+          enablePassword: ic.enablePassword,
+        });
+        if (!res.success) throw new Error(res.message || res.error || "Cisco SSH test failed");
+        setTestResult({ key, ok: true, message: res.message || "Cisco SSH connection OK" });
       } else {
         const res = await testIntegration(key, cfg[key]);
         setTestResult({ key, ok: true, message: res.message });
@@ -159,7 +199,12 @@ export function IntegrationsPanel() {
         return (
           <div key={integ.key} className="rounded-xl border border-border bg-secondary/40 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-foreground">{integ.label}</p>
+              <div>
+                <p className="text-sm font-semibold text-foreground">{integ.label}</p>
+                {integ.hint && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5">{integ.hint}</p>
+                )}
+              </div>
               <Toggle on={!!ic.enabled} onToggle={() => updateIntegration(integ.key, { enabled: !ic.enabled })} />
             </div>
             {ic.enabled && (

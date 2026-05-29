@@ -3290,14 +3290,28 @@ app.post("/api/apps/:appId/backups/:id/restore", (req, res) => {
   res.json({ success: true, message: "Configuration restored" });
 });
 
-app.post("/api/apps/:appId/integrations/test", (req, res) => {
+app.post("/api/apps/:appId/integrations/test", async (req, res) => {
   const { integrationKey, config } = req.body;
-  if (!integrationKey) return res.status(400).json({ message: "integrationKey required" });
+  if (!integrationKey) return res.status(400).json({ message: "integrationKey required", ok: false });
+
+  const key = String(integrationKey).toLowerCase();
   const host = config?.host || config?.baseUrl || config?.brokerUrl;
-  if (!host && integrationKey !== "snmp") {
+
+  if (!host && !["snmp", "mqtt"].includes(key)) {
     return res.status(400).json({ message: "Host or URL required", ok: false });
   }
-  res.json({ ok: true, message: `${integrationKey} connection test succeeded (mock)` });
+
+  try {
+    const { runIntegrationProbe } = await import("../scanner/integrations/integrationProbes.js");
+    const result = await runIntegrationProbe(key, config || {});
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, message: result.message, detail: result.detail || null });
+    }
+    return res.json({ ok: true, message: result.message, detail: result.detail || null });
+  } catch (err) {
+    console.error("[integrations/test]", err);
+    return res.status(500).json({ ok: false, message: err.message || "Integration test failed" });
+  }
 });
 
 app.post("/api/apps/:appId/ai/test-key", (req, res) => {

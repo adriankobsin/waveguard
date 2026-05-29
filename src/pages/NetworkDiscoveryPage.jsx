@@ -37,8 +37,6 @@ export default function NetworkDiscoveryPage() {
   const fileInputRef = useRef(null);
   const DISCOVERY_RESULTS_KEY = "wg-discovery-results";
 
-  const filteredIds = filtered.map(d => d.id);
-
   useEffect(() => {
     if (!settingsLoading && discoveryCfg) {
       setSubnets(normalizeSubnetList(discoveryCfg.subnets));
@@ -289,6 +287,8 @@ export default function NetworkDiscoveryPage() {
     const matchClass = classFilter === "all" || d.classification === classFilter;
     return matchSearch && matchCat && matchClass;
   });
+
+  const filteredIds = filtered.map((d) => d.id);
 
   const categories = ["all", ...new Set(devices.map((d) => d.category).filter(Boolean))];
   const unclassified = devices.filter((d) => d.classification === "unclassified").length;

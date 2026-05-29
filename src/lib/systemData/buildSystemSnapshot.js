@@ -49,10 +49,11 @@ function buildTrafficSeries(logs) {
     }
   }
 
+  const hasData = (logs || []).length > 0;
   return buckets.map((b) => ({
     ...b,
-    inMbps: Math.round(Math.max(4, b.inMbps) * 10) / 10,
-    outMbps: Math.round(Math.max(2, b.outMbps) * 10) / 10,
+    inMbps: hasData ? Math.round(Math.max(4, b.inMbps) * 10) / 10 : 0,
+    outMbps: hasData ? Math.round(Math.max(2, b.outMbps) * 10) / 10 : 0,
   }));
 }
 
@@ -179,6 +180,7 @@ export function buildSystemSnapshot({
   const control = countByStatus(filterControl(devices));
   const lighting = countByStatus(filterCategory(devices, "Lighting"));
   const cctv = countByStatus(filterCategory(devices, "Camera"));
+  const power = countByStatus(filterCategory(devices, "Power"));
 
   const offline = devices.filter((d) => d.status === "offline");
   const warning = devices.filter((d) => d.status === "warning");
@@ -215,6 +217,7 @@ export function buildSystemSnapshot({
       control: { label: "Control processors", ...control },
       lighting: { label: "Lighting zones", ...lighting },
       cctv: { label: "Cameras", ...cctv },
+      power: { label: "Power", ...power },
     },
     traffic: buildTrafficSeries(logs),
     criticalAlarms,

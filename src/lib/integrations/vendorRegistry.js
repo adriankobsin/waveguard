@@ -50,11 +50,10 @@ export const VENDOR_REGISTRY = {
   unifi: {
     id: "unifi",
     label: "UniFi (Ubiquiti)",
-    phase: 2,
-    pollMethods: [],
+    phase: 1,
+    pollMethods: ["unifi_api"],
     capabilities: { snmp: false, rest: true, cellular: false, vpn: false },
     docsUrl: "https://help.ui.com/",
-    comingSoon: true,
   },
 };
 

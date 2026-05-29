@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
@@ -13,34 +12,56 @@ import {
 import StatusPulse from "../../StatusPulse";
 import { useSystemData } from "@/contexts/SystemDataContext";
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const STATS = { online: 47, offline: 3, warning: 5, alarms: 8 };
-
-const ALARMS = [
-  { id: "a1", title: "Cam-Bridge-01 offline", severity: "critical", time: "14m ago" },
-  { id: "a2", title: "SW-Deck-Lower CPU >80%", severity: "warning", time: "3h ago" },
-  { id: "a3", title: "WAN speed degraded (12 Mbps)", severity: "warning", time: "6h ago" },
-  { id: "a4", title: "UPS battery at 42%", severity: "warning", time: "1d ago" },
+const CATEGORY_WIDGETS = [
+  { key: "network", label: "Network", icon: Wifi, color: "#06b6d4" },
+  { key: "cctv", label: "Cameras", icon: Camera, color: "#a78bfa" },
+  { key: "av", label: "AV Systems", icon: Monitor, color: "#60a5fa" },
+  { key: "power", label: "Power", icon: Zap, color: "#34d399" },
 ];
 
-const CATEGORIES = [
-  { label: "Network", icon: Wifi, count: 18, online: 16, color: "#06b6d4" },
-  { label: "Cameras", icon: Camera, count: 14, online: 13, color: "#a78bfa" },
-  { label: "AV Systems", icon: Monitor, count: 9, online: 8, color: "#60a5fa" },
-  { label: "Power", icon: Zap, count: 6, online: 6, color: "#34d399" },
-];
+function emptyTrafficSeries() {
+  return Array.from({ length: 24 }, (_, i) => ({
+    time: `${String(i).padStart(2, "0")}:00`,
+    inMbps: 0,
+    outMbps: 0,
+  }));
+}
 
-const TRAFFIC = Array.from({ length: 48 }, (_, i) => ({
-  time: `${String(Math.floor(i / 2)).padStart(2, "0")}:${i % 2 === 0 ? "00" : "30"}`,
-  inMbps: Math.round((Math.random() * 45 + 8) * 10) / 10,
-  outMbps: Math.round((Math.random() * 30 + 5) * 10) / 10,
-}));
+function emptyWanLatencySeries() {
+  return Array.from({ length: 24 }, (_, i) => ({
+    hour: `${String(i).padStart(2, "0")}:00`,
+    latency: 0,
+  }));
+}
 
-const WAN_LATENCY = Array.from({ length: 24 }, (_, i) => ({
-  hour: `${String(i).padStart(2, "0")}:00`,
-  latency: Math.round(Math.random() * 60 + 8),
-}));
-WAN_LATENCY[18].latency = 210;
+function buildWanLatencySeries(wan) {
+  const latency = wan?.selected?.latencyMs ?? 0;
+  if (!wan?.configured && !latency) return emptyWanLatencySeries();
+  return Array.from({ length: 24 }, (_, i) => ({
+    hour: `${String(i).padStart(2, "0")}:00`,
+    latency,
+  }));
+}
+
+function computeStats(snapshot) {
+  if (!snapshot) return { online: 0, offline: 0, warning: 0, alarms: 0 };
+  const cats = Object.values(snapshot.categories || {});
+  return {
+    online: cats.reduce((sum, cat) => sum + (cat.online || 0), 0),
+    offline: cats.reduce((sum, cat) => sum + (cat.offline || 0), 0),
+    warning: cats.reduce((sum, cat) => sum + (cat.warning || 0), 0),
+    alarms:
+      (snapshot.criticalAlarms?.length || 0) + (snapshot.warningAlarms?.length || 0),
+  };
+}
+
+function buildAlarmList(snapshot) {
+  if (!snapshot) return [];
+  return [
+    ...(snapshot.criticalAlarms || []).map((alarm) => ({ ...alarm, severity: "critical" })),
+    ...(snapshot.warningAlarms || []).map((alarm) => ({ ...alarm, severity: "warning" })),
+  ];
+}
 
 // ─── Widget Types ─────────────────────────────────────────────────────────────
 export const WIDGET_TYPES = {
@@ -156,46 +177,70 @@ function StatCard({ label, value, icon: Icon, iconColor, iconBg }) {
 
 // ─── Widget Components ────────────────────────────────────────────────────────
 export function StatsGridWidget() {
+  const { snapshot } = useSystemData();
+  const stats = computeStats(snapshot);
+
   return (
     <div className="grid grid-cols-2 gap-3 h-full">
-      <StatCard label="Online" value={STATS.online} icon={CheckCircle2} iconColor="#4ade80" iconBg="rgba(74,222,128,0.1)" />
-      <StatCard label="Offline" value={STATS.offline} icon={WifiOff} iconColor="#f87171" iconBg="rgba(248,113,113,0.1)" />
-      <StatCard label="Warnings" value={STATS.warning} icon={AlertTriangle} iconColor="#fbbf24" iconBg="rgba(251,191,36,0.1)" />
-      <StatCard label="Open Alarms" value={STATS.alarms} icon={Activity} iconColor="#22d3ee" iconBg="rgba(34,211,238,0.1)" />
+      <StatCard label="Online" value={stats.online} icon={CheckCircle2} iconColor="#4ade80" iconBg="rgba(74,222,128,0.1)" />
+      <StatCard label="Offline" value={stats.offline} icon={WifiOff} iconColor="#f87171" iconBg="rgba(248,113,113,0.1)" />
+      <StatCard label="Warnings" value={stats.warning} icon={AlertTriangle} iconColor="#fbbf24" iconBg="rgba(251,191,36,0.1)" />
+      <StatCard label="Open Alarms" value={stats.alarms} icon={Activity} iconColor="#22d3ee" iconBg="rgba(34,211,238,0.1)" />
     </div>
   );
 }
 
 export function AlarmsWidget() {
+  const { snapshot } = useSystemData();
+  const alarms = buildAlarmList(snapshot);
+
   return (
     <Card>
       <div className="p-5 h-full flex flex-col">
         <h3 className="text-xs font-semibold text-foreground mb-4 flex items-center gap-2 uppercase tracking-widest">
           <AlertTriangle size={12} className="text-yellow-400" />
           Active Alarms
-          <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
-            {ALARMS.length}
-          </span>
+          {alarms.length > 0 && (
+            <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-400/10 text-yellow-400 border border-yellow-400/20">
+              {alarms.length}
+            </span>
+          )}
         </h3>
-        <div className="space-y-3 flex-1">
-          {ALARMS.map(alarm => (
-            <div key={alarm.id} className="flex items-start gap-3">
-              <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${alarm.severity === "critical" ? "bg-red-400" : "bg-yellow-400"}`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-foreground leading-snug">{alarm.title}</p>
-                <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
-                  <Clock size={8} />{alarm.time}
-                </p>
+        {alarms.length === 0 ? (
+          <p className="text-xs text-muted-foreground flex-1">No active alarms.</p>
+        ) : (
+          <div className="space-y-3 flex-1">
+            {alarms.map((alarm) => (
+              <div key={alarm.id} className="flex items-start gap-3">
+                <span className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${alarm.severity === "critical" ? "bg-red-400" : "bg-yellow-400"}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-foreground leading-snug">{alarm.title}</p>
+                  <p className="text-[10px] text-muted-foreground mt-0.5 flex items-center gap-1">
+                    <Clock size={8} />{alarm.time}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </Card>
   );
 }
 
 export function CategoriesWidget() {
+  const { snapshot } = useSystemData();
+  const categories = CATEGORY_WIDGETS.map(({ key, label, icon, color }) => {
+    const cat = snapshot?.categories?.[key] || { online: 0, total: 0 };
+    return {
+      label,
+      icon,
+      color,
+      online: cat.online || 0,
+      count: cat.total || 0,
+    };
+  });
+
   return (
     <Card>
       <div className="p-5 h-full flex flex-col">
@@ -204,7 +249,7 @@ export function CategoriesWidget() {
           System Categories
         </h3>
         <div className="space-y-4 flex-1">
-          {CATEGORIES.map(cat => (
+          {categories.map((cat) => (
             <div key={cat.label} className="flex items-center gap-3">
               <cat.icon size={13} style={{ color: cat.color, flexShrink: 0 }} />
               <div className="flex-1">
@@ -215,7 +260,7 @@ export function CategoriesWidget() {
                 <div className="h-1 rounded-full bg-secondary overflow-hidden">
                   <motion.div
                     initial={{ width: 0 }}
-                    animate={{ width: `${(cat.online / cat.count) * 100}%` }}
+                    animate={{ width: `${cat.count ? (cat.online / cat.count) * 100 : 0}%` }}
                     transition={{ duration: 1, ease: "easeOut" }}
                     className="h-full rounded-full"
                     style={{ background: cat.color }}
@@ -231,22 +276,43 @@ export function CategoriesWidget() {
 }
 
 export function WanStatusWidget() {
+  const { snapshot } = useSystemData();
+  const wan = snapshot?.wan;
+  const configured = !!wan?.configured;
+  const pulseStatus = configured ? (wan.status || "offline") : "offline";
+  const downloadMbps = configured ? (wan.downloadMbps ?? 0) : 0;
+  const uploadMbps = configured ? (wan.uploadMbps ?? 0) : 0;
+  const latencyMs = wan?.selected?.latencyMs ?? null;
+
+  const rows = configured
+    ? [
+        { label: "Provider", value: wan.isp || wan.selected?.isp || "—" },
+        { label: "Public IP", value: wan.publicIp || wan.selected?.publicIp || "—", mono: true },
+        {
+          label: "Latency",
+          value: latencyMs != null ? `${latencyMs} ms` : "—",
+          good: latencyMs != null && latencyMs < 100,
+        },
+        { label: "Link", value: wan.name || wan.selected?.name || "—" },
+        { label: "Router", value: wan.routerName || wan.selected?.routerName || "—" },
+      ]
+    : [
+        { label: "Provider", value: "Not configured" },
+        { label: "Public IP", value: "—", mono: true },
+        { label: "Latency", value: "—" },
+        { label: "Status", value: "No WAN link configured" },
+      ];
+
   return (
     <Card>
       <div className="p-5 h-full flex flex-col">
         <h3 className="text-xs font-semibold text-foreground mb-4 uppercase tracking-widest flex items-center gap-2">
           <Globe size={12} className="text-primary" />
           WAN Connection
-          <StatusPulse status="online" />
+          <StatusPulse status={pulseStatus} />
         </h3>
         <div className="space-y-2.5 mb-4 flex-1">
-          {[
-            { label: "Provider", value: "Starlink VSAT" },
-            { label: "Public IP", value: "185.234.10.91", mono: true },
-            { label: "Latency", value: "38 ms", good: true },
-            { label: "Packet Loss", value: "0.1%", good: true },
-            { label: "Uptime", value: "99.7%" },
-          ].map(r => (
+          {rows.map((r) => (
             <div key={r.label} className="flex justify-between text-xs">
               <span className="text-muted-foreground">{r.label}</span>
               <span className={`font-medium ${r.mono ? "font-mono" : ""} ${r.good ? "text-green-400" : "text-foreground"}`}>
@@ -258,12 +324,12 @@ export function WanStatusWidget() {
         <div className="grid grid-cols-2 gap-2">
           <div className="rounded-lg p-3 text-center bg-primary/10 border border-primary/20">
             <ArrowDownToLine size={11} className="text-primary mx-auto mb-1" />
-            <p className="text-base font-bold text-primary">47.2</p>
+            <p className="text-base font-bold text-primary">{downloadMbps.toFixed(1)}</p>
             <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Mbps ↓</p>
           </div>
           <div className="rounded-lg p-3 text-center bg-cyan-500/10 border border-cyan-500/20">
             <ArrowUpFromLine size={11} className="text-cyan-400 mx-auto mb-1" />
-            <p className="text-base font-bold text-cyan-400">18.6</p>
+            <p className="text-base font-bold text-cyan-400">{uploadMbps.toFixed(1)}</p>
             <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Mbps ↑</p>
           </div>
         </div>
@@ -273,6 +339,12 @@ export function WanStatusWidget() {
 }
 
 export function TrafficChartWidget() {
+  const { snapshot } = useSystemData();
+  const traffic =
+    snapshot?.monitoredCount > 0 && snapshot?.traffic?.length
+      ? snapshot.traffic
+      : emptyTrafficSeries();
+
   return (
     <Card>
       <div className="p-5 h-full flex flex-col">
@@ -292,7 +364,7 @@ export function TrafficChartWidget() {
         </div>
         <div className="flex-1 min-h-0">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={TRAFFIC} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
+            <AreaChart data={traffic} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
               <defs>
                 <linearGradient id="gCyan" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#06b6d4" stopOpacity={0.35} />
@@ -318,6 +390,9 @@ export function TrafficChartWidget() {
 }
 
 export function WanLatencyWidget() {
+  const { snapshot } = useSystemData();
+  const wanLatency = buildWanLatencySeries(snapshot?.wan);
+
   return (
     <Card>
       <div className="p-5 h-full flex flex-col">
@@ -327,7 +402,7 @@ export function WanLatencyWidget() {
         </h3>
         <div className="flex-1 min-h-0">
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={WAN_LATENCY} margin={{ top: 4, right: 4, bottom: 0, left: -24 }} barSize={5}>
+            <BarChart data={wanLatency} margin={{ top: 4, right: 4, bottom: 0, left: -24 }} barSize={5}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(217 33% 17% / 0.8)" vertical={false} />
               <XAxis dataKey="hour" tick={{ fontSize: 8, fill: "hsl(215 20% 45%)" }} interval={5} />
               <YAxis tick={{ fontSize: 8, fill: "hsl(215 20% 45%)" }} unit="ms" />

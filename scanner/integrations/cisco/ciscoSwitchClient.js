@@ -27,7 +27,10 @@ class CiscoSwitchClient extends EventEmitter {
     this.sshPort = Number(connection.sshPort) || 22;
     this.snmpPort = Number(connection.snmpPort) || 161;
     this.username = connection.sshUsername || connection.username || "cisco";
-    this.allowMock = connection.allowMock !== false;
+    // Live deployments must not silently substitute demo data when SSH fails.
+    this.allowMock =
+      connection.allowMock === true ||
+      process.env.WAVEGUARD_CISCO_ALLOW_MOCK === "1";
     this._ssh = new CiscoSshClient({
       host: this.host,
       port: this.sshPort,
