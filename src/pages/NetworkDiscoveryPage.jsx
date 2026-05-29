@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Radar, Play, Settings, Loader2, AlertTriangle, Search, Download } from "lucide-react";
+import { Radar, Play, Settings, Loader2, AlertTriangle, Search, Download, Upload, Trash2, Package, X } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import {
   DEFAULT_DISCOVERY_SETTINGS,
@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import DiscoveryResultsTable from "../components/discovery/DiscoveryResultsTable";
 import DiscoverySubnetConfig from "../components/discovery/DiscoverySubnetConfig";
 import DiscoverySummaryBar from "../components/discovery/DiscoverySummaryBar";
+import { useBulkSelection } from "@/hooks/useBulkSelection";
 
 export default function NetworkDiscoveryPage() {
   const { value: discoveryCfg, loading: settingsLoading } = useSettings(
@@ -32,6 +33,11 @@ export default function NetworkDiscoveryPage() {
   const [progress, setProgress] = useState(0);
   const [scannerHealth, setScannerHealth] = useState(null);
   const [registeringId, setRegisteringId] = useState(null);
+  const bulk = useBulkSelection();
+  const fileInputRef = useRef(null);
+  const DISCOVERY_RESULTS_KEY = "wg-discovery-results";
+
+  const filteredIds = filtered.map(d => d.id);
 
   useEffect(() => {
     if (!settingsLoading && discoveryCfg) {
@@ -39,6 +45,25 @@ export default function NetworkDiscoveryPage() {
       setScanType(discoveryCfg.scanType || "ping");
     }
   }, [settingsLoading, discoveryCfg]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(DISCOVERY_RESULTS_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.scanResult && parsed.devices) {
+          setScanResult(parsed.scanResult);
+          setDevices(parsed.devices);
+        }
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    if (scanResult && devices.length > 0) {
+      localStorage.setItem(DISCOVERY_RESULTS_KEY, JSON.stringify({ scanResult, devices }));
+    }
+  }, [scanResult, devices]);
 
   useEffect(() => {
     let cancelled = false;
@@ -71,6 +96,7 @@ export default function NetworkDiscoveryPage() {
     setScanResult(null);
     setDevices([]);
     setProgress(0);
+    bulk.clear();
 
     saveDiscoverySettingsLocal({ ...discoveryCfg, subnets: scanSubnets, scanType });
 
@@ -187,6 +213,70 @@ export default function NetworkDiscoveryPage() {
     }
   };
 
+  const clearResults = () => {
+    localStorage.removeItem(DISCOVERY_RESULTS_KEY);
+    setScanResult(null);
+    setDevices([]);
+    bulk.clear();
+    toast.success("Discovery results cleared");
+  };
+
+  const handleExportJSON = () => {
+    const data = JSON.stringify({ scanResult, devices, exportedAt: new Date().toISOString() }, null, 2);
+    const blob = new Blob([data], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "discovery-results.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const parsed = JSON.parse(evt.target.result);
+        if (parsed.devices) {
+          setScanResult(parsed.scanResult || { totalFound: parsed.devices.length, durationMs: 0, scanInterface: "imported" });
+          setDevices(parsed.devices);
+          bulk.clear();
+          toast.success(`Imported ${parsed.devices.length} devices`);
+        } else if (Array.isArray(parsed)) {
+          setScanResult({ totalFound: parsed.length, durationMs: 0, scanInterface: "imported" });
+          setDevices(parsed);
+          bulk.clear();
+          toast.success(`Imported ${parsed.length} devices`);
+        } else {
+          toast.error("Unrecognized discovery file format");
+        }
+      } catch {
+        toast.error("Invalid discovery file");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  };
+
+  const handleBulkAddToTopology = async () => {
+    const targets = devices.filter(d => bulk.selectedIds.has(d.id));
+    if (!targets.length) return;
+    setRegisteringId("bulk");
+    setDevices(prev => prev.map(d => bulk.selectedIds.has(d.id) ? { ...d, classification: "inventory" } : d));
+    try {
+      await registerDiscoveredDevices(targets, "inventory");
+      toast.success(`${targets.length} device${targets.length > 1 ? "s" : ""} added to topology`);
+      bulk.clear();
+    } catch (e) {
+      setDevices(prev => prev.map(d => bulk.selectedIds.has(d.id) ? { ...d, classification: "unclassified" } : d));
+      toast.error(e.message || "Bulk registration failed");
+    } finally {
+      setRegisteringId(null);
+    }
+  };
+
   const filtered = devices.filter((d) => {
     const q = search.toLowerCase();
     const matchSearch =
@@ -247,12 +337,33 @@ export default function NetworkDiscoveryPage() {
         </div>
         <div className="flex items-center gap-2">
           {scanResult && (
-            <button
-              onClick={exportCSV}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Download size={12} /> Export CSV
-            </button>
+            <>
+              <input ref={fileInputRef} type="file" accept=".json" onChange={handleImport} className="hidden" />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Upload size={12} /> Import
+              </button>
+              <button
+                onClick={handleExportJSON}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Download size={12} /> Export JSON
+              </button>
+              <button
+                onClick={exportCSV}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Download size={12} /> Export CSV
+              </button>
+              <button
+                onClick={clearResults}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 size={12} /> Clear
+              </button>
+            </>
           )}
           <button
             onClick={() => setShowConfig((s) => !s)}
@@ -374,6 +485,27 @@ export default function NetworkDiscoveryPage() {
               )
             }
           />
+          {bulk.count > 0 && (
+            <div className="flex items-center justify-between gap-3 px-5 py-2.5 border-b border-border bg-primary/5">
+              <span className="text-sm font-medium text-foreground">{bulk.count} selected</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleBulkAddToTopology}
+                  disabled={registeringId === "bulk"}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-400 transition-colors disabled:opacity-60"
+                >
+                  {registeringId === "bulk" ? <Loader2 size={12} className="animate-spin" /> : <Package size={12} />}
+                  Add to Topology
+                </button>
+                <button
+                  onClick={bulk.clear}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-border text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <X size={12} /> Clear selection
+                </button>
+              </div>
+            </div>
+          )}
           <div className="flex items-center gap-3 px-5 py-2.5 border-b border-border bg-card/40 flex-shrink-0 flex-wrap gap-y-2">
             <div className="relative flex-1 min-w-40 max-w-64">
               <Search size={11} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -428,6 +560,10 @@ export default function NetworkDiscoveryPage() {
               devices={filtered}
               onClassify={classify}
               registeringId={registeringId}
+              selectedIds={bulk.selectedIds}
+              onToggle={bulk.toggle}
+              onToggleAll={() => bulk.toggleAll(filteredIds)}
+              filteredIds={filteredIds}
             />
           </div>
         </div>

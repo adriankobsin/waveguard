@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Package, ChevronDown, ChevronRight, Wifi, Camera, Monitor, Zap, Server, Lightbulb, HelpCircle } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const CATEGORY_ICONS = {
   Network:  { icon: Wifi,      color: "text-cyan-400",   bg: "bg-cyan-500/12" },
@@ -27,7 +28,7 @@ function PortBadge({ port }) {
   );
 }
 
-function DeviceRow({ device, onClassify, index, registeringId }) {
+function DeviceRow({ device, onClassify, index, registeringId, isSelected, onToggle }) {
   const isRegistering = registeringId === device.id || registeringId === "bulk";
   const [expanded, setExpanded] = useState(false);
   const catMeta = CATEGORY_ICONS[device.category] || CATEGORY_ICONS.Unknown;
@@ -45,8 +46,12 @@ function DeviceRow({ device, onClassify, index, registeringId }) {
         }`}
         onClick={() => setExpanded(e => !e)}
       >
+        {/* Checkbox */}
+        <td className="pl-3 pr-1 py-3 w-8" onClick={e => e.stopPropagation()}>
+          <Checkbox checked={isSelected} onCheckedChange={() => onToggle(device.id)} />
+        </td>
         {/* Expand */}
-        <td className="pl-4 pr-2 py-3 w-8">
+        <td className="pl-1 pr-2 py-3 w-8">
           {expanded
             ? <ChevronDown size={12} className="text-muted-foreground" />
             : <ChevronRight size={12} className="text-muted-foreground" />
@@ -146,7 +151,7 @@ function DeviceRow({ device, onClassify, index, registeringId }) {
       {/* Expanded detail row */}
       {expanded && (
         <tr className="border-b border-border bg-muted/30">
-          <td colSpan={9} className="px-14 py-3">
+          <td colSpan={10} className="px-14 py-3">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
               <div>
                 <p className="text-muted-foreground mb-1 uppercase tracking-wide text-[10px]">IP Address</p>
@@ -179,7 +184,9 @@ function DeviceRow({ device, onClassify, index, registeringId }) {
   );
 }
 
-export default function DiscoveryResultsTable({ devices, onClassify, registeringId }) {
+export default function DiscoveryResultsTable({ devices, onClassify, registeringId, selectedIds, onToggle, onToggleAll, filteredIds }) {
+  const allSelected = filteredIds?.length > 0 && filteredIds.every(id => selectedIds?.has(id));
+  const someSelected = filteredIds?.some(id => selectedIds?.has(id));
   if (devices.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
@@ -193,7 +200,10 @@ export default function DiscoveryResultsTable({ devices, onClassify, registering
     <table className="w-full text-left">
       <thead className="sticky top-0 z-10 bg-card border-b border-border">
         <tr className="text-[10px] uppercase tracking-widest text-muted-foreground">
-          <th className="pl-4 pr-2 py-2.5 w-8" />
+          <th className="pl-3 pr-1 py-2.5 w-8">
+            <Checkbox checked={allSelected} onCheckedChange={() => onToggleAll?.()} aria-label="Select all" />
+          </th>
+          <th className="pl-1 pr-2 py-2.5 w-8" />
           <th className="px-2 py-2.5 w-10" />
           <th className="px-3 py-2.5">IP / Hostname</th>
           <th className="px-3 py-2.5 hidden md:table-cell">Vendor / MAC</th>
@@ -206,7 +216,7 @@ export default function DiscoveryResultsTable({ devices, onClassify, registering
       </thead>
       <tbody>
         {devices.map((device, i) => (
-          <DeviceRow key={device.id} device={device} onClassify={onClassify} index={i} registeringId={registeringId} />
+          <DeviceRow key={device.id} device={device} onClassify={onClassify} index={i} registeringId={registeringId} isSelected={selectedIds?.has(device.id)} onToggle={onToggle} />
         ))}
       </tbody>
     </table>

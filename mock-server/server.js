@@ -603,9 +603,7 @@ app.post("/api/apps/:appId/auth/change-password", (req, res) => {
 });
 
 app.get("/api/apps/:appId/entities/User/me", (req, res) => {
-  const token = req.headers["authorization"]?.replace("Bearer ", "");
-  const userId = db.sessions[token];
-  const user = userId ? db.users.find((u) => u.id === userId) : db.users[0];
+  const user = getRequestUser(req);
   res.json(sanitizeUser(user || db.users[0]));
 });
 
