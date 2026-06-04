@@ -23,6 +23,7 @@ import ReportsPage from './pages/ReportsPage';
 import LightingPage from './pages/LightingPage';
 import ScenesPage from './pages/ScenesPage';
 import NetworkDiscoveryPage from './pages/NetworkDiscoveryPage';
+import AudioPage from './pages/AudioPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -71,6 +72,7 @@ function App() {
             <Route path="/scenes" element={<ScenesPage />} />
             <Route path="/cisco-switches" element={<Navigate to="/snmp?tab=cisco" replace />} />
             <Route path="/discovery" element={<NetworkDiscoveryPage />} />
+            <Route path="/audio" element={<AudioPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 

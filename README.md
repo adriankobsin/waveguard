@@ -28,11 +28,11 @@ WaveGuard runs entirely on the host network — discovery, lighting control, SNM
 
 | Module | What it does |
 |---|---|
-| **Dashboard** | Real-time status overview with customisable widgets — device health, alerts, WAN status, **Lutron processor + lights**, **Cisco switch fleet**, network stats |
+| **Dashboard** | Real-time status overview with customisable widgets — device health, alerts, **WAN status (live public IP, gateway latency, speed test)**, **Lutron processor + lights**, **Cisco switch fleet**, network stats |
 | **Topology** | Filterable equipment list with per-device scan/edit, path tracing, groups, CSV import. Full SNMP scan only on **Refresh** |
 | **Topology — Deck / Rack / AV / Control** | Deck floor plans, rack elevation designer, AV signal flow, control-path diagrams |
 | **Core Network (SNMP)** | Live switch port status, connected device detection, cable fault hints, VLAN / PoE / speed display, **WAN management**, and **Cisco Switches** (Catalyst 1300 / CBS350 over SSH + SNMP) |
-| **Discovery** | Subnet scans (ping / ARP / full / SNMP), auto-classify discovered devices, register to inventory |
+| **Discovery** | Subnet scans (ping / ARP / full / SNMP), **browsable scan history sidebar**, auto-classify discovered devices, register to inventory |
 | **Diagnoses** | Aggregated diagnostic findings from every subsystem — network, SNMP, WAN, lighting (processor offline, zone rejected, zone unreachable). Severity-coded with acknowledgement |
 | **Maintenance** | Scheduled task management with priority levels, status tracking, due-date alerts |
 | **Equipment** | Equipment database with grid / list views, vessel spreadsheet import (Albatros-style multi-sheet `.xlsx`), bulk edit / delete |
@@ -278,6 +278,28 @@ Configure default subnets and SNMP credentials under **Settings → Discovery**.
 
 The **Core Network (SNMP)** page renders a live port map for every managed switch in inventory — port up/down, speed, VLAN, PoE power, link partner MAC + IP. Tabs include **Overview**, **Fleet**, **Cisco Switches**, **WAN Management**, **Alerts**, and **Settings**. The grid is built from periodic IF-MIB polls and a Bridge-MIB FDB pull; cable-fault hints come from comparing planned cables in the Cable Register to the live connected-port reality.
 
+### WAN Management (Peplink Router Integration)
+
+WaveGuard connects to **Peplink** routers via the on-device REST API (port 443) for live WAN monitoring:
+
+| Feature | Description |
+|---|---|
+| **Live WAN status** | Real-time connection state, IP, gateway, DNS for every WAN link |
+| **Public IP detection** | Fetched from `api.ipify.org` — handles CGNAT / LTE private IPs |
+| **Gateway latency** | ICMP ping to the active WAN gateway (5s timeout), displayed on dashboard |
+| **Cellular info** | IMEI, ICCID, IMSI, EID extracted from cellular modem connections |
+| **Device info** | Serial number, MAC addresses, model, hostname, firmware version |
+| **Speed test** | Simulated (Peplink `/api/cmd.speedtest` unsupported on current firmware) |
+| **Background polling** | Auto-polls every 30s (adjustable per-profile) — no manual refresh needed |
+
+**Setup:**
+1. Register the Peplink in **Discovery** or add it manually in **Topology → Add equipment** (IP: LAN address).
+2. Go to **Core Network → Fleet → Edit** on the Peplink equipment, set `Integration Vendor` to **Peplink**.
+3. Go to **Credentials Vault** and add browser-login credentials (username `admin`).
+4. The **WAN Management** tab shows live WAN links. The dashboard **WAN Connection** and **WAN Latency** widgets populate automatically.
+
+**Architecture:** Uses an adapter pattern (`baseAdapter.js` → `peplinkRouter.js`) for portability to other router vendors (MikroTik, Juniper, etc.). Authentication supports session login (cookie) and OAuth2 client credentials.
+
 ### Dashboard widgets
 
 | Widget | Shows |
@@ -285,7 +307,7 @@ The **Core Network (SNMP)** page renders a live port map for every managed switc
 | **Lutron lights** | Processor connection status (connected / offline / mock) and light loads on vs total |
 | **Cisco switches** | Online/offline count and per-switch reachability |
 | **Network** | Equipment health + SNMP fleet summary |
-| **WAN / internet** | Live WAN throughput, ISP details, speed test |
+| **WAN / internet** | Live WAN throughput, public IP, ISP, gateway latency, speed test button |
 
 Add or rearrange widgets from **Settings → Dashboard widgets** or the Dashboard edit mode.
 
@@ -423,6 +445,11 @@ scanner/integrations/
 ├── knx/knxClient.js
 ├── dali/daliClient.js
 ├── dmx/dmxClient.js
+├── routers/
+│   ├── baseAdapter.js      # Abstract adapter interface (retry, error classification)
+│   ├── transport.js        # Centralised fetch with timeout
+│   ├── index.js            # Adapter registry + vendor detection
+│   └── peplinkRouter.js    # Peplink REST API adapter (session/OAuth2, WAN, cellular)
 ├── peplinkPoll.js
 ├── wanSpeedTest.js
 └── cisco/                  # Catalyst 1300 / CBS350 — SSH (`ssh2`) + SNMP

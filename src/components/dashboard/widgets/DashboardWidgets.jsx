@@ -351,33 +351,54 @@ export function WanStatusWidget() {
   const [testing, setTesting] = useState(false);
   const [testVersion, setTestVersion] = useState(0);
 
-  const assigned = useMemo(() => {
-    const ids = wanMgmt?.assignedRouterEquipmentIds || [];
-    return ids.map(id => equipment.find(e => e.id === id)).filter(Boolean);
-  }, [wanMgmt, equipment]);
-
-  const router = assigned[0];
-
   const routerProfile = useMemo(() => {
-    if (!router) return null;
-    const found = profiles.find(p => p.equipmentId === router.id);
-    if (found) return found;
+    const ids = wanMgmt?.assignedRouterEquipmentIds || [];
+    // Find the first assigned equipment whose profile has live poll data
+    for (const id of ids) {
+      const eq = equipment.find(e => e.id === id);
+      if (!eq) continue;
+      const found = profiles.find(p => p.equipmentId === id);
+      if (found?.lastPoll?.ports?.length) return found;
+    }
+    // Fallback: first assigned equipment with any profile
+    for (const id of ids) {
+      const eq = equipment.find(e => e.id === id);
+      if (!eq) continue;
+      const found = profiles.find(p => p.equipmentId === id);
+      if (found) return found;
+    }
     // Synthetic fallback so the speed-test button is always clickable
-    return {
-      id: `snmp-sw-${router.id}`,
-      equipmentId: router.id,
-      enabled: true,
-      deviceRole: "wan_router",
-      integrationVendor: "snmp",
-      lastPoll: null,
-    };
-  }, [router, profiles]);
+    const firstEq = ids.map(id => equipment.find(e => e.id === id)).filter(Boolean)[0];
+    if (firstEq) {
+      return {
+        id: `snmp-sw-${firstEq.id}`,
+        equipmentId: firstEq.id,
+        enabled: true,
+        deviceRole: "wan_router",
+        integrationVendor: "snmp",
+        lastPoll: null,
+      };
+    }
+    return null;
+  }, [wanMgmt, equipment, profiles]);
+
+  const router = useMemo(() => {
+    if (!routerProfile) return null;
+    return equipment.find(e => e.id === routerProfile.equipmentId) || null;
+  }, [routerProfile, equipment]);
 
   const wanPort = useMemo(() => {
     if (!routerProfile) return null;
     const poll = routerProfile?.lastPoll;
     if (poll?.ports?.length) {
-      return poll.ports.find(p => p.meta?.type === "wan") || poll.ports.find(p => p.name?.toLowerCase().includes("wan")) || poll.ports[0];
+      const wans = poll.ports.filter(p => p.meta?.type === "wan");
+      const up = wans.find(p => p.status === "up");
+      if (up) return up;
+      const disabled = wans.find(p => p.status === "disabled");
+      if (disabled) return disabled;
+      const down = wans.find(p => p.status === "down");
+      if (down) return down;
+      return poll.ports.find(p => p.name?.toLowerCase().includes("wan")) || poll.ports[0];
     }
     // Synthetic WAN port for dashboard
     return { index: 1, name: "WAN1", meta: { type: "wan", publicIp: null } };
@@ -609,23 +630,50 @@ export function WanLatencyWidget() {
   const equipment = sources?.equipment || [];
   const profiles = sources?.snmpSwitches?.profiles || [];
 
-  const assigned = useMemo(() => {
+  const latencyMeta = useMemo(() => {
+    const fallback = { ms: null, label: null };
     const ids = wanMgmt?.assignedRouterEquipmentIds || [];
-    return ids.map(id => equipment.find(e => e.id === id)).filter(Boolean);
-  }, [wanMgmt, equipment]);
+    // Find first assigned equipment with poll data, then with any profile
+    let best = null;
+    for (const id of ids) {
+      const eq = equipment.find(e => e.id === id);
+      if (!eq) continue;
+      const profile = profiles.find(p => p.equipmentId === id);
+      if (profile?.lastPoll?.ports?.length) { best = { eq, profile }; break; }
+      if (profile && !best) best = { eq, profile };
+    }
+    if (!best) {
+      const first = ids.map(id => equipment.find(e => e.id === id)).filter(Boolean)[0];
+      if (first) best = { eq: first, profile: null };
+    }
+    if (!best) return fallback;
+    const poll = best.profile?.lastPoll;
+    const upWanPort = poll?.ports?.find(p => p.meta?.type === "wan" && p.status === "up");
+    const gatewayLatency = upWanPort?.meta?.latencyMs ?? null;
 
-  const router = assigned[0];
-
-  const speedTestLatency = useMemo(() => {
-    if (!router) return null;
-    const profile = profiles.find(p => p.equipmentId === router.id);
-    if (!profile) return null;
     const tests = loadWanSpeedTests();
-    const match = tests.filter(t => t.profileId === profile.id).sort((a, b) => new Date(b.testedAt) - new Date(a.testedAt))[0];
-    return match?.latencyMs ?? null;
-  }, [router, profiles]);
+    const match = tests.filter(t => t.profileId === best.profile?.id).sort((a, b) => new Date(b.testedAt) - new Date(a.testedAt))[0];
+    const speedTestLatency = match?.latencyMs ?? null;
 
-  const latencyMs = speedTestLatency ?? router?.responseTimeMs ?? null;
+    if (speedTestLatency != null) return { ms: speedTestLatency, label: "Latest speed test" };
+    if (gatewayLatency != null) return { ms: gatewayLatency, label: "Live gateway ping" };
+    if (best.eq?.responseTimeMs != null) return { ms: best.eq.responseTimeMs, label: "Ping response time" };
+    return fallback;
+  }, [wanMgmt, equipment, profiles]);
+
+  const latencyMs = latencyMeta.ms;
+
+  const router = useMemo(() => {
+    const ids = wanMgmt?.assignedRouterEquipmentIds || [];
+    for (const id of ids) {
+      const eq = equipment.find(e => e.id === id);
+      if (!eq) continue;
+      const profile = profiles.find(p => p.equipmentId === id);
+      if (profile?.lastPoll?.ports?.length) return eq;
+    }
+    const first = ids.map(id => equipment.find(e => e.id === id)).filter(Boolean)[0];
+    return first || null;
+  }, [wanMgmt, equipment, profiles]);
 
   if (!router) {
     return (
@@ -653,7 +701,7 @@ export function WanLatencyWidget() {
           {latencyMs != null ? (
             <>
               <p className="text-3xl font-bold tabular-nums text-foreground">{Math.round(latencyMs)}<span className="text-lg text-muted-foreground font-normal">ms</span></p>
-              <p className="text-[10px] text-muted-foreground mt-1">{speedTestLatency ? "Latest speed test" : "Ping response time"}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">{latencyMeta.label}</p>
             </>
           ) : (
             <>

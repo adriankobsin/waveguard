@@ -11,6 +11,13 @@ export { detectLocalSubnets, getScanInterfaceLabel, buildTopologyConnections, ma
 export { lookupVendor, guessCategory };
 export { pollSwitchPorts, testSwitchInterface, buildPollAllResponse, isSnmpWalkAvailable };
 
+// Router adapter library
+export { getRouterAdapter, detectRouterVendor, routerRegistry, getAllRouterVendors } from "./integrations/routers/index.js";
+export { peplinkRouterAdapter } from "./integrations/routers/peplinkRouter.js";
+export { ciscoRouterAdapter } from "./integrations/routers/ciscoRouterAdapter.js";
+export { fortinetRouterAdapter } from "./integrations/routers/fortinetRouterAdapter.js";
+export { genericRouterAdapter } from "./integrations/routers/genericRouterAdapter.js";
+
 const DEFAULT_OPTIONS = {
   subnets: ["192.168.10.0/24"],
   scanType: "ping",

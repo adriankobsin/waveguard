@@ -1,13 +1,16 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Globe,
   Plus,
   Server,
   X,
   Search,
+  Gauge,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buildWanLinks, WAN_PRIORITIES } from "@/lib/wan/wanManagementSettings";
+import { formatRelativeTime } from "@/lib/systemData/formatRelativeTime";
 import { formatSpeedMbps } from "@/lib/snmp/snmpAnalytics";
 import { runWanSpeedTest } from "@/api/wanApi";
 import {
@@ -18,7 +21,7 @@ import {
 import { DEVICE_ROLE_LABELS, getVendorInfo } from "@/lib/integrations/vendorRegistry";
 import WanLinkEditDrawer from "./WanLinkEditDrawer";
 import WanRouterDetailPanel from "./WanRouterDetailPanel";
-import { saveWanSpeedTestResult } from "@/lib/wan/wanWidgetStorage";
+import { saveWanSpeedTestResult, loadWanSpeedTestsWithServer } from "@/lib/wan/wanWidgetStorage";
 
 const STATUS_DOT = {
   online: "bg-emerald-500",
@@ -55,6 +58,8 @@ export default function SnmpWanManagementPanel({
   const [testingKey, setTestingKey] = useState(null);
   const [speedTests, setSpeedTests] = useState({});
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [latestTest, setLatestTest] = useState(null);
+  const [testUpdated, setTestUpdated] = useState(0);
 
   const wan = useMemo(
     () => buildWanLinks(snmpState, equipment, wanManagement),
@@ -194,6 +199,41 @@ export default function SnmpWanManagementPanel({
     });
   };
 
+  useEffect(() => {
+    loadWanSpeedTestsWithServer().then(tests => {
+      const sorted = (tests || []).sort((a, b) => new Date(b.testedAt) - new Date(a.testedAt));
+      setLatestTest(sorted[0] || null);
+    });
+  }, [testUpdated]);
+
+  const primaryLink = useMemo(() => {
+    return wan.links.find(l => l.status === "online" && l.profileId) || wan.links.find(l => l.profileId) || null;
+  }, [wan.links]);
+
+  const handleRunSpeedTest = async () => {
+    const link = primaryLink;
+    if (!link?.profileId || link?.portIndex == null) {
+      toast.error("No online polled WAN link to test");
+      return;
+    }
+    setTestingKey(link.key);
+    try {
+      const result = await runWanSpeedTest({
+        profileId: link.profileId,
+        portIndex: link.portIndex,
+        portName: link.portName || link.name,
+      });
+      saveWanSpeedTestResult({ ...result, profileId: link.profileId, portIndex: link.portIndex });
+      setSpeedTests((prev) => ({ ...prev, [link.key]: result }));
+      setLatestTest({ ...result, profileId: link.profileId, portIndex: link.portIndex });
+      toast.success(`Speed test: ↓${Math.round(result.downloadMbps)} ↑${Math.round(result.uploadMbps)} Mbps`);
+    } catch (err) {
+      toast.error(err.message || "Speed test failed");
+    } finally {
+      setTestingKey(null);
+    }
+  };
+
   const handleAssignRouter = async (eq) => {
     if (!onAssignRouter) {
       toast.error("Router assignment not available");
@@ -235,8 +275,17 @@ export default function SnmpWanManagementPanel({
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
+            onClick={handleRunSpeedTest}
+            disabled={testingKey || !primaryLink}
+            className="flex items-center gap-1.5 text-sm bg-primary text-primary-foreground rounded-xl px-3 py-2 hover:opacity-90 disabled:opacity-50"
+          >
+            {testingKey ? <Loader2 size={14} className="animate-spin" /> : <Gauge size={14} />}
+            {testingKey ? "Testing…" : "Speed test"}
+          </button>
+          <button
+            type="button"
             onClick={() => setPickerOpen(true)}
-            className="flex items-center gap-1.5 text-sm bg-primary text-primary-foreground rounded-xl px-3 py-2 hover:opacity-90"
+            className="flex items-center gap-1.5 text-sm bg-primary/10 text-primary border border-primary/20 rounded-xl px-3 py-2 hover:bg-primary/20"
           >
             <Plus size={14} /> Assign WAN router
           </button>
@@ -273,16 +322,16 @@ export default function SnmpWanManagementPanel({
         />
         <KpiCard label="Primary ISP" value={wan.summary.primaryIsp} sub="Active primary path" />
         <KpiCard
-          label="Live download"
-          value={wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateDownMbps)}
-          sub={wan.synthetic ? "Poll router to measure" : "Sum of online links"}
-          accent={wan.synthetic ? "text-muted-foreground" : "text-primary"}
+          label={latestTest ? "Speed test ↓" : "Live download"}
+          value={latestTest ? formatSpeedMbps(latestTest.downloadMbps) : (wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateDownMbps))}
+          sub={latestTest ? `Tested ${formatRelativeTime(latestTest.testedAt)}` : (wan.synthetic ? "Poll router to measure" : "Sum of online links")}
+          accent={latestTest ? "text-primary" : (wan.synthetic ? "text-muted-foreground" : "text-primary")}
         />
         <KpiCard
-          label="Live upload"
-          value={wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateUpMbps)}
-          sub={wan.synthetic ? "Poll router to measure" : "Sum of online links"}
-          accent={wan.synthetic ? "text-muted-foreground" : "text-emerald-400"}
+          label={latestTest ? "Speed test ↑" : "Live upload"}
+          value={latestTest ? formatSpeedMbps(latestTest.uploadMbps) : (wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateUpMbps))}
+          sub={latestTest ? `${Math.round(latestTest.latencyMs)}ms latency` : (wan.synthetic ? "Poll router to measure" : "Sum of online links")}
+          accent={latestTest ? "text-emerald-400" : (wan.synthetic ? "text-muted-foreground" : "text-emerald-400")}
         />
       </div>
 

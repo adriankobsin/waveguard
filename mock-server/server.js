@@ -33,8 +33,10 @@ import {
   normalizeCredentialsVault,
 } from "../src/lib/credentials/credentialsVault.js";
 import { mergePeplinkIntoPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
-import { fetchPeplinkStatus, testPeplinkConnection } from "../scanner/integrations/peplinkPoll.js";
-import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
+import { peplinkRouterAdapter } from "../scanner/integrations/routers/peplinkRouter.js";
+import { ciscoRouterAdapter } from "../scanner/integrations/routers/ciscoRouterAdapter.js";
+import { genericRouterAdapter } from "../scanner/integrations/routers/genericRouterAdapter.js";
+import { getRouterAdapter, detectRouterVendor } from "../scanner/integrations/routers/index.js";
 import {
   getLutronClient,
   closeLutronClient,
@@ -76,6 +78,7 @@ import {
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 import { loadPersistedDb, queueSave, pingAllOnStartup } from "./persistence.js";
 import { addClient, broadcast, clientCount } from "./events.js";
+import { getDb, seedTypes, listTypes, listConfigs, getConfig, createConfig, updateConfig, deleteConfig, logEvent, getLogs, getDashboardStats, getCategories } from "./db/database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Set WAVEGUARD_USE_MOCK_SCAN=true only for demos without LAN access. */
@@ -207,6 +210,7 @@ const db = {
   ],
   layoutTopology: [],
   equipment: [],
+  scanHistory: [],
   rackLayouts: [],
   signalLinks: [],
   speedTests: [],
@@ -691,7 +695,7 @@ app.post("/api/apps/:appId/functions/networkScan", async (req, res) => {
           mode,
           scanSubnets
         )[0];
-      return res.json({
+      const targetResult = {
         success: true,
         devices: [device],
         target,
@@ -701,23 +705,37 @@ app.post("/api/apps/:appId/functions/networkScan", async (req, res) => {
         subnets: scanSubnets,
         scanType: mode,
         scannedAt: new Date().toISOString(),
-      });
+      };
+      const targetEntry = { ...targetResult, devices: targetResult.devices.slice(0, 250) };
+      db.scanHistory.unshift({ id: "scan-" + Date.now(), ...targetEntry, savedAt: new Date().toISOString() });
+      if (db.scanHistory.length > 50) db.scanHistory.length = 50;
+      queueSave(db);
+      return res.json(targetResult);
     }
-    return res.json({
-      success: true,
-      devices,
-      totalFound: devices.length,
-      scanInterface: "eth0",
-      durationMs: mode === "full" ? 2500 : 1500,
-      subnets: scanSubnets,
-      scanType: mode,
-      scannedAt: new Date().toISOString(),
-    });
-  }
+      const result = {
+        success: true,
+        devices,
+        totalFound: devices.length,
+        scanInterface: "eth0",
+        durationMs: mode === "full" ? 2500 : 1500,
+        subnets: scanSubnets,
+        scanType: mode,
+        scannedAt: new Date().toISOString(),
+      };
+      const historyEntry = { ...result, devices: result.devices.slice(0, 250) };
+      db.scanHistory.unshift({ id: "scan-" + Date.now(), ...historyEntry, savedAt: new Date().toISOString() });
+      if (db.scanHistory.length > 50) db.scanHistory.length = 50;
+      queueSave(db);
+      return res.json(result);
+    }
 
-  try {
-    const result = await scan(mergeScanOptions(req.body));
-    res.json(result);
+    try {
+      const result = await scan(mergeScanOptions(req.body));
+      const historyEntry = { ...result, devices: (result.devices || []).slice(0, 250) };
+      db.scanHistory.unshift({ id: "scan-" + Date.now(), ...historyEntry, savedAt: new Date().toISOString() });
+      if (db.scanHistory.length > 50) db.scanHistory.length = 50;
+      queueSave(db);
+      res.json(result);
   } catch (err) {
     console.error("[networkScan]", err);
     res.status(500).json({ success: false, error: err.message });
@@ -824,6 +842,49 @@ app.post("/api/apps/:appId/functions/registerDiscoveredDevice", (req, res) => {
     console.error("[registerDiscoveredDevice]", err);
     res.status(500).json({ success: false, error: err.message });
   }
+});
+
+app.post("/api/apps/:appId/functions/saveScanHistory", (req, res) => {
+  try {
+    const entry = req.body;
+    if (!entry?.scannedAt) {
+      return res.status(400).json({ success: false, error: "scannedAt is required" });
+    }
+    const id = `scan-${Date.now()}`;
+    const record = { id, ...entry, savedAt: new Date().toISOString() };
+    db.scanHistory.unshift(record);
+    queueSave(db);
+    res.json({ success: true, scanHistory: record });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/apps/:appId/functions/scanHistory", (_req, res) => {
+  res.json({ success: true, scanHistory: db.scanHistory || [] });
+});
+
+app.post("/api/apps/:appId/functions/scanHistory", (_req, res) => {
+  res.json({ success: true, scanHistory: db.scanHistory || [] });
+});
+
+app.post("/api/apps/:appId/functions/deleteScanHistory", (req, res) => {
+  const { id } = req.body || {};
+  if (!id) return res.status(400).json({ success: false, error: "id is required" });
+  const idx = (db.scanHistory || []).findIndex((s) => s.id === id);
+  if (idx === -1) return res.status(404).json({ success: false, error: "Scan not found" });
+  db.scanHistory.splice(idx, 1);
+  queueSave(db);
+  res.json({ success: true });
+});
+
+app.delete("/api/apps/:appId/functions/scanHistory/:id", (req, res) => {
+  const { id } = req.params;
+  const idx = (db.scanHistory || []).findIndex((s) => s.id === id);
+  if (idx === -1) return res.status(404).json({ success: false, error: "Scan not found" });
+  db.scanHistory.splice(idx, 1);
+  queueSave(db);
+  res.json({ success: true });
 });
 
 function getSnmpSwitchesState() {
@@ -946,13 +1007,13 @@ async function pollProfileAndSave(profile) {
     profile.pollMethod === "peplink_hybrid" || profile.integrationVendor === "peplink";
   if (usePeplink) {
     try {
-      const pep = await fetchPeplinkStatus(profile, {
+      const result = await peplinkRouterAdapter.pollStatus(profile, {
         ip: opts.ip,
         equipment: eq,
-        forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
-        globalPeplinkCreds: getPeplinkCredentials(),
+        forceMock: process.env.PEPLINK_USE_MOCK === "1",
+        globalRouterCreds: getPeplinkCredentials(),
       });
-      poll = mergePeplinkIntoPoll(poll, pep);
+      poll = mergePeplinkIntoPoll(poll, result);
     } catch (err) {
       console.warn("[pollProfileAndSave] Peplink enrich failed:", err.message);
       if (!poll?.ports?.length) {
@@ -1134,13 +1195,17 @@ app.post("/api/apps/:appId/functions/peplinkTestConnection", async (req, res) =>
     }
     const eq = db.equipment.find((e) => e.id === profile.equipmentId);
     const disc = getDiscoverySettings();
-    const result = await testPeplinkConnection(profile, {
+
+    const vendor = profile.integrationVendor || detectRouterVendor(eq);
+    const adapter = getRouterAdapter(vendor);
+
+    const result = await adapter.testConnection(profile, {
       ip: equipmentIp(eq),
       equipment: eq,
-      forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
-      globalPeplinkCreds: getPeplinkCredentials(),
+      forceMock: process.env.PEPLINK_USE_MOCK === "1",
+      globalRouterCreds: getPeplinkCredentials(),
     });
-    if (MUTATE_METHODS.has(method)) queueSave(db);
+    res.json(result);
   } catch (err) {
     console.error("[peplinkTestConnection]", err);
     res.status(500).json({ success: false, error: err.message });
@@ -1156,12 +1221,16 @@ app.post("/api/apps/:appId/functions/wanSpeedTest", async (req, res) => {
     }
     const eq = db.equipment.find((e) => e.id === profile.equipmentId);
     const disc = getDiscoverySettings();
-    const result = await runWanSpeedTest(profile, {
+
+    const vendor = profile.integrationVendor || detectRouterVendor(eq);
+    const adapter = getRouterAdapter(vendor);
+
+    const result = await adapter.runSpeedTest(profile, {
       ip: equipmentIp(eq),
       equipment: eq,
       wanIndex: Number(portIndex) || 1,
       portName: portName || "",
-      forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
+      forceMock: process.env.PEPLINK_USE_MOCK === "1",
     });
     res.json({ ...result, profileId: profile.id, portIndex: Number(portIndex) || 1 });
   } catch (err) {
@@ -3324,6 +3393,89 @@ app.delete("/api/apps/:appId/users/:id", (req, res) => {
   res.json({ success: true });
 });
 
+// ---- Integration Database API ----
+seedTypes();
+
+app.get("/api/apps/:appId/integrations/dashboard", (_req, res) => {
+  res.json(getDashboardStats());
+});
+
+app.get("/api/apps/:appId/integrations/types", (req, res) => {
+  const { category } = req.query;
+  res.json(listTypes(category || null));
+});
+
+app.get("/api/apps/:appId/integrations/categories", (_req, res) => {
+  res.json(getCategories());
+});
+
+app.get("/api/apps/:appId/integrations/configs", (req, res) => {
+  const { type_id } = req.query;
+  res.json(listConfigs(type_id || null));
+});
+
+app.get("/api/apps/:appId/integrations/configs/:id", (req, res) => {
+  const cfg = getConfig(Number(req.params.id));
+  if (!cfg) return res.status(404).json({ message: "Config not found" });
+  res.json(cfg);
+});
+
+app.post("/api/apps/:appId/integrations/configs", (req, res) => {
+  const { type_id, label, host, port, username, password, api_key, api_url, options } = req.body;
+  if (!type_id || !label) return res.status(400).json({ message: "type_id and label are required" });
+  const cfg = createConfig({ type_id, label, host, port, username, password, api_key, api_url, options });
+  logEvent(cfg.id, "info", `Integration "${label}" created`);
+  res.status(201).json(cfg);
+});
+
+app.put("/api/apps/:appId/integrations/configs/:id", (req, res) => {
+  const { label, host, port, username, password, api_key, api_url, options, enabled } = req.body;
+  const cfg = updateConfig(Number(req.params.id), { label, host, port, username, password, api_key, api_url, options, enabled });
+  if (!cfg) return res.status(404).json({ message: "Config not found" });
+  logEvent(cfg.id, "info", `Integration "${cfg.label}" updated`);
+  res.json(cfg);
+});
+
+app.delete("/api/apps/:appId/integrations/configs/:id", (req, res) => {
+  const cfg = getConfig(Number(req.params.id));
+  if (!cfg) return res.status(404).json({ message: "Config not found" });
+  logEvent(cfg.id, "info", `Integration "${cfg.label}" deleted`);
+  deleteConfig(Number(req.params.id));
+  res.json({ success: true });
+});
+
+app.post("/api/apps/:appId/integrations/configs/:id/test", (req, res) => {
+  const cfg = getConfig(Number(req.params.id));
+  if (!cfg) return res.status(404).json({ message: "Config not found" });
+
+  let ok = false;
+  let detail = null;
+
+  if (cfg.host) {
+    const net = cfg.port ? `${cfg.host}:${cfg.port}` : cfg.host;
+    ok = true;
+    detail = `Resolved ${net}`;
+  } else if (cfg.api_url) {
+    ok = true;
+    detail = `API URL configured: ${cfg.api_url}`;
+  }
+
+  if (ok) {
+    updateConfig(cfg.id, { health_status: "online" });
+    logEvent(cfg.id, "info", `Test connection succeeded — ${detail}`);
+    res.json({ success: true, status: "online", detail });
+  } else {
+    updateConfig(cfg.id, { health_status: "offline" });
+    logEvent(cfg.id, "error", "Test connection failed — no host or API URL configured");
+    res.status(400).json({ success: false, status: "offline", detail: "No host or API URL configured" });
+  }
+});
+
+app.get("/api/apps/:appId/integrations/configs/:id/logs", (req, res) => {
+  const limit = Math.min(Number(req.query.limit) || 50, 500);
+  res.json(getLogs(Number(req.params.id), limit));
+});
+
 // ---- Start ----
 pollAllStoredCiscoSwitches().catch((err) => {
   console.warn("[ciscoPoll] initial fleet poll failed:", err?.message || err);
@@ -3334,6 +3486,43 @@ setInterval(() => {
   });
 }, CISCO_BACKGROUND_POLL_INTERVAL_MS);
 
+const DEFAULT_POLL_INTERVAL_MS = 30_000;
+
+async function pollAllSwitchProfiles() {
+  try {
+    const state = getSnmpSwitchesState();
+    const enabled = state.profiles.filter((p) => p.enabled !== false);
+    for (const profile of enabled) {
+      try {
+        const interval = (profile.pollIntervalSec || 30) * 1000;
+        const now = Date.now();
+        const last = profile.lastPollAt ? new Date(profile.lastPollAt).getTime() : 0;
+        if (now - last < interval) continue;
+        console.log(`[bgPoll] polling ${profile.equipmentId}...`);
+        const { profile: updated } = await pollProfileAndSave(profile);
+        const idx = state.profiles.findIndex((p) => p.id === updated.id);
+        if (idx >= 0) state.profiles[idx] = updated;
+      } catch (err) {
+        console.error(`[bgPoll] ${profile.equipmentId} failed:`, err?.message || err);
+      }
+    }
+    saveSnmpSwitchesState(state);
+  } catch (err) {
+    console.error("[bgPoll] main loop failed:", err?.message || err);
+  }
+}
+
+console.log("[bgPoll] starting initial poll...");
+pollAllSwitchProfiles().then(() => {
+  console.log("[bgPoll] initial poll complete");
+}).catch((err) => {
+  console.error("[bgPoll] initial poll failed:", err?.message || err);
+});
+console.log(`[bgPoll] background loop every ${DEFAULT_POLL_INTERVAL_MS / 1000}s`);
+setInterval(pollAllSwitchProfiles, DEFAULT_POLL_INTERVAL_MS);
+
+import createAudioRouter from "./audioRoutes.js";
+app.use(`/api/apps/${APP_ID}/audio`, createAudioRouter(db, broadcast));
 
 app.listen(PORT, () => {
   console.log(`[mock-base44] Server running at http://localhost:${PORT}`);

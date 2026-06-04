@@ -21,20 +21,83 @@ function mockProfileForPort(portName = "") {
   return MOCK_ISP_PROFILES.default;
 }
 
+async function sessionLogin(ip, username, password) {
+  const res = await fetch(`https://${ip}/api/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    throw new Error(`Login failed (${res.status})`);
+  }
+  const body = await res.json();
+  if (body.stat === "fail") {
+    throw new Error(`Login failed: ${body.message || "invalid credentials"}`);
+  }
+  const cookies = res.headers.getSetCookie?.() || [];
+  const bauth = cookies.find((c) => c.startsWith("bauth="));
+  if (!bauth) {
+    throw new Error("Peplink login succeeded but no bauth cookie received");
+  }
+  return bauth.split(";")[0];
+}
+
+async function getLocalToken(ip, clientId, clientSecret) {
+  const res = await fetch(`https://${ip}/api/auth.token.grant`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId, clientSecret, scope: "api" }),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`Token grant failed (${res.status}): ${text.slice(0, 160)}`);
+  }
+  const data = await res.json();
+  if (data.stat === "fail") {
+    throw new Error(`Token grant failed: ${data.message || "unknown"}`);
+  }
+  if (!data.response?.accessToken) {
+    throw new Error("No access token in Peplink response");
+  }
+  return data.response.accessToken;
+}
+
 async function pollLocalSpeedTest(ip, profile, wanIndex) {
-  const pep = profile.peplink || {};
-  const clientId = pep.localClientId;
-  const clientSecret = pep.localClientSecret;
-  if (!clientId || !clientSecret) {
+  const sessionCreds = profile.browserLogin?.username && profile.browserLogin?.password
+    ? { username: profile.browserLogin.username, password: profile.browserLogin.password }
+    : null;
+  const tokenCreds = profile.peplink?.localClientId && profile.peplink?.localClientSecret
+    ? { clientId: profile.peplink.localClientId, clientSecret: profile.peplink.localClientSecret }
+    : null;
+
+  if (!sessionCreds && !tokenCreds) {
     throw new Error("On-device API credentials required for speed test");
   }
-  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-  const res = await fetch(`https://${ip}/api/cmd.speedtest`, {
+
+  let authCookie = null;
+  let authToken = null;
+
+  if (sessionCreds) {
+    try {
+      authCookie = await sessionLogin(ip, sessionCreds.username, sessionCreds.password);
+    } catch (err) {
+      if (!tokenCreds) throw err;
+    }
+  }
+
+  if (!authCookie && tokenCreds) {
+    authToken = await getLocalToken(ip, tokenCreds.clientId, tokenCreds.clientSecret);
+  }
+
+  const authSuffix = authCookie ? "" : `?accessToken=${encodeURIComponent(authToken)}`;
+  const authHeaders = authCookie ? { Cookie: authCookie } : {};
+
+  const res = await fetch(`https://${ip}/api/cmd.speedtest${authSuffix}`, {
     method: "POST",
     headers: {
-      Authorization: `Basic ${auth}`,
       Accept: "application/json",
       "Content-Type": "application/json",
+      ...authHeaders,
     },
     body: JSON.stringify({ wan: wanIndex }),
   });
@@ -43,13 +106,17 @@ async function pollLocalSpeedTest(ip, profile, wanIndex) {
     throw new Error(`Speed test failed (${res.status}): ${text.slice(0, 160)}`);
   }
   const data = await res.json();
+  if (data.stat === "fail") {
+    throw new Error(`Speed test failed: ${data.message || "unknown error"}`);
+  }
+  const result = data.response || data;
   return {
     success: true,
-    downloadMbps: Number(data.download || data.down || 0),
-    uploadMbps: Number(data.upload || data.up || 0),
-    latencyMs: Number(data.latency || data.ping || 0) || null,
-    jitterMs: Number(data.jitter) || null,
-    server: data.server || "Peplink speed test",
+    downloadMbps: Number(result.download || result.down || 0),
+    uploadMbps: Number(result.upload || result.up || 0),
+    latencyMs: Number(result.latency || result.ping || 0) || null,
+    jitterMs: Number(result.jitter) || null,
+    server: result.server || "Peplink speed test",
     source: "peplink-local",
     testedAt: new Date().toISOString(),
   };
@@ -87,11 +154,15 @@ export async function runWanSpeedTest(profile, opts = {}) {
   }
 
   if (profile.integrationVendor === "peplink" || profile.pollMethod === "peplink_hybrid") {
-    if (ip && profile.peplink?.localClientId && profile.peplink?.localClientSecret) {
-      try {
-        return await pollLocalSpeedTest(ip, profile, wanIndex);
-      } catch (err) {
-        if (profile.peplink?.mode === "local") throw err;
+    if (ip) {
+      const hasSessionCreds = !!(profile.browserLogin?.username && profile.browserLogin?.password);
+      const hasTokenCreds = !!(profile.peplink?.localClientId && profile.peplink?.localClientSecret);
+      if (hasSessionCreds || hasTokenCreds) {
+        try {
+          return await pollLocalSpeedTest(ip, profile, wanIndex);
+        } catch (err) {
+          if (profile.peplink?.mode === "local") throw err;
+        }
       }
     }
     await new Promise((r) => setTimeout(r, 2000));

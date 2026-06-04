@@ -3,7 +3,7 @@ import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
   Wifi, Menu, X, Search, Bell, Share2, Zap,
-  BookOpen, Bot, Cable, Package, FileText, Lightbulb, Radar, HelpCircle,
+  BookOpen, Bot, Cable, Package, FileText,   Lightbulb, Music, Radar, HelpCircle,
   Sun, Moon, FlaskConical,
 } from "lucide-react";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
@@ -24,6 +24,7 @@ const NAV = [
   { to: "/documents", icon: BookOpen, label: "Documents" },
   { to: "/assistant", icon: Bot, label: "AI Assistant" },
   { to: "/lighting", icon: Lightbulb, label: "Lights and Shades" },
+  { to: "/audio", icon: Music, label: "Audio DSP" },
   { to: "/automation", icon: Zap, label: "Automation" },
   { to: "/reports", icon: FileText, label: "Reports" },
   { to: "/help", icon: HelpCircle, label: "Help" },
@@ -190,7 +191,7 @@ function AppLayoutContent() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
           {NAV.map(item => (
             <NavLink
               key={item.to}

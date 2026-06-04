@@ -88,3 +88,25 @@ export async function networkScan(payload, agentUrl) {
   }
   return postScannerFunction("networkScan", payload, agentUrl);
 }
+
+/** Save a scan result to history (server-side). */
+export async function saveScanHistory(scanResult) {
+  return postScannerFunction("saveScanHistory", scanResult);
+}
+
+/** Load all saved scan history entries from the server. */
+export async function loadScanHistory() {
+  const data = await postScannerFunction("scanHistory");
+  return data?.scanHistory || [];
+}
+
+/** Delete a scan history entry by id. */
+export async function deleteScanHistory(id) {
+  const base = getScannerBaseUrl();
+  const res = await fetch(`${base}/api/apps/${APP_ID}/functions/scanHistory/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to delete scan history");
+  return res.json();
+}

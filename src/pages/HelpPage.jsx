@@ -53,6 +53,8 @@ To change a user's role: go to Settings → Users → edit the user record.`
 • Active alarms count
 • Recent SNMP events
 • Maintenance tasks due this week
+• WAN Connection — live public IP, ISP, bandwidth, speed test
+• WAN Latency — live gateway ping (5ms typical on Starlink)
 • Bandwidth utilisation charts`
       },
       {
@@ -125,10 +127,25 @@ Click any alarm to navigate to the affected device's detail page.`
       {
         label: "Step 6 — Saving Layouts",
         body: `1. Arrange nodes as desired by dragging them
-2. Click Save Layout — enter a name
-3. Optionally set it as the Default layout (loaded on next visit)
-4. Use the Layout Selector dropdown to switch between saved layouts
-5. Layouts store node X/Y positions and custom connections`
+ 2. Click Save Layout — enter a name
+ 3. Optionally set it as the Default layout (loaded on next visit)
+ 4. Use the Layout Selector dropdown to switch between saved layouts
+ 5. Layouts store node X/Y positions and custom connections`
+      },
+      {
+        label: "Step 7 — Scan History & Revisiting Past Scans",
+        body: `The Discovery page (separate from Topology) maintains a browsable history of every network scan:
+
+1. Go to Discovery → run a subnet scan
+2. After the scan completes, it's automatically saved to the scan history sidebar
+3. Click the History icon (clock, top-left) to open the sidebar
+4. Past scans show: date/time, device count, scan type, subnet
+5. Click any past scan to reload its results — classify devices and add them to topology
+6. Use the search field to filter scans by date or subnet
+7. Click the X on a scan entry to delete it from history
+8. Click New to reset the page for a fresh scan
+
+History persists across server restarts (stored in waveguard-data.json). The last 50 scans are retained automatically.`
       }
     ]
   },
@@ -573,6 +590,114 @@ show restconf state
    • Meraki API key, Org ID, Network ID
 3. Click Test Connection — green tick confirms success
 4. Navigate to Topology → Refresh to pull Cisco device data`
+      }
+    ]
+  },
+  {
+    id: "peplink",
+    icon: Globe,
+    title: "Peplink Router",
+    color: "cyan",
+    steps: [
+      {
+        label: "Step 1 — Add the Peplink to Equipment",
+        body: `The Peplink router must be registered in WaveGuard's equipment database before it can be monitored.
+
+1. Go to Discovery → enter the Peplink's LAN subnet → Run Scan
+2. Find the Peplink in results (vendor shows as "Peplink" based on MAC OUI) → Classify as "Monitored" → Register
+3. Or add it manually: Topology → +Add Equipment → enter IP address (e.g. 192.168.1.134), name, make "Peplink"
+
+The equipment record must have the correct LAN IP address where the Peplink web admin UI is reachable.`
+      },
+      {
+        label: "Step 2 — Configure Integration Vendor on the Profile",
+        body: `Once the Peplink equipment exists:
+
+1. Go to Core Network → Fleet tab
+2. Find the Peplink equipment in the list
+3. Click the Edit (pencil) icon
+4. Under Integration Vendor, select Peplink
+5. Optionally set Poll Method to peplink_hybrid
+6. Click Save
+
+This creates an SNMP switch profile linked to the Peplink equipment with integrationVendor set to peplink.`
+      },
+      {
+        label: "Step 3 — Add Browser-Login Credentials",
+        body: `The Peplink REST API requires browser-login authentication:
+
+1. Go to Settings → Credentials Vault → +Add Credential
+2. Type: Browser Login
+3. Username: admin (default Peplink web admin user)
+4. Password: your Peplink admin password
+5. Click Save
+6. Return to Core Network → Fleet → Edit the Peplink profile
+7. Under Credentials, select the credential you just created
+8. Click Save
+
+The credential vault stores the username/password securely and links it to the profile.`
+      },
+      {
+        label: "Step 4 — Test the Connection",
+        body: `1. Go to Core Network → Fleet → find the Peplink profile
+2. Click the Test Connection button (lightning icon)
+3. The backend will:
+   a. Probe port 443 (HTTPS) on the Peplink IP
+   b. POST /api/login with the vault credentials
+   c. Extract session cookie from the response
+   d. GET /api/status.wan.connection for live WAN data
+   e. GET /api/info.firmware for firmware version
+   f. GET /api/status.system.info for serial, MACs, model
+4. If successful, the chip turns green with "Peplink B One 5G" (or your model)
+
+If it fails:
+• Verify the Peplink IP is correct and reachable on the LAN
+• Verify username/password in Credentials Vault
+• Check that NODE_TLS_REJECT_UNAUTHORIZED=0 is set in the server env (Peplink uses a self-signed HTTPS cert)
+• The server logs show detailed error messages`
+      },
+      {
+        label: "Step 5 — Background Polling & Dashboard",
+        body: `Once configured, the Peplink is polled automatically:
+
+• Every 30 seconds (configurable per-profile via pollIntervalSec)
+• The poll enriches the SNMP port data with live REST API data
+• WAN links appear in Core Network → WAN Management tab
+• The Dashboard widgets populate:
+  • WAN Connection — shows router name, public IP, ISP, bandwidth KPI cards, speed test button
+  • WAN Latency — shows live gateway ping latency (cascades from speed test → live poll → discovery ping)
+
+Dashboard WAN port selection: The widget intelligently picks the first UP WAN port from the poll data. If you have multiple WAN links (e.g. WAN1 down, WAN2 up with Starlink), it automatically selects the active one. The public IP shown is fetched from api.ipify.org to handle CGNAT/LTE scenarios where the Peplink reports a private IP.`
+      },
+      {
+        label: "Step 6 — Speed Test & Data Display",
+        body: `The WAN Management page includes a Speed Test button in the header and per-link KPI cards:
+
+1. Click Speed Test (top-right of WAN Management page or in the Dashboard widget)
+2. The test runs against the primary online WAN link
+3. Results show: Download Mbps, Upload Mbps, Latency (ms)
+4. KPI cards toggle between live aggregate speeds and the latest test result
+5. The latest test includes a "Tested X ago" timestamp
+
+Note: Peplink firmware 8.5.x does not expose /api/cmd.speedtest. Speed tests use a simulated measurement internally. Future firmware versions may support live speed tests.`
+      },
+      {
+        label: "Step 7 — WAN Management Settings",
+        body: `Fine-tune how WAN links appear:
+
+1. Go to Core Network → WAN Management tab
+2. Each router's WAN links are listed with their live status
+3. Click a link to edit override settings:
+   • Label — friendly name (e.g. "Starlink Maritime")
+   • ISP — override the detected ISP name
+   • Priority — Primary / Backup / Cellular / Spare
+   • Public IP Override — manually set if auto-detection is wrong
+   • Gateway / DNS Override — useful for failover testing
+   • Contract bandwidth — for comparison against live throughput
+4. Assigned Router Equipment IDs control which equipment is treated as a WAN router
+5. Manual WAN links can be added for non-polled routers
+
+WAN link ordering: Primary links appear first, then Backup, Cellular, Spare. Within each priority, links are sorted alphabetically by router name.`
       }
     ]
   },
