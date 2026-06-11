@@ -377,6 +377,8 @@ function redactForWire(conn) {
     sshUsername: conn.sshUsername,
     sshPassword: conn.sshPassword,
     enablePassword: conn.enablePassword,
+    platform: conn.platform,
+    snmpEnabled: conn.snmpEnabled,
     snmpPort: conn.snmpPort,
     snmpVersion: conn.snmpVersion,
     snmpCommunity: conn.snmpCommunity,

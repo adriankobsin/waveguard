@@ -7,11 +7,13 @@ import {
   LIGHTING_ZONE_STATE_SETTINGS_KEY,
   LIGHTING_LUTRON_CONNECTION_KEY,
   LIGHTING_CONNECTION_KEY,
+  LIGHTING_SYSTEMS_CONFIG_KEY,
   LIGHTING_CUSTOM_SCENES_KEY,
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
   LIGHTING_CONNECTION_CHANGED_EVENT,
+  LIGHTING_SYSTEMS_CHANGED_EVENT,
   LIGHTING_CUSTOM_SCENES_CHANGED_EVENT,
   DEFAULT_LIGHTING_HOUSE,
   DEFAULT_LUTRON_CONNECTION,
@@ -21,8 +23,12 @@ import {
   normalizeZoneState,
   normalizeLutronConnection,
   normalizeLightingConnection,
+  normalizeLightingSystemsConfig,
   normalizeCustomScene,
   normalizeCustomScenes,
+  connectionForSystemType,
+  defaultConnectionForSystemType,
+  migrateLegacyLightingConnections,
   loadLightingHouseLocal,
   saveLightingHouseLocal,
   loadZoneStateLocal,
@@ -31,6 +37,8 @@ import {
   saveLutronConnectionLocal,
   loadLightingConnectionLocal,
   saveLightingConnectionLocal,
+  loadLightingSystemsConfigLocal,
+  saveLightingSystemsConfigLocal,
   loadCustomScenesLocal,
   saveCustomScenesLocal,
   defaultPortForProtocol,
@@ -410,6 +418,92 @@ export async function saveLightingConnection(conn) {
   return persistLightingConnectionToSettings(normalized);
 }
 
+// ── Multi-system lighting configuration ───────────────────────────────────
+
+async function loadLightingSystemsConfigFromSettings() {
+  try {
+    const records = await base44.entities.SystemSettings.filter({
+      key: LIGHTING_SYSTEMS_CONFIG_KEY,
+    });
+    if (records.length > 0 && records[0].value != null) {
+      return normalizeLightingSystemsConfig(parseSettingsValue(records[0].value));
+    }
+  } catch (err) {
+    console.warn("[lightingApi] lighting systems config load failed:", err);
+  }
+  const migrated = migrateLegacyLightingConnections();
+  if (migrated?.enabled?.length) {
+    persistLightingSystemsConfigToSettings(migrated).catch((err) =>
+      console.warn("[lightingApi] lighting systems config migrate failed:", err)
+    );
+  }
+  return migrated;
+}
+
+async function persistLightingSystemsConfigToSettings(config) {
+  const normalized = normalizeLightingSystemsConfig(config);
+  saveLightingSystemsConfigLocal(normalized);
+
+  const lutronConn = connectionForSystemType(normalized, "lutron");
+  saveLutronConnectionLocal(lutronConn);
+  saveLightingConnectionLocal(lutronConn);
+
+  try {
+    const records = await base44.entities.SystemSettings.filter({
+      key: LIGHTING_SYSTEMS_CONFIG_KEY,
+    });
+    const payload = { key: LIGHTING_SYSTEMS_CONFIG_KEY, value: normalized };
+    if (records.length > 0) {
+      await base44.entities.SystemSettings.update(records[0].id, payload);
+    } else {
+      await base44.entities.SystemSettings.create(payload);
+    }
+  } catch (err) {
+    console.warn("[lightingApi] lighting systems config save failed:", err);
+  }
+  return normalized;
+}
+
+export async function loadLightingSystemsConfig() {
+  if (isDemoModeActive()) {
+    return loadLightingSystemsConfigLocal() || migrateLegacyLightingConnections();
+  }
+  return loadLightingSystemsConfigFromSettings();
+}
+
+export async function saveLightingSystemsConfig(config) {
+  const normalized = normalizeLightingSystemsConfig({
+    ...config,
+    updatedAt: new Date().toISOString(),
+  });
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(LIGHTING_SYSTEMS_CHANGED_EVENT, { detail: normalized })
+    );
+    const lutronConn = connectionForSystemType(normalized, "lutron");
+    window.dispatchEvent(
+      new CustomEvent(LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT, { detail: lutronConn })
+    );
+    window.dispatchEvent(
+      new CustomEvent(LIGHTING_CONNECTION_CHANGED_EVENT, { detail: lutronConn })
+    );
+  }
+  if (isDemoModeActive()) {
+    saveLightingSystemsConfigLocal(normalized);
+    const lutronConn = connectionForSystemType(normalized, "lutron");
+    saveLutronConnectionLocal(lutronConn);
+    saveLightingConnectionLocal(lutronConn);
+    return normalized;
+  }
+  return persistLightingSystemsConfigToSettings(normalized);
+}
+
+/** Connection for a specific lighting system type from the multi-system config. */
+export async function loadConnectionForSystem(systemType = "lutron") {
+  const config = await loadLightingSystemsConfig();
+  return connectionForSystemType(config, systemType);
+}
+
 // ── Lutron processor connection (integration credentials) ────────────────────
 
 async function loadLutronConnectionFromSettings() {
@@ -646,7 +740,7 @@ function rememberOcsZone(zoneHref) {
  * (a shade rejected as a dimmer is a silent no-op on most firmwares), so
  * always pass it from the UI when we know it.
  */
-export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind = null }) {
+export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind = null, systemType = "lutron" }) {
   if (!zoneHref) throw new Error("zoneHref required");
   const clamped = Math.max(0, Math.min(100, Number(level) || 0));
 
@@ -665,7 +759,7 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind 
     return result;
   }
 
-  const conn = await loadLutronConnection();
+  const conn = await loadConnectionForSystem(systemType);
   const liveEnabled = !!(conn?.enabled && conn?.host);
   const shadeFamily = isShadeFamilyHint(zoneKind);
 
@@ -675,7 +769,7 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind 
   // anyway — translating Open/Close → Raise/Lower up front is both
   // faster and keeps the event log clean.
   if (shadeFamily && ocsDiscoveredZones.has(zoneHref)) {
-    return _setShadeViaRaiseLower(zoneHref, clamped, zoneKind);
+    return _setShadeViaRaiseLower(zoneHref, clamped, zoneKind, systemType);
   }
 
   const remote = await callMockLutron("setZoneLevel", {
@@ -683,6 +777,12 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind 
     zoneKind,
     level: clamped,
     fadeSeconds,
+    systemType,
+    host: conn?.host,
+    port: conn?.port,
+    protocol: conn?.protocol,
+    username: conn?.username,
+    password: conn?.password,
   });
   if (remote?.success) {
     await broadcastZoneUpdate([remote.zone]);
@@ -713,7 +813,7 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind 
     isZoneTypeMismatchError(remote?.error)
   ) {
     try {
-      const result = await _setShadeViaRaiseLower(zoneHref, clamped, zoneKind);
+      const result = await _setShadeViaRaiseLower(zoneHref, clamped, zoneKind, systemType);
       rememberOcsZone(zoneHref);
       return result;
     } catch (raiseErr) {
@@ -773,12 +873,19 @@ export async function setZoneLevel({ zoneHref, level, fadeSeconds = 0, zoneKind 
  * path after a ZoneType-mismatch rejection and as the cached fast path
  * for zones we previously discovered to be OpenCloseStop.
  */
-async function _setShadeViaRaiseLower(zoneHref, clamped, zoneKind) {
+async function _setShadeViaRaiseLower(zoneHref, clamped, zoneKind, systemType = "lutron") {
+  const conn = await loadConnectionForSystem(systemType);
   const action = clamped >= 50 ? "raise" : "lower";
   const remote = await callMockLutron("raiseLowerStop", {
     zoneHref,
     zoneKind: zoneKind || "openCloseStop",
     action,
+    systemType,
+    host: conn?.host,
+    port: conn?.port,
+    protocol: conn?.protocol,
+    username: conn?.username,
+    password: conn?.password,
   });
   if (remote?.success) {
     const next = {
@@ -1046,7 +1153,7 @@ export function subscribeLutronEvents(onUpdate) {
  * the shade at its current position. `zoneKind` is forwarded so the LEAP
  * client can seed its kind cache without an extra ReadRequest probe.
  */
-export async function stopShade({ zoneHref, zoneKind = "shade" } = {}) {
+export async function stopShade({ zoneHref, zoneKind = "shade", systemType = "lutron" } = {}) {
   if (!zoneHref) throw new Error("zoneHref required");
   if (isDemoModeActive() || !isMockServer) {
     const r = getLocalEngine().raiseLower(zoneHref, "stop");
@@ -1054,10 +1161,17 @@ export async function stopShade({ zoneHref, zoneKind = "shade" } = {}) {
     return r;
   }
 
+  const conn = await loadConnectionForSystem(systemType);
   const remote = await callMockLutron("raiseLowerStop", {
     zoneHref,
     zoneKind,
     action: "stop",
+    systemType,
+    host: conn?.host,
+    port: conn?.port,
+    protocol: conn?.protocol,
+    username: conn?.username,
+    password: conn?.password,
   });
   if (remote?.success) {
     logEvent({ kind: "zone", zoneHref, action: "stop", result: "success", message: "Processor stopped shade" });
@@ -1131,8 +1245,9 @@ export async function testLutronProcessor(override = {}) {
  * it defaults to `"lutron"` for backward compatibility.
  */
 export async function testLightingProcessor(override = {}, systemType) {
-  const stored = await loadLightingConnection();
-  const effectiveType = systemType || override.systemType || stored.systemType || "lutron";
+  const config = await loadLightingSystemsConfig();
+  const effectiveType = systemType || override.systemType || "lutron";
+  const stored = connectionForSystemType(config, effectiveType);
   const merged = normalizeLightingConnection({ ...stored, ...override, systemType: effectiveType });
   const { host, protocol, username, password } = merged;
   const port = merged.port || defaultPortForProtocol(protocol, effectiveType);

@@ -48,8 +48,12 @@ export async function probeCiscoPorts(host) {
   }));
 }
 
-export function recommendationFromPorts(ports) {
+export function recommendationFromPorts(ports, { sshOnly = false } = {}) {
   const byRole = Object.fromEntries(ports.map((p) => [p.role, p]));
+  if (sshOnly) {
+    if (byRole.ssh?.open) return null;
+    return "SSH (port 22) is closed. Enable SSH on the switch.";
+  }
   if (byRole.ssh?.open && byRole.snmp?.open) {
     return null; // best case
   }

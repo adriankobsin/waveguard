@@ -37,6 +37,7 @@ import { fetchPeplinkStatus, testPeplinkConnection } from "../scanner/integratio
 import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
 import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
 import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
+import { buildMockCrestronEngine } from "../src/lib/integrations/crestron/crestronAdapter.js";
 import { buildMockDaliEngine } from "../src/lib/integrations/dali/daliAdapter.js";
 import { buildMockDmxEngine } from "../src/lib/integrations/dmx/dmxAdapter.js";
 import {
@@ -69,7 +70,7 @@ import {
   recommendationFromPorts as ciscoRecommendation,
 } from "../scanner/integrations/cisco/ciscoSwitchClient.js";
 import { mergeCiscoIntoPoll } from "../src/lib/integrations/cisco/ciscoAdapter.js";
-import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
+import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, LIGHTING_SYSTEMS_CONFIG_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
 import {
   NETWORK_CISCO_SWITCHES_KEY,
   normalizeCiscoSwitches,
@@ -1245,12 +1246,17 @@ const lutronEngine = buildMockLutronEngine();
 const knxEngine = buildMockKnxEngine();
 const daliEngine = buildMockDaliEngine();
 const dmxEngine = buildMockDmxEngine();
+const crestronEngine = buildMockCrestronEngine();
 
 function engineForSystemType(systemType) {
   switch (systemType) {
     case "knx": return knxEngine;
     case "dali": return daliEngine;
-    case "dmx": return dmxEngine;
+    case "dmx":
+    case "pharos":
+      return dmxEngine;
+    case "crestron":
+      return crestronEngine;
     default: return lutronEngine;
   }
 }
@@ -1267,6 +1273,29 @@ function getStoredLutronConnection() {
     }
   }
   return raw && typeof raw === "object" ? raw : null;
+}
+
+/** Pull per-system connection from the multi-system config, with legacy fallback. */
+function getStoredSystemConnection(systemType) {
+  const row = db.systemSettings.find((s) => s.key === LIGHTING_SYSTEMS_CONFIG_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  if (raw?.connections?.[systemType]) {
+    const conn = raw.connections[systemType];
+    if (conn?.host) return conn;
+  }
+  if (systemType === "lutron") {
+    return getStoredLutronConnection();
+  }
+  const generic = getStoredLightingConnection(systemType);
+  if (generic) return generic;
+  return null;
 }
 
 /** Pull the stored generic lighting connection by systemType. */
@@ -1304,15 +1333,13 @@ function resolveLiveConnection(reqBody = {}) {
         password: reqBody.password,
       }
     : null;
-  const stored =
-    systemType === "lutron"
-      ? getStoredLutronConnection()
-      : getStoredLightingConnection(systemType);
+  const stored = getStoredSystemConnection(systemType);
   const conn = override || stored;
   if (!conn?.enabled || !conn.host) return null;
   const protocol = conn.protocol === "leap" ? "leap" : conn.protocol || "telnet";
+  const USERNAME_OPTIONAL = new Set(["knx", "dali", "dmx", "pharos", "crestron"]);
   // LEAP uses TLS certificate authentication — username/password not required
-  if (protocol !== "leap" && !conn.username) return null;
+  if (protocol !== "leap" && !conn.username && !USERNAME_OPTIONAL.has(systemType)) return null;
   return {
     enabled: true,
     host: conn.host,
@@ -1420,6 +1447,8 @@ function resolveCiscoConnection(reqBody = {}) {
       sshUsername: reqBody.sshUsername || reqBody.username || "cisco",
       sshPassword: reqBody.sshPassword || reqBody.password,
       enablePassword: reqBody.enablePassword,
+      platform: reqBody.platform,
+      snmpEnabled: reqBody.snmpEnabled,
       snmpPort: reqBody.snmpPort,
       snmpVersion: reqBody.snmpVersion,
       snmpCommunity: reqBody.snmpCommunity,

@@ -109,6 +109,7 @@ const INTEGRATION_DEFS = [
   { key: "knx", label: "KNX", fields: [{ k: "host", l: "Gateway IP" }, { k: "port", l: "Port (3671)" }] },
   { key: "dali", label: "DALI", fields: [{ k: "host", l: "Gateway host" }, { k: "port", l: "Port (5582)" }] },
   { key: "dmx", label: "DMX / Art-Net", fields: [{ k: "host", l: "Art-Net host" }] },
+  { key: "pharos", label: "Pharos (DMX)", fields: [{ k: "host", l: "Pharos controller IP" }] },
   { key: "modbus", label: "Modbus TCP", fields: [{ k: "host", l: "Host" }, { k: "port", l: "Port (502)" }] },
   { key: "unifi", label: "UniFi (Ubiquiti)", fields: [{ k: "host", l: "Controller IP" }, { k: "port", l: "HTTPS port (8443)" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
   { key: "dante", label: "Dante AV", fields: [{ k: "host", l: "Device or controller IP" }] },
@@ -151,15 +152,15 @@ export function IntegrationsPanel() {
     setTesting(key);
     setTestResult(null);
     try {
-      if (key === "knx" || key === "dali" || key === "dmx") {
+      if (key === "knx" || key === "dali" || key === "dmx" || key === "pharos") {
         const ic = cfg[key] || {};
         const res = await testLightingProcessor({
           host: ic.host,
           port: Number(ic.port) || undefined,
           username: ic.user,
           password: ic.password,
-          systemType: key,
-        });
+          systemType: key === "pharos" ? "pharos" : key,
+        }, key === "pharos" ? "pharos" : key);
         if (!res.success) throw new Error(res.message || `${key.toUpperCase()} processor unreachable`);
         const detail = [res.product, res.firmware ? `fw ${res.firmware}` : null, res.api]
           .filter(Boolean)
