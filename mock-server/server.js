@@ -33,10 +33,12 @@ import {
   normalizeCredentialsVault,
 } from "../src/lib/credentials/credentialsVault.js";
 import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
-import { fetchPeplinkStatus, testPeplinkConnection } from "../scanner/integrations/peplinkPoll.js";
+import { lookupIpGeolocation } from "../scanner/integrations/geo/ipGeolocation.js";
+import { fetchOpenMeteoForecast } from "../scanner/integrations/weather/openMeteo.js";
 import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
 import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
 import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
+import { buildMockCrestronEngine } from "../src/lib/integrations/crestron/crestronAdapter.js";
 import { buildMockDaliEngine } from "../src/lib/integrations/dali/daliAdapter.js";
 import { buildMockDmxEngine } from "../src/lib/integrations/dmx/dmxAdapter.js";
 import {
@@ -62,6 +64,12 @@ import {
 import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
 import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
 import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
+import { getModbusClient, closeModbusClient, probeModbusPorts, recommendationFromPorts as modbusRecommendation } from "../scanner/integrations/modbus/modbusClient.js";
+import { getCoolmasterClient, closeCoolmasterClient, probeCoolmasterPorts, recommendationFromPorts as coolmasterRecommendation } from "../scanner/integrations/coolmaster/coolmasterClient.js";
+import { getRs485Client, closeRs485Client, probeRs485Ports, recommendationFromPorts as rs485Recommendation } from "../scanner/integrations/rs485/rs485Client.js";
+import { buildMockModbusEngine } from "../src/lib/integrations/modbus/modbusAdapter.js";
+import { buildMockCoolmasterEngine } from "../src/lib/integrations/coolmaster/coolmasterAdapter.js";
+import { buildMockRs485Engine } from "../src/lib/integrations/rs485/rs485Adapter.js";
 import {
   getCiscoSwitchClient,
   closeCiscoSwitchClient,
@@ -69,7 +77,7 @@ import {
   recommendationFromPorts as ciscoRecommendation,
 } from "../scanner/integrations/cisco/ciscoSwitchClient.js";
 import { mergeCiscoIntoPoll } from "../src/lib/integrations/cisco/ciscoAdapter.js";
-import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
+import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, LIGHTING_SYSTEMS_CONFIG_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
 import {
   NETWORK_CISCO_SWITCHES_KEY,
   normalizeCiscoSwitches,
@@ -674,6 +682,38 @@ app.get("/api/apps/:appId/scanner/health", (_req, res) => {
   res.json(getHealth());
 });
 
+app.post("/api/apps/:appId/functions/geoLocation", async (req, res) => {
+  try {
+    const ip = typeof req.body?.ip === "string" ? req.body.ip.trim() : "";
+    const result = await lookupIpGeolocation(ip || undefined);
+    res.json(result);
+  } catch (err) {
+    console.error("[geoLocation]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Geolocation lookup failed",
+      source: "ipapi.co",
+      lookedUpAt: new Date().toISOString(),
+    });
+  }
+});
+
+app.post("/api/apps/:appId/functions/weatherForecast", async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body || {};
+    const result = await fetchOpenMeteoForecast(latitude, longitude);
+    res.json(result);
+  } catch (err) {
+    console.error("[weatherForecast]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Weather lookup failed",
+      source: "open-meteo.com",
+      fetchedAt: new Date().toISOString(),
+    });
+  }
+});
+
 app.post("/api/apps/:appId/functions/discoverSubnets", (_req, res) => {
   const subnets = detectLocalSubnets();
   res.json({ success: true, subnets, scanInterface: getHealth().scanInterface });
@@ -1245,12 +1285,17 @@ const lutronEngine = buildMockLutronEngine();
 const knxEngine = buildMockKnxEngine();
 const daliEngine = buildMockDaliEngine();
 const dmxEngine = buildMockDmxEngine();
+const crestronEngine = buildMockCrestronEngine();
 
 function engineForSystemType(systemType) {
   switch (systemType) {
     case "knx": return knxEngine;
     case "dali": return daliEngine;
-    case "dmx": return dmxEngine;
+    case "dmx":
+    case "pharos":
+      return dmxEngine;
+    case "crestron":
+      return crestronEngine;
     default: return lutronEngine;
   }
 }
@@ -1267,6 +1312,29 @@ function getStoredLutronConnection() {
     }
   }
   return raw && typeof raw === "object" ? raw : null;
+}
+
+/** Pull per-system connection from the multi-system config, with legacy fallback. */
+function getStoredSystemConnection(systemType) {
+  const row = db.systemSettings.find((s) => s.key === LIGHTING_SYSTEMS_CONFIG_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  if (raw?.connections?.[systemType]) {
+    const conn = raw.connections[systemType];
+    if (conn?.host) return conn;
+  }
+  if (systemType === "lutron") {
+    return getStoredLutronConnection();
+  }
+  const generic = getStoredLightingConnection(systemType);
+  if (generic) return generic;
+  return null;
 }
 
 /** Pull the stored generic lighting connection by systemType. */
@@ -1304,15 +1372,13 @@ function resolveLiveConnection(reqBody = {}) {
         password: reqBody.password,
       }
     : null;
-  const stored =
-    systemType === "lutron"
-      ? getStoredLutronConnection()
-      : getStoredLightingConnection(systemType);
+  const stored = getStoredSystemConnection(systemType);
   const conn = override || stored;
   if (!conn?.enabled || !conn.host) return null;
   const protocol = conn.protocol === "leap" ? "leap" : conn.protocol || "telnet";
+  const USERNAME_OPTIONAL = new Set(["knx", "dali", "dmx", "pharos", "crestron"]);
   // LEAP uses TLS certificate authentication — username/password not required
-  if (protocol !== "leap" && !conn.username) return null;
+  if (protocol !== "leap" && !conn.username && !USERNAME_OPTIONAL.has(systemType)) return null;
   return {
     enabled: true,
     host: conn.host,
@@ -1420,6 +1486,8 @@ function resolveCiscoConnection(reqBody = {}) {
       sshUsername: reqBody.sshUsername || reqBody.username || "cisco",
       sshPassword: reqBody.sshPassword || reqBody.password,
       enablePassword: reqBody.enablePassword,
+      platform: reqBody.platform,
+      snmpEnabled: reqBody.snmpEnabled,
       snmpPort: reqBody.snmpPort,
       snmpVersion: reqBody.snmpVersion,
       snmpCommunity: reqBody.snmpCommunity,

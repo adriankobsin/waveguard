@@ -320,3 +320,132 @@ Every subsystem emits diagnoses into the central generator (`src/lib/systemData/
 | Connected Devices tab is empty | LLDP / CDP not enabled on the switch; or the operator hasn't polled yet | Enable LLDP under Administration → Discovery → LLDP. CDP is auto-enabled by default; if it was disabled, re-enable it under Discovery → CDP. |
 | `ssh2 is not installed` error from the Cisco modal | The `scanner/node_modules` hasn't been rebuilt since `ssh2` was added | Run `npm install` at the project root (postinstall installs `scanner/`) or `npm install` inside `scanner/` |
 | Switch logs `%AAA-W-REJECT` for telnet | A client probed port 23 | WaveGuard no longer probes Telnet during Cisco port discovery — only SSH (22) and SNMP (161) |
+
+---
+
+## 10. HVAC Integration (Modbus TCP)
+
+| Setting | Value |
+|---|---|
+| Protocol | Modbus TCP (RTU encapsulation) |
+| Default port | TCP 502 |
+| Unit ID | 1–247 (default 1) |
+| Live client | `scanner/integrations/modbus/modbusClient.js` |
+| Mock engine | `src/lib/integrations/modbus/modbusAdapter.js` |
+
+### Configure
+
+1. **Settings → Integrations → Modbus TCP (HVAC)**.
+2. Enter the **host** (Modbus gateway/controller IP) and optional **unit ID**.
+3. Click **Test connection** — the probe sends a `Read Holding Registers` (FC 03) to confirm the protocol handshake.
+4. Save — the integration is registered for the dashboard and diagnoses pipeline.
+
+### Addressing
+
+Modbus register addresses are mapped as follows:
+
+| Prefix | What it does | Example |
+|---|---|---|
+| `reg:<addr>` | Write a single holding register (FC 06) with 0–65535 scaled from 0–100% | `reg:0` → register 0 |
+| `coil:<addr>` | Write a single coil (FC 05) | `coil:0` → coil 0 |
+| `hvac_temp:<zone>` | Write a temperature setpoint (register × 10 = °C) | `hvac_temp:0` → register 0×2 = 20.0°C |
+| `hvac_mode:<zone>` | Write HVAC mode (0=off, 1=heat, 2=cool, 3=auto) | `hvac_mode:0` → register 1 |
+
+### Typical HVAC register map (example)
+
+| Register | Function | Format |
+|---|---|---|
+| 0 | Zone 1 setpoint | °C × 10 (e.g. 220 = 22.0°C) |
+| 1 | Zone 1 mode | 0=off, 1=heat, 2=cool, 3=auto |
+| 2 | Zone 2 setpoint | °C × 10 |
+| 3 | Zone 2 mode | 0–3 |
+| ... | ... | ... |
+
+---
+
+## 11. HVAC Integration (Coolmaster Net)
+
+| Setting | Value |
+|---|---|
+| Protocol | Coolmaster Net (Mitsubishi VRF/heat pump) |
+| Default port | TCP 10102 |
+| Live client | `scanner/integrations/coolmaster/coolmasterClient.js` |
+| Mock engine | `src/lib/integrations/coolmaster/coolmasterAdapter.js` |
+
+### Configure
+
+1. **Settings → Integrations → Coolmaster Net (HVAC)**.
+2. Enter the **host** (Coolmaster controller IP) and optional **unit ID**.
+3. Click **Test connection** — the probe sends a `#0,0,0,\r\n` query and expects a `#` response.
+4. Save.
+
+### Protocol format
+
+Commands follow the Coolmaster ASCII protocol:
+
+| Command | Format | Example |
+|---|---|---|
+| Query unit | `#<id>,<unit>,0,\r\n` | `#0,0,0,\r\n` |
+| Set temperature | `#<id>,<unit>,1,<temp>\r\n` | `#0,0,1,22\r\n` |
+| Set mode | `#<id>,<unit>,2,<mode>\r\n` | `#0,0,2,1\r\n` (1=cool, 2=heat) |
+| Set fan speed | `#<id>,<unit>,3,<speed>\r\n` | `#0,0,3,4\r\n` (4=auto) |
+| Set power | `#<id>,<unit>,4,<on>\r\n` | `#0,0,4,1\r\n` |
+
+---
+
+## 12. HVAC Integration (RS485 Serial Bridge)
+
+| Setting | Value |
+|---|---|
+| Protocol | TCP-to-RS485 bridge (USR-N510 and similar) |
+| Default port | TCP 4001 |
+| Live client | `scanner/integrations/rs485/rs485Client.js` |
+| Mock engine | `src/lib/integrations/rs485/rs485Adapter.js` |
+
+### Configure
+
+1. **Settings → Integrations → RS485 Serial Bridge (HVAC)**.
+2. Enter the **bridge IP** and **TCP port**.
+3. Optionally set **baud rate** (default 9600) and **encoding** (ascii or hex).
+4. Click **Test connection** — the probe checks common ports (4001–4005, 8899, 2000, 2001).
+5. Save.
+
+### Usage
+
+The RS485 bridge forwards raw ASCII or hex commands from WaveGuard to any serial HVAC device connected to the bridge. Configure the serial parameters (baud, data bits, parity, stop bits) in the bridge's web interface to match your HVAC bus.
+
+---
+
+## 13. KNX HVAC (KNX DPT extension)
+
+The existing KNX integration (`scanner/integrations/knx/knxClient.js`) has been extended with HVAC-specific DPT writers:
+
+| DPT | Method | Description |
+|---|---|---|
+| 9.001 | `writeHvacTemperature(groupAddr, tempC)` | 2-byte IEEE float temperature (-273–+670760°C) |
+| 5.001 | `writeHvacSetpoint(groupAddr, tempC)` | 1-byte 0–100% → scaled to 0–40°C range |
+| 20.102 | `writeHvacMode(groupAddr, mode)` | HVAC mode (auto/comfort/standby/night/frost) |
+| 1.001 | `writeHvacOnOff(groupAddr, on)` | Binary on/off control |
+
+The mock engine (`src/lib/integrations/knx/knxAdapter.js`) seeds 4 HVAC zones with temperature, setpoint, mode, and on/off group addresses.
+
+HVAC group addresses for KNX follow a conventional structure:
+
+| Function | Main group | Middle | Sub |
+|---|---|---|---|
+| Temperature feedback | 2 | zone | 0 |
+| Setpoint write | 3 | zone | 0 |
+| HVAC mode | 4 | zone | 0 |
+| On/Off | 5 | zone | 0 |
+| Humidity feedback | 6 | zone | 0 |
+
+---
+
+## 14. Troubleshooting — HVAC
+
+| Symptom | Most likely cause | Fix |
+|---|---|---|
+| Modbus probe fails | Unit ID mismatch or register out of range | Verify the unit ID on the Modbus controller. Try reading register 0 with unit ID 1. |
+| Modbus "Illegal Data Address" | The controller doesn't support the probed register | Some controllers require specific function code access. Try adjusting register address. |
+| Coolmaster probe times out | Wrong IP or port, or controller not powered | Default port is 10102. Verify the Coolmaster's web interface is accessible. |
+| RS485 bridge connects but no data | Baud rate or serial params don't match the HVAC device | Check the HVAC device manual for correct serial settings. Common: 9600 8N1. |

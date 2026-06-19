@@ -14,21 +14,25 @@ import { saveRackLayoutLocal } from "@/lib/rackLayoutStorage";
 import {
   DEFAULT_LIGHTING_HOUSE,
   DEFAULT_LIGHTING_CONNECTION,
+  DEFAULT_LIGHTING_SYSTEMS_CONFIG,
   DEFAULT_CUSTOM_SCENES,
   DEFAULT_LIGHTING_EVENT_LOG,
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
   LIGHTING_CONNECTION_CHANGED_EVENT,
+  LIGHTING_SYSTEMS_CHANGED_EVENT,
   LIGHTING_CUSTOM_SCENES_CHANGED_EVENT,
   LIGHTING_EVENT_LOG_CHANGED_EVENT,
   clearLightingHouseLocal,
   clearLutronConnectionLocal,
   clearLightingConnectionLocal,
+  clearLightingSystemsConfigLocal,
   saveLightingHouseLocal,
   saveZoneStateLocal,
   saveLutronConnectionLocal,
   saveLightingConnectionLocal,
+  saveLightingSystemsConfigLocal,
   saveCustomScenesLocal,
   saveLightingEventLogLocal,
 } from "@/lib/lighting/lightingSettings";
@@ -70,6 +74,7 @@ const LOCAL_STORAGE_KEYS = [
   "waveguard:lighting:active-scene",
   "waveguard:lighting:lutron-connection",
   "waveguard:lighting:connection",
+  "waveguard:lighting:systems-config",
   "waveguard:lighting:custom-scenes",
   "waveguard:lighting:event-log",
   "waveguard:lighting:ocs-zones",
@@ -109,11 +114,13 @@ export function clearPlatformBrowserCaches() {
   clearLightingHouseLocal();
   clearLutronConnectionLocal();
   clearLightingConnectionLocal();
+  clearLightingSystemsConfigLocal();
   clearCiscoSwitchesLocal();
 
   const lightingHouse = { ...DEFAULT_LIGHTING_HOUSE };
   const lutronConnection = { ...DEFAULT_LIGHTING_CONNECTION };
   const lightingConnection = { ...DEFAULT_LIGHTING_CONNECTION };
+  const lightingSystemsConfig = { ...DEFAULT_LIGHTING_SYSTEMS_CONFIG };
   const customScenes = { ...DEFAULT_CUSTOM_SCENES };
   const lightingEventLog = { ...DEFAULT_LIGHTING_EVENT_LOG };
   const ciscoSwitches = { ...DEFAULT_CISCO_SWITCHES };
@@ -125,6 +132,7 @@ export function clearPlatformBrowserCaches() {
   saveZoneStateLocal({});
   saveLutronConnectionLocal(lutronConnection);
   saveLightingConnectionLocal(lightingConnection);
+  saveLightingSystemsConfigLocal(lightingSystemsConfig);
   saveCustomScenesLocal(customScenes);
   saveLightingEventLogLocal(lightingEventLog);
   saveCiscoEventLogLocal(ciscoEventLog);
@@ -140,6 +148,7 @@ export function clearPlatformBrowserCaches() {
   window.dispatchEvent(new CustomEvent(LIGHTING_ZONE_STATE_CHANGED_EVENT, { detail: { state: {} } }));
   window.dispatchEvent(new CustomEvent(LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT, { detail: lutronConnection }));
   window.dispatchEvent(new CustomEvent(LIGHTING_CONNECTION_CHANGED_EVENT, { detail: lightingConnection }));
+  window.dispatchEvent(new CustomEvent(LIGHTING_SYSTEMS_CHANGED_EVENT, { detail: lightingSystemsConfig }));
   window.dispatchEvent(new CustomEvent(LIGHTING_CUSTOM_SCENES_CHANGED_EVENT, { detail: customScenes }));
   window.dispatchEvent(new CustomEvent(LIGHTING_EVENT_LOG_CHANGED_EVENT, { detail: lightingEventLog }));
   window.dispatchEvent(new CustomEvent(NETWORK_CISCO_SWITCHES_CHANGED_EVENT, { detail: ciscoSwitches }));

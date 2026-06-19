@@ -220,7 +220,11 @@ export default function CiscoConnectionModal({
                   <p className="text-[11px] text-muted-foreground">
                     {phase === "success"
                       ? "Connected"
-                      : "Catalyst 1300 / CBS350 — SSH + SNMP"}
+                      : draft.platform === "ios-xe"
+                        ? "Catalyst 9200/9300 — SSH only"
+                        : draft.snmpEnabled === false
+                          ? "SSH only (SNMP disabled)"
+                          : "Catalyst 1300 / CBS350 / 9200 — SSH"}
                   </p>
                 </div>
               </div>
@@ -359,6 +363,44 @@ export default function CiscoConnectionModal({
                     className="overflow-hidden"
                   >
                     <div className="space-y-3 pt-1">
+                      <div>
+                        <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">
+                          Switch platform
+                        </label>
+                        <select
+                          disabled={connecting}
+                          value={draft.platform || "auto"}
+                          onChange={(e) => {
+                            const platform = e.target.value;
+                            patch({
+                              platform,
+                              ...(platform === "ios-xe" ? { snmpEnabled: false } : {}),
+                            });
+                          }}
+                          className="w-full rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-sky-500/40 disabled:opacity-50"
+                        >
+                          <option value="auto">Auto-detect</option>
+                          <option value="ios-xe">Catalyst 9200/9300 (IOS-XE) — e.g. C9200L-48P-4X</option>
+                          <option value="smb">Catalyst 1300 / CBS350 (SMB OS)</option>
+                        </select>
+                      </div>
+
+                      <label className="flex items-center justify-between gap-3 rounded-lg border border-border bg-secondary/30 px-3 py-2.5 cursor-pointer">
+                        <span className="text-[11px] text-foreground">
+                          Use SNMP polling
+                          <span className="block text-[10px] text-muted-foreground font-normal mt-0.5">
+                            Turn off for SSH-only switches (recommended for C9200L).
+                          </span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={draft.snmpEnabled !== false}
+                          disabled={connecting}
+                          onChange={(e) => patch({ snmpEnabled: e.target.checked })}
+                          className="rounded border-border"
+                        />
+                      </label>
+
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1 block">

@@ -39,6 +39,10 @@ export const DEFAULT_CISCO_SWITCH = {
   id: "",
   enabled: true,
   host: "",
+  /** auto | ios-xe | smb — C9200L/C9300 use ios-xe */
+  platform: "auto",
+  /** When false, WaveGuard uses SSH show commands only (no SNMP poll/enrich). */
+  snmpEnabled: true,
   sshPort: 22,
   sshUsername: "cisco",
   sshPassword: "",
@@ -96,6 +100,10 @@ export function normalizeCiscoSwitch(value) {
     id: value.id || genId(),
     enabled: value.enabled !== false,
     host: String(value.host || "").trim(),
+    platform: ["auto", "ios-xe", "smb"].includes(value.platform)
+      ? value.platform
+      : DEFAULT_CISCO_SWITCH.platform,
+    snmpEnabled: value.snmpEnabled !== false,
     sshPort,
     sshUsername:
       typeof value.sshUsername === "string" && value.sshUsername.trim()
