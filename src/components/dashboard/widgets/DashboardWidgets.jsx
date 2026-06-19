@@ -4,6 +4,7 @@ import {
   Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
   WifiOff, Activity, Globe, ArrowDownToLine, ArrowUpFromLine,
   Radio, BarChart3, Server, Clock, Lightbulb, Cpu, Loader2, ArrowRight,
+  MapPin, RefreshCw, Cloud, CloudRain, CloudSnow, CloudLightning, CloudFog, Sun,
 } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -11,6 +12,9 @@ import {
 } from "recharts";
 import StatusPulse from "../../StatusPulse";
 import { useSystemData } from "@/contexts/SystemDataContext";
+import SystemLocationMap from "../SystemLocationMap";
+import { formatLocationLine, useSystemLocation } from "@/hooks/useSystemLocation";
+import { useLiveWeather } from "@/hooks/useLiveWeather";
 
 const CATEGORY_WIDGETS = [
   { key: "network", label: "Network", icon: Wifi, color: "#06b6d4" },
@@ -128,6 +132,22 @@ export const WIDGET_TYPES = {
     icon: Cpu,
     minSize: { w: 2, h: 2 },
     defaultSize: { w: 2, h: 3 },
+  },
+  system_location: {
+    id: "system_location",
+    name: "System location",
+    description: "Approximate geolocation from public IP on an interactive map",
+    icon: MapPin,
+    minSize: { w: 3, h: 3 },
+    defaultSize: { w: 4, h: 4 },
+  },
+  live_weather: {
+    id: "live_weather",
+    name: "Live weather",
+    description: "Current conditions from Open-Meteo at the system location",
+    icon: Cloud,
+    minSize: { w: 2, h: 2 },
+    defaultSize: { w: 4, h: 3 },
   },
 };
 
@@ -582,6 +602,194 @@ export function CiscoSwitchesWidget() {
   );
 }
 
+export function SystemLocationWidget() {
+  const { publicIp, location, loading, error, refresh, hasCoords, mapCenter } = useSystemLocation({
+    refreshIntervalMs: 15 * 60 * 1000,
+  });
+
+  return (
+    <Card className="widget-no-drag">
+      <div className="p-4 h-full flex flex-col min-h-0">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="text-xs font-semibold text-foreground uppercase tracking-widest flex items-center gap-2">
+            <MapPin size={12} className="text-sky-400" />
+            System location
+          </h3>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+            className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 shrink-0 disabled:opacity-50"
+            title="Refresh location"
+          >
+            {loading ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <RefreshCw size={11} />
+            )}
+            Refresh
+          </button>
+        </div>
+
+        {loading && !location ? (
+          <div className="flex items-center justify-center flex-1 text-muted-foreground text-xs gap-2 min-h-[160px]">
+            <Loader2 size={14} className="animate-spin" />
+            Resolving location…
+          </div>
+        ) : (
+          <>
+            <p className="text-xs font-medium text-foreground truncate">
+              {formatLocationLine(location)}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-0.5 mb-1 truncate">
+              IP: {location?.ip || publicIp || "auto-detect"}
+              {location?.isp ? ` · ${location.isp}` : ""}
+            </p>
+            <p className="text-[10px] text-muted-foreground mb-2">
+              Approximate location from public IP
+            </p>
+            {error && !loading && (
+              <p className="text-[10px] text-red-400 mb-2">{error}</p>
+            )}
+            <div className="flex-1 min-h-[160px] rounded-lg overflow-hidden border border-border">
+              <SystemLocationMap
+                latitude={location?.latitude}
+                longitude={location?.longitude}
+                hasCoords={hasCoords}
+                center={mapCenter}
+                compact
+                zoom={10}
+              />
+            </div>
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function weatherIconForCode(code) {
+  const n = Number(code);
+  if (n === 0 || n === 1) return Sun;
+  if (n === 2 || n === 3) return Cloud;
+  if (n === 45 || n === 48) return CloudFog;
+  if (n >= 71 && n <= 77) return CloudSnow;
+  if (n >= 85 && n <= 86) return CloudSnow;
+  if (n >= 95 && n <= 99) return CloudLightning;
+  if (n >= 51 && n <= 67) return CloudRain;
+  if (n >= 80 && n <= 82) return CloudRain;
+  return Cloud;
+}
+
+function formatTemp(c) {
+  if (c == null || !Number.isFinite(Number(c))) return "—";
+  return `${Math.round(Number(c))}°C`;
+}
+
+export function LiveWeatherWidget() {
+  const { location, weather, loading, error, refresh } = useLiveWeather();
+  const WeatherIcon = weatherIconForCode(weather?.weatherCode);
+
+  return (
+    <Card className="widget-no-drag">
+      <div className="p-4 h-full flex flex-col min-h-0">
+        <div className="flex items-start justify-between gap-2 mb-2">
+          <h3 className="text-xs font-semibold text-foreground uppercase tracking-widest flex items-center gap-2">
+            <Cloud size={12} className="text-sky-400" />
+            Live weather
+          </h3>
+          <button
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+            className="text-[10px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1 shrink-0 disabled:opacity-50"
+            title="Refresh weather"
+          >
+            {loading ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <RefreshCw size={11} />
+            )}
+            Refresh
+          </button>
+        </div>
+
+        {loading && !weather ? (
+          <div className="flex items-center justify-center flex-1 text-muted-foreground text-xs gap-2 min-h-[120px]">
+            <Loader2 size={14} className="animate-spin" />
+            Loading weather…
+          </div>
+        ) : weather?.success ? (
+          <>
+            <p className="text-[10px] text-muted-foreground truncate mb-2">
+              {formatLocationLine(location)}
+            </p>
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-12 h-12 rounded-xl bg-sky-500/10 ring-1 ring-sky-500/20 flex items-center justify-center flex-shrink-0">
+                <WeatherIcon size={24} className="text-sky-300" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-foreground leading-none">
+                  {formatTemp(weather.temperatureC)}
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {weather.weatherLabel}
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground flex-1">
+              <div className="rounded-lg bg-muted/40 border border-border px-2 py-1.5">
+                <span className="block text-[9px] uppercase tracking-wide">Feels like</span>
+                <span className="text-foreground font-medium">
+                  {formatTemp(weather.apparentTemperatureC)}
+                </span>
+              </div>
+              <div className="rounded-lg bg-muted/40 border border-border px-2 py-1.5">
+                <span className="block text-[9px] uppercase tracking-wide">Humidity</span>
+                <span className="text-foreground font-medium">
+                  {weather.humidityPct != null ? `${Math.round(weather.humidityPct)}%` : "—"}
+                </span>
+              </div>
+              <div className="rounded-lg bg-muted/40 border border-border px-2 py-1.5">
+                <span className="block text-[9px] uppercase tracking-wide">Wind</span>
+                <span className="text-foreground font-medium">
+                  {weather.windSpeedKmh != null
+                    ? `${Math.round(weather.windSpeedKmh)} km/h`
+                    : "—"}
+                </span>
+              </div>
+              <div className="rounded-lg bg-muted/40 border border-border px-2 py-1.5">
+                <span className="block text-[9px] uppercase tracking-wide">Today</span>
+                <span className="text-foreground font-medium">
+                  {formatTemp(weather.dailyHighC)} / {formatTemp(weather.dailyLowC)}
+                </span>
+              </div>
+            </div>
+            <p className="text-[9px] text-muted-foreground mt-2 pt-2 border-t border-border">
+              Data by{" "}
+              <a
+                href="https://open-meteo.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline"
+              >
+                Open-Meteo
+              </a>
+            </p>
+          </>
+        ) : (
+          <div className="flex-1 text-xs text-muted-foreground min-h-[120px]">
+            <p>{error || weather?.error || "Weather unavailable"}</p>
+            <p className="mt-2 text-[10px]">
+              Weather uses coordinates from the system location (public IP).
+            </p>
+          </div>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 // Map widget IDs to components
 export const WIDGET_COMPONENTS = {
   stats_grid: StatsGridWidget,
@@ -592,4 +800,6 @@ export const WIDGET_COMPONENTS = {
   wan_latency: WanLatencyWidget,
   lutron_lights: LutronLightsWidget,
   cisco_switches: CiscoSwitchesWidget,
+  system_location: SystemLocationWidget,
+  live_weather: LiveWeatherWidget,
 };

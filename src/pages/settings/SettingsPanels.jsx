@@ -110,7 +110,36 @@ const INTEGRATION_DEFS = [
   { key: "dali", label: "DALI", fields: [{ k: "host", l: "Gateway host" }, { k: "port", l: "Port (5582)" }] },
   { key: "dmx", label: "DMX / Art-Net", fields: [{ k: "host", l: "Art-Net host" }] },
   { key: "pharos", label: "Pharos (DMX)", fields: [{ k: "host", l: "Pharos controller IP" }] },
-  { key: "modbus", label: "Modbus TCP", fields: [{ k: "host", l: "Host" }, { k: "port", l: "Port (502)" }] },
+  {
+    key: "modbus",
+    label: "Modbus TCP (HVAC)",
+    fields: [
+      { k: "host", l: "Host" },
+      { k: "port", l: "Port (502)" },
+      { k: "unitId", l: "Unit ID (1-247)" },
+    ],
+  },
+  {
+    key: "coolmaster",
+    label: "Coolmaster Net (HVAC)",
+    hint: "For Mitsubishi VRF/heat pump systems via Coolmaster controller.",
+    fields: [
+      { k: "host", l: "Controller IP" },
+      { k: "port", l: "Port (10102)" },
+      { k: "unitId", l: "Unit ID (0)" },
+    ],
+  },
+  {
+    key: "rs485",
+    label: "RS485 Serial Bridge (HVAC)",
+    hint: "Generic TCP-to-RS485 bridge for HVAC bus protocols (Modbus RTU, BACnet MSTP, proprietary).",
+    fields: [
+      { k: "host", l: "Bridge IP" },
+      { k: "port", l: "TCP port (4001)" },
+      { k: "baud", l: "Baud rate (9600)" },
+      { k: "encoding", l: "Encoding (ascii/hex)" },
+    ],
+  },
   { key: "unifi", label: "UniFi (Ubiquiti)", fields: [{ k: "host", l: "Controller IP" }, { k: "port", l: "HTTPS port (8443)" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
   { key: "dante", label: "Dante AV", fields: [{ k: "host", l: "Device or controller IP" }] },
   { key: "symetrix", label: "Symetrix DSP", fields: [{ k: "host", l: "Host" }, { k: "port", l: "TCP port (48630)" }] },
@@ -129,11 +158,15 @@ const defaultIntegrations = () => {
             ? "3671"
             : i.key === "modbus"
               ? "502"
-              : i.key === "unifi"
-                ? "8443"
-                : i.key === "symetrix"
-                  ? "48630"
-                  : "",
+              : i.key === "coolmaster"
+                ? "10102"
+                : i.key === "rs485"
+                  ? "4001"
+                  : i.key === "unifi"
+                    ? "8443"
+                    : i.key === "symetrix"
+                      ? "48630"
+                      : "",
     };
   });
   return cfg;

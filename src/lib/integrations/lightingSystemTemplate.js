@@ -46,7 +46,7 @@ export const LIGHTING_SYSTEM_TYPES = {
 
 export const LIGHTING_SYSTEM_LABELS = {
   lutron: "Lutron (HomeWorks QSX / Athena / RadioRA 3)",
-  knx: "KNX (EIB / KNX IP)",
+  knx: "KNX (EIB / KNX IP) + HVAC",
   dali: "DALI (IEC 62386)",
   dmx: "DMX512 (ENTTEC / Art-Net / sACN)",
 };
@@ -74,7 +74,7 @@ export const LIGHTING_DEFAULT_CREDENTIALS = {
 
 export const LIGHTING_SYSTEM_DESCRIPTIONS = {
   lutron: "Lutron HomeWorks QSX, Athena, or RadioRA 3 processor via Telnet or LEAP.",
-  knx: "KNX IP gateway or router using tunnelling or routing (port 3671).",
+  knx: "KNX IP gateway or router using tunnelling or routing (port 3671). Supports lighting and HVAC DPTs (temperature, setpoint, mode).",
   dali: "DALI-2 USB gateway or IP bridge (IEC 62386).",
   dmx: "DMX512 controller via Art-Net, sACN, or ENTTEC USB Pro.",
 };

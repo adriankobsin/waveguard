@@ -31,6 +31,8 @@ function factoryIntegrations() {
     "knx",
     "cisco",
     "modbus",
+    "coolmaster",
+    "rs485",
     "unifi",
     "dante",
     "symetrix",

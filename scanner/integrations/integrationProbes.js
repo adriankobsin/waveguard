@@ -251,11 +251,89 @@ async function probeModbus(config) {
   const host = parseHost(config?.host);
   if (!host) return { ok: false, message: "Host required" };
   const port = parsePort(config?.port, 502);
-  const open = await tcpProbe(host, port);
+  const unitId = parsePort(config?.unitId, 1);
+  const open = await tcpProbe(host, port, 2000);
   if (!open.open) {
     return { ok: false, message: `Modbus TCP port ${port} closed on ${host}` };
   }
-  return { ok: true, message: `Modbus TCP port ${port} open on ${host}` };
+  const handshake = await modbusHandshake(host, port, unitId);
+  if (handshake) {
+    return { ok: true, message: `Modbus TCP OK on ${host}:${port} (unit ${unitId}) — holding register read confirmed`, detail: { unitId } };
+  }
+  return { ok: true, message: `Modbus TCP port ${port} open on ${host}. Protocol handshake inconclusive — verify unit ID (${unitId}) and register addresses.` };
+}
+
+function modbusHandshake(host, port, unitId) {
+  return new Promise((resolve) => {
+    const sock = new net.Socket();
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      try { sock.destroy(); } catch { }
+      resolve(ok);
+    };
+    sock.setTimeout(3000);
+    sock.on("connect", () => {
+      const mbap = Buffer.alloc(12);
+      mbap.writeUInt16BE(1, 0);
+      mbap.writeUInt16BE(0, 2);
+      mbap.writeUInt16BE(2, 4);
+      mbap.writeUInt8(unitId, 6);
+      mbap.writeUInt8(0x03, 7);
+      mbap.writeUInt16BE(0, 8);
+      mbap.writeUInt16BE(1, 10);
+      sock.write(mbap);
+      const timer = setTimeout(() => finish(true), 2000);
+      sock.once("data", (data) => {
+        clearTimeout(timer);
+        finish(data.length >= 8);
+      });
+    });
+    sock.on("error", () => finish(false));
+    sock.on("timeout", () => finish(false));
+    try { sock.connect(port, host); } catch { finish(false); }
+  });
+}
+
+async function probeCoolmaster(config) {
+  const host = parseHost(config?.host);
+  if (!host) return { ok: false, message: "Host required" };
+  const port = parsePort(config?.port, 10102);
+  try {
+    const resp = await tcpExchange(host, port, "#0,0,0,\r\n", {
+      timeoutMs: 4000,
+      expect: (buf) => buf.includes("#"),
+    });
+    return { ok: true, message: `Coolmaster Net controller responded on ${host}:${port} — ${resp.slice(0, 40).trim()}` };
+  } catch {
+    const open = await tcpProbe(host, port);
+    if (open.open) {
+      return { ok: true, message: `Coolmaster Net port ${port} open on ${host}. Protocol handshake inconclusive — verify the controller model.` };
+    }
+    return { ok: false, message: `Coolmaster Net port ${port} closed on ${host}. Default port is 10102.` };
+  }
+}
+
+async function probeRs485(config) {
+  const host = parseHost(config?.host);
+  if (!host) return { ok: false, message: "Host required" };
+  const port = parsePort(config?.port, 4001);
+  const open = await tcpProbe(host, port);
+  if (!open.open) {
+    const altPorts = [4001, 4002, 4003, 4004, 4005, 8899, 2000, 2001];
+    const results = await Promise.all(altPorts.map((p) => tcpProbe(host, p, 1500)));
+    const openPorts = altPorts.filter((_, i) => results[i].open);
+    if (openPorts.length) {
+      return {
+        ok: true,
+        message: `RS485-to-TCP bridge ports open on ${host}: ${openPorts.join(", ")}. Configure baud rate (9600/19200/38400/115200), data bits, parity, stop bits to match your HVAC device.`,
+        detail: { openPorts },
+      };
+    }
+    return { ok: false, message: `RS485 bridge port ${port} closed on ${host}. Also checked ports 4001-4005, 8899, 2000, 2001.` };
+  }
+  return { ok: true, message: `RS485-to-TCP bridge reachable at ${host}:${port}. Configure serial parameters to match your HVAC bus.` };
 }
 
 async function probeUnifi(config) {
@@ -367,6 +445,8 @@ const PROBE_HANDLERS = {
   dahua: probeDahua,
   mqtt: probeMqtt,
   modbus: probeModbus,
+  coolmaster: probeCoolmaster,
+  rs485: probeRs485,
   unifi: probeUnifi,
   dante: probeDante,
   symetrix: probeSymetrix,

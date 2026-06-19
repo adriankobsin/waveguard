@@ -33,7 +33,8 @@ import {
   normalizeCredentialsVault,
 } from "../src/lib/credentials/credentialsVault.js";
 import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
-import { fetchPeplinkStatus, testPeplinkConnection } from "../scanner/integrations/peplinkPoll.js";
+import { lookupIpGeolocation } from "../scanner/integrations/geo/ipGeolocation.js";
+import { fetchOpenMeteoForecast } from "../scanner/integrations/weather/openMeteo.js";
 import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
 import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
 import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
@@ -63,6 +64,12 @@ import {
 import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
 import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
 import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
+import { getModbusClient, closeModbusClient, probeModbusPorts, recommendationFromPorts as modbusRecommendation } from "../scanner/integrations/modbus/modbusClient.js";
+import { getCoolmasterClient, closeCoolmasterClient, probeCoolmasterPorts, recommendationFromPorts as coolmasterRecommendation } from "../scanner/integrations/coolmaster/coolmasterClient.js";
+import { getRs485Client, closeRs485Client, probeRs485Ports, recommendationFromPorts as rs485Recommendation } from "../scanner/integrations/rs485/rs485Client.js";
+import { buildMockModbusEngine } from "../src/lib/integrations/modbus/modbusAdapter.js";
+import { buildMockCoolmasterEngine } from "../src/lib/integrations/coolmaster/coolmasterAdapter.js";
+import { buildMockRs485Engine } from "../src/lib/integrations/rs485/rs485Adapter.js";
 import {
   getCiscoSwitchClient,
   closeCiscoSwitchClient,
@@ -673,6 +680,38 @@ function mergeScanOptions(body = {}) {
 
 app.get("/api/apps/:appId/scanner/health", (_req, res) => {
   res.json(getHealth());
+});
+
+app.post("/api/apps/:appId/functions/geoLocation", async (req, res) => {
+  try {
+    const ip = typeof req.body?.ip === "string" ? req.body.ip.trim() : "";
+    const result = await lookupIpGeolocation(ip || undefined);
+    res.json(result);
+  } catch (err) {
+    console.error("[geoLocation]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Geolocation lookup failed",
+      source: "ipapi.co",
+      lookedUpAt: new Date().toISOString(),
+    });
+  }
+});
+
+app.post("/api/apps/:appId/functions/weatherForecast", async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body || {};
+    const result = await fetchOpenMeteoForecast(latitude, longitude);
+    res.json(result);
+  } catch (err) {
+    console.error("[weatherForecast]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Weather lookup failed",
+      source: "open-meteo.com",
+      fetchedAt: new Date().toISOString(),
+    });
+  }
 });
 
 app.post("/api/apps/:appId/functions/discoverSubnets", (_req, res) => {

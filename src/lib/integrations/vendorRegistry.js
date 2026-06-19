@@ -2,7 +2,7 @@
  * Vendor integration registry — capabilities and Phase 2 stubs.
  */
 
-export const VENDOR_IDS = ["snmp", "cisco", "peplink", "fortinet", "kerio", "unifi"];
+export const VENDOR_IDS = ["snmp", "cisco", "peplink", "fortinet", "kerio", "unifi", "modbus", "coolmaster", "rs485"];
 
 export const VENDOR_REGISTRY = {
   snmp: {
@@ -54,6 +54,30 @@ export const VENDOR_REGISTRY = {
     pollMethods: ["unifi_api"],
     capabilities: { snmp: false, rest: true, cellular: false, vpn: false },
     docsUrl: "https://help.ui.com/",
+  },
+  modbus: {
+    id: "modbus",
+    label: "Modbus TCP (HVAC)",
+    phase: 1,
+    pollMethods: ["modbus_tcp"],
+    capabilities: { modbus: true, hvac: true },
+    docsUrl: null,
+  },
+  coolmaster: {
+    id: "coolmaster",
+    label: "Coolmaster Net (HVAC)",
+    phase: 1,
+    pollMethods: ["coolmaster_tcp"],
+    capabilities: { hvac: true, mitsubishi: true },
+    docsUrl: null,
+  },
+  rs485: {
+    id: "rs485",
+    label: "RS485 Serial Bridge (HVAC)",
+    phase: 1,
+    pollMethods: ["rs485_tcp"],
+    capabilities: { hvac: true, serial: true },
+    docsUrl: null,
   },
 };
 

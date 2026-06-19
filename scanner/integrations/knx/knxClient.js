@@ -155,6 +155,56 @@ class KnxTunnellingClient extends EventEmitter {
     await this.writeGroupValue("0/0/0", 0);
   }
 
+  async writeHvacTemperature(groupAddr, tempC) {
+    const buf = Buffer.alloc(2);
+    buf.writeInt16BE(Math.round(tempC * 100), 0);
+    const seq = this.sequence++ % 256;
+    const frame = buildTunnellingRequestDpt9(this.channelId, seq, groupAddr, buf);
+    return this.sendFrame(frame, seq, `KNX HVAC temperature write ${groupAddr}`);
+  }
+
+  async writeHvacSetpoint(groupAddr, tempC) {
+    const scaled = Math.round(tempC * 2);
+    return this.writeGroupValue(groupAddr, Math.max(0, Math.min(255, scaled)));
+  }
+
+  async writeHvacMode(groupAddr, mode) {
+    const modeMap = {
+      auto: 0, comfort: 1, standby: 2, night: 3, frost: 4,
+      heat: 1, cool: 3, off: 4,
+    };
+    const val = modeMap[mode] !== undefined ? modeMap[mode] : 0;
+    return this.writeGroupValue(groupAddr, val);
+  }
+
+  async writeHvacOnOff(groupAddr, on) {
+    return this.writeGroupValue(groupAddr, on ? 1 : 0);
+  }
+
+  sendFrame(frame, seq, label) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error(`KNX ${label} timeout`)),
+        this.connectTimeoutMs
+      );
+      const onAck = (s) => {
+        if (s === seq) {
+          clearTimeout(timer);
+          this.off("ack", onAck);
+          resolve({ groupAddr: label, writtenAt: new Date().toISOString() });
+        }
+      };
+      this.on("ack", onAck);
+      try {
+        this.socket?.send(frame, this.port, this.host);
+      } catch (err) {
+        clearTimeout(timer);
+        this.off("ack", onAck);
+        reject(err);
+      }
+    });
+  }
+
   dispose() {
     this.disposed = true;
     if (this.channelId != null) {
@@ -290,6 +340,32 @@ function probeTcpOrUdpPort(host, port, timeoutMs = 1800) {
       });
     });
   });
+}
+
+function buildTunnellingRequestDpt9(channelId, seq, groupAddr, payload) {
+  const parts = String(groupAddr).split("/");
+  const main = parseInt(parts[0], 10) || 0;
+  const middle = parseInt(parts[1], 10) || 0;
+  const sub = parseInt(parts[2], 10) || 0;
+
+  const addr = (main << 11) | (middle << 8) | sub;
+  const apduLen = 1 + 1 + payload.length;
+  const buf = Buffer.alloc(18 + apduLen);
+  let off = 0;
+  buf.writeUInt8(6, off++); off += 3;
+  buf.writeUInt16BE(0x0420, off); off += 2;
+  buf.writeUInt8(apduLen + 4, off++); off += 1;
+  buf.writeUInt8(channelId, off++);
+  buf.writeUInt8(seq, off++);
+  buf.writeUInt8(0, off++); off += 1;
+  buf.writeUInt8(0x29, off++);
+  buf.writeUInt8(0x00, off++);
+  buf.writeUInt16BE(addr, off); off += 2;
+  buf.writeUInt8(0x00, off++);
+  buf.writeUInt8((apduLen << 2) | 0x03, off++);
+  buf.writeUInt8(0x00, off++);
+  payload.copy(buf, off);
+  return buf;
 }
 
 export async function probeKnxPorts(host) {
