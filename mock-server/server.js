@@ -67,9 +67,11 @@ import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as
 import { getModbusClient, closeModbusClient, probeModbusPorts, recommendationFromPorts as modbusRecommendation } from "../scanner/integrations/modbus/modbusClient.js";
 import { getCoolmasterClient, closeCoolmasterClient, probeCoolmasterPorts, recommendationFromPorts as coolmasterRecommendation } from "../scanner/integrations/coolmaster/coolmasterClient.js";
 import { getRs485Client, closeRs485Client, probeRs485Ports, recommendationFromPorts as rs485Recommendation } from "../scanner/integrations/rs485/rs485Client.js";
+import { getYachticaClient, closeYachticaClient, probeYachticaPorts, recommendationFromPorts as yachticaRecommendation } from "../scanner/integrations/yachtica/yachticaClient.js";
 import { buildMockModbusEngine } from "../src/lib/integrations/modbus/modbusAdapter.js";
 import { buildMockCoolmasterEngine } from "../src/lib/integrations/coolmaster/coolmasterAdapter.js";
 import { buildMockRs485Engine } from "../src/lib/integrations/rs485/rs485Adapter.js";
+import { buildMockYachticaEngine } from "../src/lib/integrations/yachtica/yachticaAdapter.js";
 import {
   getCiscoSwitchClient,
   closeCiscoSwitchClient,
@@ -1286,6 +1288,7 @@ const knxEngine = buildMockKnxEngine();
 const daliEngine = buildMockDaliEngine();
 const dmxEngine = buildMockDmxEngine();
 const crestronEngine = buildMockCrestronEngine();
+const yachticaEngine = buildMockYachticaEngine();
 
 function engineForSystemType(systemType) {
   switch (systemType) {
@@ -1296,6 +1299,8 @@ function engineForSystemType(systemType) {
       return dmxEngine;
     case "crestron":
       return crestronEngine;
+    case "yachtica":
+      return yachticaEngine;
     default: return lutronEngine;
   }
 }
@@ -1577,6 +1582,8 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
         liveClient = getDaliClient(live);
       } else if (systemType === "dmx") {
         liveClient = getDmxClient(live);
+      } else if (systemType === "yachtica") {
+        liveClient = getYachticaClient(live);
       }
     }
     // For testProcessor we let the dedicated branch handle connectivity so it
@@ -1997,9 +2004,11 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
           availablePorts = await probeDaliPorts(targetHost);
         } else if (systemType === "dmx") {
           availablePorts = await probeDmxPorts(targetHost);
+        } else if (systemType === "yachtica") {
+          availablePorts = await probeYachticaPorts(targetHost);
         }
         const openPorts = availablePorts.filter((p) => p.open).map((p) => p.port);
-        const recFn = systemType === "knx" ? knxRecommendation : systemType === "dali" ? daliRecommendation : dmxRecommendation;
+        const recFn = systemType === "knx" ? knxRecommendation : systemType === "dali" ? daliRecommendation : systemType === "yachtica" ? yachticaRecommendation : dmxRecommendation;
         const recommendation = recFn(availablePorts, resolvedProtocol);
         if (liveClient) {
           try {
@@ -2477,6 +2486,7 @@ for (const sig of ["SIGINT", "SIGTERM"]) {
     try { closeKnxClient(); } catch { /* */ }
     try { closeDaliClient(); } catch { /* */ }
     try { closeDmxClient(); } catch { /* */ }
+    try { closeYachticaClient(); } catch { /* */ }
     process.exit(0);
   });
 }

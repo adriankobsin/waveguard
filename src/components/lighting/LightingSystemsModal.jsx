@@ -39,6 +39,7 @@ const PROTOCOL_LABELS = {
   "enttec-usb": "ENTTEC USB",
   cip: "CIP (41794)",
   rest: "REST (HTTPS)",
+  "yachtica-tcp": "Yachtica TCP",
 };
 
 /**

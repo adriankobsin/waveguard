@@ -143,6 +143,16 @@ const INTEGRATION_DEFS = [
   { key: "unifi", label: "UniFi (Ubiquiti)", fields: [{ k: "host", l: "Controller IP" }, { k: "port", l: "HTTPS port (8443)" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
   { key: "dante", label: "Dante AV", fields: [{ k: "host", l: "Device or controller IP" }] },
   { key: "symetrix", label: "Symetrix DSP", fields: [{ k: "host", l: "Host" }, { k: "port", l: "TCP port (48630)" }] },
+  {
+    key: "yachtica",
+    label: "Yachtica Lighting (TCP)",
+    hint: "Yachtica S.r.l. lighting TCP gateway (port 5000). Supports up to 64 addresses × 8 channels of dimmers, relays, scenes, and keypad interfaces.",
+    fields: [
+      { k: "host", l: "Gateway IP" },
+      { k: "port", l: "TCP port (5000)" },
+      { k: "addressCount", l: "Device addresses (1-64)" },
+    ],
+  },
 ];
 
 const defaultIntegrations = () => {
@@ -164,8 +174,10 @@ const defaultIntegrations = () => {
                   ? "4001"
                   : i.key === "unifi"
                     ? "8443"
-                    : i.key === "symetrix"
-                      ? "48630"
+              : i.key === "symetrix"
+                    ? "48630"
+                    : i.key === "yachtica"
+                      ? "5000"
                       : "",
     };
   });
@@ -185,7 +197,7 @@ export function IntegrationsPanel() {
     setTesting(key);
     setTestResult(null);
     try {
-      if (key === "knx" || key === "dali" || key === "dmx" || key === "pharos") {
+      if (key === "knx" || key === "dali" || key === "dmx" || key === "pharos" || key === "yachtica") {
         const ic = cfg[key] || {};
         const res = await testLightingProcessor({
           host: ic.host,

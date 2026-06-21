@@ -42,6 +42,7 @@ export const LIGHTING_SYSTEM_TYPES = {
   KNX: "knx",
   DALI: "dali",
   DMX: "dmx",
+  YACHTICA: "yachtica",
 };
 
 export const LIGHTING_SYSTEM_LABELS = {
@@ -49,6 +50,7 @@ export const LIGHTING_SYSTEM_LABELS = {
   knx: "KNX (EIB / KNX IP) + HVAC",
   dali: "DALI (IEC 62386)",
   dmx: "DMX512 (ENTTEC / Art-Net / sACN)",
+  yachtica: "Yachtica (Lighting TCP Gateway)",
 };
 
 export const LIGHTING_PROTOCOLS = {
@@ -56,6 +58,7 @@ export const LIGHTING_PROTOCOLS = {
   knx: ["knx-ip", "knx-tunnelling"],
   dali: ["dali-usb", "dali-ip"],
   dmx: ["art-net", "sacn", "enttec-usb"],
+  yachtica: ["yachtica-tcp"],
 };
 
 export const LIGHTING_DEFAULT_PORTS = {
@@ -63,6 +66,7 @@ export const LIGHTING_DEFAULT_PORTS = {
   knx: { "knx-ip": 3671, "knx-tunnelling": 3671 },
   dali: { "dali-usb": 0, "dali-ip": 5582 },
   dmx: { "art-net": 6454, "sacn": 5568, "enttec-usb": 0 },
+  yachtica: { "yachtica-tcp": 5000 },
 };
 
 export const LIGHTING_DEFAULT_CREDENTIALS = {
@@ -70,6 +74,7 @@ export const LIGHTING_DEFAULT_CREDENTIALS = {
   knx: { username: "", password: "" },
   dali: { username: "", password: "" },
   dmx: { username: "", password: "" },
+  yachtica: { username: "", password: "" },
 };
 
 export const LIGHTING_SYSTEM_DESCRIPTIONS = {
@@ -77,6 +82,7 @@ export const LIGHTING_SYSTEM_DESCRIPTIONS = {
   knx: "KNX IP gateway or router using tunnelling or routing (port 3671). Supports lighting and HVAC DPTs (temperature, setpoint, mode).",
   dali: "DALI-2 USB gateway or IP bridge (IEC 62386).",
   dmx: "DMX512 controller via Art-Net, sACN, or ENTTEC USB Pro.",
+  yachtica: "Yachtica lighting TCP gateway (port 5000). Supports up to 64 addresses × 8 channels of dimmers, relays, scenes (56), and keypad inputs per gateway.",
 };
 
 /**
@@ -92,6 +98,9 @@ export function integrationIdFromHref(href, systemType = "lutron") {
   if (systemType === "dali") {
     const m = /\/(?:zone|ballast|group)\/(\d+)/.exec(String(href));
     return m ? m[1] : null;
+  }
+  if (systemType === "yachtica") {
+    return String(href);
   }
   if (systemType === "dmx") {
     const m = /\/(?:zone|fixture|channel)\/(\d+)/.exec(String(href));

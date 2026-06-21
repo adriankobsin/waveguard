@@ -2,7 +2,7 @@
  * Vendor integration registry — capabilities and Phase 2 stubs.
  */
 
-export const VENDOR_IDS = ["snmp", "cisco", "peplink", "fortinet", "kerio", "unifi", "modbus", "coolmaster", "rs485"];
+export const VENDOR_IDS = ["snmp", "cisco", "peplink", "fortinet", "kerio", "unifi", "modbus", "coolmaster", "rs485", "yachtica"];
 
 export const VENDOR_REGISTRY = {
   snmp: {
@@ -77,6 +77,14 @@ export const VENDOR_REGISTRY = {
     phase: 1,
     pollMethods: ["rs485_tcp"],
     capabilities: { hvac: true, serial: true },
+    docsUrl: null,
+  },
+  yachtica: {
+    id: "yachtica",
+    label: "Yachtica Lighting (TCP)",
+    phase: 1,
+    pollMethods: ["yachtica_tcp"],
+    capabilities: { lighting: true, dimmer: true, relay: true, keypad: true, scene: true },
     docsUrl: null,
   },
 };

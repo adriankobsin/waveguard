@@ -422,6 +422,17 @@ async function probeDante(config) {
   };
 }
 
+async function probeYachtica(config) {
+  const host = parseHost(config?.host);
+  if (!host) return { ok: false, message: "Host required" };
+  const port = parsePort(config?.port, 5000);
+  const open = await tcpProbe(host, port, 2000);
+  if (!open.open) {
+    return { ok: false, message: `Yachtica gateway port ${port} closed on ${host}. Default port is 5000.` };
+  }
+  return { ok: true, message: `Yachtica gateway reachable at ${host}:${port}. Verify device addresses (0-63) match your installation.` };
+}
+
 async function probeSymetrix(config) {
   const host = parseHost(config?.host);
   if (!host) return { ok: false, message: "Host required" };
@@ -450,6 +461,7 @@ const PROBE_HANDLERS = {
   unifi: probeUnifi,
   dante: probeDante,
   symetrix: probeSymetrix,
+  yachtica: probeYachtica,
 };
 
 /**

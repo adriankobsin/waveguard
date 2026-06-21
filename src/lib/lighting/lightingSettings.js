@@ -96,6 +96,7 @@ export const LIGHTING_SYSTEM_TYPES = [
   "dmx",
   "pharos",
   "crestron",
+  "yachtica",
 ];
 
 export const SYSTEM_TYPE_LABELS = {
@@ -105,6 +106,7 @@ export const SYSTEM_TYPE_LABELS = {
   dmx: "DMX512",
   pharos: "Pharos",
   crestron: "Crestron",
+  yachtica: "Yachtica",
 };
 
 export const SYSTEM_TYPE_DESCRIPTIONS = {
@@ -114,6 +116,7 @@ export const SYSTEM_TYPE_DESCRIPTIONS = {
   dmx: "DMX512 via Art-Net, sACN, or ENTTEC USB.",
   pharos: "Pharos architectural lighting controller (Art-Net / sACN).",
   crestron: "Crestron processor lighting and shade control (CIP / REST).",
+  yachtica: "Yachtica lighting TCP gateway (port 5000). 64 addresses × 8 channels — dimmers, relays, scenes, keypads.",
 };
 
 export const SYSTEM_TYPE_PROTOCOLS = {
@@ -123,6 +126,7 @@ export const SYSTEM_TYPE_PROTOCOLS = {
   dmx: DMX_PROTOCOLS,
   pharos: PHAROS_PROTOCOLS,
   crestron: CRESTRON_PROTOCOLS,
+  yachtica: ["yachtica-tcp"],
 };
 
 export const SYSTEM_TYPE_DEFAULT_PORTS = {
@@ -132,6 +136,7 @@ export const SYSTEM_TYPE_DEFAULT_PORTS = {
   dmx: { "art-net": 6454, "sacn": 5568, "enttec-usb": 0 },
   pharos: { "art-net": 6454, "sacn": 5568 },
   crestron: { cip: 41794, rest: 443 },
+  yachtica: { "yachtica-tcp": 5000 },
 };
 
 export const SYSTEM_TYPE_DEFAULT_CREDENTIALS = {
@@ -141,6 +146,7 @@ export const SYSTEM_TYPE_DEFAULT_CREDENTIALS = {
   dmx: { username: "", password: "" },
   pharos: { username: "", password: "" },
   crestron: { username: "", password: "" },
+  yachtica: { username: "", password: "" },
 };
 
 export const DEFAULT_LIGHTING_CONNECTION = {
