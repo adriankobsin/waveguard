@@ -1,0 +1,172 @@
+{
+  "_comment": "Marine HVAC Abstraction Layer — Example Configuration",
+  "pollIntervalMs": 5000,
+  "defaultMinSetpoint": 16,
+  "defaultMaxSetpoint": 30,
+  "defaultSupportedModes": ["off", "cool", "heat", "auto", "dry", "fan_only"],
+  "forceWrite": false,
+  "zones": [
+    {
+      "id": "owner_cabin",
+      "name": "Owner Cabin",
+      "deck": "Main Deck",
+      "room": "Owner Suite",
+      "manufacturer": "frigomar",
+      "protocol": "modbus_rtu",
+      "connection": {
+        "type": "modbus_rtu",
+        "serialPort": "/dev/ttyUSB0",
+        "baudRate": 9600,
+        "parity": "none",
+        "stopBits": 1,
+        "slaveId": 1
+      },
+      "registerMap": {
+        "currentTemperature": { "address": 1001, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": true },
+        "targetTemperature": { "address": 1002, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": false },
+        "powerState": { "address": 1003, "type": "coil", "readOnly": false },
+        "mode": { "address": 1004, "type": "holding", "readOnly": false, "mapping": { "0": "off", "1": "cool", "2": "heat", "3": "auto", "4": "fan_only" } },
+        "fanSpeed": { "address": 1005, "type": "holding", "readOnly": false, "mapping": { "0": "auto", "1": "low", "2": "medium", "3": "high" } },
+        "alarmCode": { "address": 1010, "type": "holding", "readOnly": true }
+      }
+    },
+    {
+      "id": "vip_cabin",
+      "name": "VIP Cabin",
+      "deck": "Main Deck",
+      "room": "VIP Suite",
+      "manufacturer": "dometic",
+      "protocol": "modbus_tcp",
+      "connection": {
+        "type": "modbus_tcp",
+        "host": "192.168.1.50",
+        "port": 502,
+        "slaveId": 10
+      },
+      "registerMap": {
+        "currentTemperature": { "address": 2001, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": true },
+        "targetTemperature": { "address": 2002, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": false },
+        "powerState": { "address": 2003, "type": "coil", "readOnly": false },
+        "mode": { "address": 2004, "type": "holding", "readOnly": false, "mapping": { "0": "off", "1": "cool", "2": "heat", "3": "auto", "4": "fan_only" } },
+        "fanSpeed": { "address": 2005, "type": "holding", "readOnly": false, "mapping": { "0": "auto", "1": "low", "2": "medium", "3": "high" } },
+        "alarmCode": { "address": 2010, "type": "holding", "readOnly": true }
+      }
+    },
+    {
+      "id": "main_saloon",
+      "name": "Main Saloon",
+      "deck": "Main Deck",
+      "room": "Saloon",
+      "manufacturer": "condaria",
+      "protocol": "bacnet_ip",
+      "connection": {
+        "type": "bacnet_ip",
+        "host": "192.168.1.60",
+        "port": 47808,
+        "deviceInstance": 1001
+      },
+      "bacnetMap": {
+        "currentTemperature": { "objectType": "analogInput", "instance": 1, "property": "presentValue" },
+        "targetTemperature": { "objectType": "analogValue", "instance": 1, "property": "presentValue" },
+        "powerState": { "objectType": "binaryValue", "instance": 1, "property": "presentValue" },
+        "mode": { "objectType": "multiStateValue", "instance": 1, "property": "presentValue", "mapping": { 0: "off", 1: "cool", 2: "heat", 3: "auto" } },
+        "fanSpeed": { "objectType": "multiStateValue", "instance": 2, "property": "presentValue", "mapping": { 0: "auto", 1: "low", 2: "medium", 3: "high" } },
+        "alarmCode": { "objectType": "analogValue", "instance": 10, "property": "presentValue" }
+      }
+    },
+    {
+      "id": "bridge",
+      "name": "Bridge",
+      "deck": "Upper Deck",
+      "room": "Wheelhouse",
+      "manufacturer": "heinen_hopman",
+      "protocol": "canbus",
+      "connection": {
+        "type": "canbus",
+        "interface": "can0",
+        "baudRate": 250000
+      },
+      "canMap": {
+        "currentTemperature": { "id": 512, "offset": 0, "length": 2, "scale": 0.1 },
+        "targetTemperature": { "id": 512, "offset": 2, "length": 2, "scale": 0.1 },
+        "powerState": { "id": 513, "offset": 0, "length": 1 },
+        "mode": { "id": 513, "offset": 1, "length": 1, "mapping": { 0: "off", 1: "cool", 2: "heat", 3: "auto" } },
+        "fanSpeed": { "id": 513, "offset": 2, "length": 1, "mapping": { 0: "auto", 1: "low", 2: "medium", 3: "high" } },
+        "alarmCode": { "id": 514, "offset": 0, "length": 1 }
+      }
+    },
+    {
+      "id": "crew_mess",
+      "name": "Crew Mess",
+      "deck": "Lower Deck",
+      "room": "Crew Mess",
+      "manufacturer": "generic",
+      "protocol": "bacnet_mstp",
+      "connection": {
+        "type": "bacnet_mstp",
+        "serialPort": "/dev/ttyS0",
+        "baudRate": 38400,
+        "deviceInstance": 2001,
+        "macAddress": 5
+      },
+      "bacnetMap": {
+        "currentTemperature": { "objectType": "analogInput", "instance": 1, "property": "presentValue" },
+        "targetTemperature": { "objectType": "analogValue", "instance": 1, "property": "presentValue" },
+        "powerState": { "objectType": "binaryValue", "instance": 1, "property": "presentValue" },
+        "mode": { "objectType": "multiStateValue", "instance": 1, "property": "presentValue", "mapping": { 1: "off", 2: "cool", 3: "heat", 4: "auto" } },
+        "fanSpeed": { "objectType": "multiStateValue", "instance": 2, "property": "presentValue", "mapping": { 1: "auto", 2: "low", 3: "medium", 4: "high" } },
+        "alarmCode": { "objectType": "analogValue", "instance": 10, "property": "presentValue" }
+      }
+    },
+    {
+      "id": "owner_cabin_crestron",
+      "name": "Owner Cabin (Crestron Gateway)",
+      "deck": "Main Deck",
+      "room": "Owner Suite",
+      "manufacturer": "frigomar",
+      "protocol": "crestron_gateway",
+      "connection": {
+        "type": "crestron_gateway",
+        "host": "192.168.1.100",
+        "port": 443,
+        "username": "apiadmin",
+        "password": "apiadmin",
+        "programSlot": 1
+      },
+      "crestronZoneIndex": 0,
+      "registerMap": {
+        "currentTemperature": { "address": 101, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": true },
+        "targetTemperature": { "address": 102, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": false },
+        "powerState": { "address": 103, "type": "coil", "readOnly": false },
+        "mode": { "address": 104, "type": "holding", "readOnly": false, "mapping": { "0": "off", "1": "cool", "2": "heat", "3": "auto", "4": "fan_only" } },
+        "fanSpeed": { "address": 105, "type": "holding", "readOnly": false, "mapping": { "0": "auto", "1": "low", "2": "medium", "3": "high" } },
+        "alarmCode": { "address": 110, "type": "holding", "readOnly": true }
+      }
+    },
+    {
+      "id": "vip_cabin_crestron",
+      "name": "VIP Cabin (Crestron Gateway)",
+      "deck": "Main Deck",
+      "room": "VIP Suite",
+      "manufacturer": "dometic",
+      "protocol": "crestron_gateway",
+      "connection": {
+        "type": "crestron_gateway",
+        "host": "192.168.1.100",
+        "port": 443,
+        "username": "apiadmin",
+        "password": "apiadmin",
+        "programSlot": 1
+      },
+      "crestronZoneIndex": 1,
+      "registerMap": {
+        "currentTemperature": { "address": 201, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": true },
+        "targetTemperature": { "address": 202, "type": "holding", "scale": 0.1, "unit": "celsius", "readOnly": false },
+        "powerState": { "address": 203, "type": "coil", "readOnly": false },
+        "mode": { "address": 204, "type": "holding", "readOnly": false, "mapping": { "0": "off", "1": "cool", "2": "heat", "3": "auto", "4": "fan_only" } },
+        "fanSpeed": { "address": 205, "type": "holding", "readOnly": false, "mapping": { "0": "auto", "1": "low", "2": "medium", "3": "high" } },
+        "alarmCode": { "address": 210, "type": "holding", "readOnly": true }
+      }
+    }
+  ]
+}

@@ -3,14 +3,15 @@ import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
   Wifi, Menu, X, Search, Bell, Share2, Zap,
-  BookOpen, Bot, Cable, Package, FileText,   Lightbulb, Music, Radar, HelpCircle,
-  Sun, Moon, FlaskConical,
+  BookOpen, Bot, Cable, Package, FileText,   Lightbulb, Music, Radar, HelpCircle, Thermometer,
+  Sun, Moon, FlaskConical, Loader2,
 } from "lucide-react";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePlatformMode } from "@/contexts/PlatformModeContext";
 import { SystemDataProvider, useSystemDataOptional } from "@/contexts/SystemDataContext";
 import { getDiagnosisCounts } from "@/lib/systemData/generateDiagnoses";
+import { DiscoveryProvider, useDiscovery } from "@/contexts/DiscoveryContext";
 
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -27,6 +28,7 @@ const NAV = [
   { to: "/audio", icon: Music, label: "Audio DSP" },
   { to: "/automation", icon: Zap, label: "Automation" },
   { to: "/reports", icon: FileText, label: "Reports" },
+  { to: "/hvac", icon: Thermometer, label: "HVAC" },
   { to: "/help", icon: HelpCircle, label: "Help" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -127,6 +129,7 @@ function AppLayoutContent() {
   const diagCounts = systemData ? getDiagnosisCounts(systemData.diagnoses) : { active: 0, critical: 0 };
   const maintenanceOverdue = systemData?.snapshot?.maintenance?.overdue ?? 0;
   const monitoredCount = systemData?.snapshot?.monitoredCount;
+  const { scanning, progress, devices, error } = useDiscovery();
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -189,6 +192,46 @@ function AppLayoutContent() {
             {monitoredCount != null ? `${monitoredCount} devices monitored` : "Loading…"}
           </p>
         </div>
+
+        {/* Scan progress indicator */}
+        {scanning && (
+          <div className="mx-4 mb-2 px-3.5 py-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/25">
+            <NavLink
+              to="/discovery"
+              onClick={() => setSidebarOpen(false)}
+              className="block"
+            >
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] font-semibold text-cyan-400 flex items-center gap-1.5">
+                  <Loader2 size={10} className="animate-spin" />
+                  Scanning network
+                </span>
+                <span className="text-[9px] text-cyan-400/70">{Math.round(progress)}%</span>
+              </div>
+              <div className="h-1 bg-cyan-500/20 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-500 to-cyan-400 rounded-full transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="text-[9px] text-muted-foreground/70 mt-1.5">
+                {devices.length} device{devices.length !== 1 ? "s" : ""} found
+              </p>
+            </NavLink>
+          </div>
+        )}
+
+        {error && !scanning && (
+          <div className="mx-4 mb-2 px-3.5 py-2 rounded-lg bg-red-500/10 border border-red-500/25">
+            <NavLink
+              to="/discovery"
+              onClick={() => setSidebarOpen(false)}
+              className="flex items-center gap-1.5"
+            >
+              <span className="text-[10px] text-red-400">Scan error — tap to view</span>
+            </NavLink>
+          </div>
+        )}
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
@@ -309,7 +352,9 @@ export default function AppLayout() {
 
   return (
     <SystemDataProvider>
-      <AppLayoutContent />
+      <DiscoveryProvider>
+        <AppLayoutContent />
+      </DiscoveryProvider>
     </SystemDataProvider>
   );
 }

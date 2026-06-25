@@ -24,6 +24,7 @@ import LightingPage from './pages/LightingPage';
 import ScenesPage from './pages/ScenesPage';
 import NetworkDiscoveryPage from './pages/NetworkDiscoveryPage';
 import AudioPage from './pages/AudioPage';
+import HVACPage from './pages/HVACPage';
 
 // Layout
 import AppLayout from './components/AppLayout';
@@ -73,6 +74,7 @@ function App() {
             <Route path="/cisco-switches" element={<Navigate to="/snmp?tab=cisco" replace />} />
             <Route path="/discovery" element={<NetworkDiscoveryPage />} />
             <Route path="/audio" element={<AudioPage />} />
+            <Route path="/hvac" element={<HVACPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
 

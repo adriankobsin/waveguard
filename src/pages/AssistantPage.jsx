@@ -99,7 +99,7 @@ export default function AssistantPage() {
   const [sessions, setSessions] = useState(() => loadSessions());
   const [activeId, setActiveId] = useState(null);
   const [localMessages, setLocalMessages] = useState([]);
-  const [localMode, setLocalMode] = useState("online");
+  const [localMode, setLocalMode] = useState("local");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);

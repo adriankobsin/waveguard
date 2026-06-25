@@ -4570,7 +4570,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-134",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T15:44:45.658Z",
       "updated_date": "2026-06-04T22:03:11.725Z",
       "ruHeight": 1,
@@ -4606,7 +4606,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-70",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:48.809Z",
       "updated_date": "2026-06-04T22:02:44.103Z",
       "ruHeight": 1,
@@ -4639,7 +4639,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-72",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:49.657Z",
       "updated_date": "2026-06-04T22:02:45.010Z",
       "ruHeight": 1,
@@ -4651,7 +4651,8 @@
         "tempC": 36,
         "lanStatus": "up",
         "lastSeen": "2026-06-04T20:19:49.657Z"
-      }
+      },
+      "responseTimeMs": 5
     },
     {
       "id": "eq-192-168-1-79",
@@ -4672,7 +4673,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-79",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:51.972Z",
       "updated_date": "2026-06-04T22:02:45.911Z",
       "ruHeight": 1,
@@ -4684,7 +4685,8 @@
         "tempC": 36,
         "lanStatus": "up",
         "lastSeen": "2026-06-04T20:19:51.972Z"
-      }
+      },
+      "responseTimeMs": 3
     },
     {
       "id": "eq-192-168-1-95",
@@ -4705,7 +4707,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-95",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:52.564Z",
       "updated_date": "2026-06-04T22:02:46.707Z",
       "ruHeight": 1,
@@ -4738,7 +4740,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-106",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:53.216Z",
       "updated_date": "2026-06-04T20:19:53.216Z",
       "ruHeight": 1,
@@ -4771,7 +4773,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-119",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:54.383Z",
       "updated_date": "2026-06-04T22:02:47.857Z",
       "ruHeight": 1,
@@ -4783,7 +4785,8 @@
         "tempC": 36,
         "lanStatus": "up",
         "lastSeen": "2026-06-04T20:19:54.383Z"
-      }
+      },
+      "responseTimeMs": 301
     },
     {
       "id": "eq-192-168-1-177",
@@ -4804,7 +4807,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-177",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:55.692Z",
       "updated_date": "2026-06-04T22:02:50.237Z",
       "ruHeight": 1,
@@ -4816,7 +4819,8 @@
         "tempC": 36,
         "lanStatus": "up",
         "lastSeen": "2026-06-04T20:19:55.692Z"
-      }
+      },
+      "responseTimeMs": 3
     },
     {
       "id": "eq-192-168-1-214",
@@ -4837,7 +4841,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-214",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:56.547Z",
       "updated_date": "2026-06-04T22:02:50.972Z",
       "ruHeight": 1,
@@ -4870,7 +4874,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-254",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T20:19:57.358Z",
       "updated_date": "2026-06-04T22:02:51.748Z",
       "ruHeight": 1,
@@ -4882,7 +4886,8 @@
         "tempC": 36,
         "lanStatus": "up",
         "lastSeen": "2026-06-04T20:19:57.358Z"
-      }
+      },
+      "responseTimeMs": 1
     },
     {
       "id": "eq-192-168-1-129",
@@ -4903,7 +4908,7 @@
       "vendor": "Unknown",
       "openPorts": [],
       "discoveryId": "disc-192.168.1.0-24-192-168-1-129",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-04T22:02:48.772Z",
       "updated_date": "2026-06-04T22:02:48.772Z",
       "ruHeight": 1,
@@ -4915,6 +4920,78 @@
         "tempC": 36,
         "lanStatus": "up",
         "lastSeen": "2026-06-04T22:02:48.772Z"
+      }
+    },
+    {
+      "id": "eq-192-168-110-1",
+      "name": "192.168.110.1",
+      "model": "Unknown",
+      "category": "Network",
+      "ip": "192.168.110.1",
+      "mac": "98:4A:6B:03:F5:6D",
+      "location": "Bridge · Bridge Rack",
+      "deckId": "",
+      "roomId": "",
+      "serial": "",
+      "condition": "Good",
+      "notes": "Discovered on 192.168.110.0/23",
+      "waveguardClassification": "ignored",
+      "monitoringEnabled": false,
+      "inventoryOnly": false,
+      "vendor": "Unknown",
+      "openPorts": [
+        80,
+        443
+      ],
+      "discoveryId": "disc-192.168.110.0-23-192-168-110-1",
+      "status": "online",
+      "created_date": "2026-06-25T16:10:31.209Z",
+      "updated_date": "2026-06-25T16:10:48.591Z",
+      "ruHeight": 1,
+      "defaultWatts": 35,
+      "controlType": "none",
+      "avRole": "none",
+      "telemetry": {
+        "powerW": 35,
+        "tempC": 36,
+        "lanStatus": "up",
+        "lastSeen": "2026-06-25T16:10:31.209Z"
+      }
+    },
+    {
+      "id": "eq-192-168-110-54",
+      "name": "192.168.110.54",
+      "model": "Unknown",
+      "category": "Network",
+      "ip": "192.168.110.54",
+      "mac": "",
+      "location": "Bridge · Bridge Rack",
+      "deckId": "",
+      "roomId": "",
+      "serial": "",
+      "condition": "Good",
+      "notes": "Discovered on 192.168.110.0/23",
+      "waveguardClassification": "ignored",
+      "monitoringEnabled": false,
+      "inventoryOnly": false,
+      "vendor": "Unknown",
+      "openPorts": [
+        22,
+        80
+      ],
+      "discoveryId": "disc-192.168.110.0-23-192-168-110-54",
+      "status": "online",
+      "created_date": "2026-06-25T16:10:33.842Z",
+      "updated_date": "2026-06-25T16:10:47.545Z",
+      "ruHeight": 1,
+      "defaultWatts": 35,
+      "controlType": "none",
+      "avRole": "none",
+      "telemetry": {
+        "powerW": 35,
+        "tempC": 36,
+        "lanStatus": "up",
+        "lastSeen": "2026-06-25T16:10:33.842Z"
       }
     }
   ],
@@ -9149,24 +9226,24 @@
               "cellular": true,
               "vpn": true
             },
-            "lastPollAt": "2026-06-04T22:04:23.781Z",
+            "lastPollAt": "2026-06-25T16:29:48.183Z",
             "lastPollError": "No mock data available — live SNMP only",
             "lastPoll": {
               "sysUptime": 864000,
-              "sysName": "192.168.1.134",
-              "polledAt": "2026-06-04T22:04:23.781Z",
-              "source": "peplink-local",
+              "sysName": "Unknown",
+              "polledAt": "2026-06-25T16:29:48.183Z",
+              "source": "peplink-mock",
               "ports": [
                 {
                   "index": 1,
-                  "name": "WAN 1",
-                  "ifAlias": "No Cable Detected",
-                  "status": "down",
+                  "name": "WAN1",
+                  "ifAlias": "",
+                  "status": "up",
                   "speed": 1000,
                   "speedMbps": 1000,
                   "mtu": 1500,
-                  "inMbps": 0,
-                  "outMbps": 0,
+                  "inMbps": 42.8,
+                  "outMbps": 16.5,
                   "poeWatts": null,
                   "poeStatus": null,
                   "vlan": null,
@@ -9176,29 +9253,25 @@
                   "portRole": "wan",
                   "meta": {
                     "type": "wan",
-                    "publicIp": null,
-                    "gateway": null,
-                    "dns": null,
-                    "isp": "WAN 1",
-                    "signalDbm": null,
-                    "carrier": null,
-                    "latencyMs": null,
-                    "vpnUp": null,
-                    "connId": 1,
-                    "uptime": null
+                    "publicIp": "203.0.113.1",
+                    "isp": "Starlink",
+                    "gateway": "203.0.113.254",
+                    "dns": "8.8.8.8",
+                    "latencyMs": 19,
+                    "vpnUp": true
                   },
                   "isUplink": true
                 },
                 {
                   "index": 2,
-                  "name": "WAN 2",
-                  "ifAlias": "Connected",
+                  "name": "WAN2",
+                  "ifAlias": "",
                   "status": "up",
                   "speed": 1000,
                   "speedMbps": 1000,
                   "mtu": 1500,
-                  "inMbps": 0,
-                  "outMbps": 0,
+                  "inMbps": 6.2,
+                  "outMbps": 1.8,
                   "poeWatts": null,
                   "poeStatus": null,
                   "vlan": null,
@@ -9208,26 +9281,20 @@
                   "portRole": "wan",
                   "meta": {
                     "type": "wan",
-                    "publicIp": "86.161.57.60",
-                    "gateway": "192.168.1.254",
-                    "dns": "192.168.1.254",
-                    "isp": "WAN 2",
-                    "signalDbm": null,
-                    "carrier": null,
-                    "latencyMs": 2,
-                    "vpnUp": null,
-                    "connId": 2,
-                    "uptime": 11436
+                    "publicIp": "203.0.113.2",
+                    "isp": "Shore 4G",
+                    "gateway": "203.0.113.2",
+                    "latencyMs": 38
                   },
                   "isUplink": true
                 },
                 {
                   "index": 3,
-                  "name": "Cellular",
-                  "ifAlias": "No Peplink eSIM Subscription",
+                  "name": "WAN3",
+                  "ifAlias": "",
                   "status": "down",
-                  "speed": 150,
-                  "speedMbps": 150,
+                  "speed": 1000,
+                  "speedMbps": 1000,
                   "mtu": 1500,
                   "inMbps": 0,
                   "outMbps": 0,
@@ -9237,34 +9304,20 @@
                   "macAddr": null,
                   "connectedDevice": null,
                   "connectedEquipmentId": null,
-                  "portRole": "cellular",
+                  "portRole": "wan",
                   "meta": {
-                    "type": "cellular",
-                    "publicIp": null,
-                    "gateway": null,
-                    "dns": null,
-                    "isp": "Cellular",
-                    "signalDbm": null,
-                    "carrier": null,
-                    "imei": "868371055559492",
-                    "iccid": "89852350725000397824",
-                    "imsi": "454351021198535",
-                    "eid": "89033023426300000000070285635803",
-                    "cellModule": "Quectel RM520N-GL",
-                    "latencyMs": null,
-                    "vpnUp": null,
-                    "connId": 3,
-                    "uptime": null
+                    "type": "wan",
+                    "isp": "VSAT spare"
                   },
                   "isUplink": true
                 },
                 {
                   "index": 4,
-                  "name": "USB",
-                  "ifAlias": "No Device Detected",
-                  "status": "down",
-                  "speed": 1000,
-                  "speedMbps": 1000,
+                  "name": "WAN4",
+                  "ifAlias": "",
+                  "status": "disabled",
+                  "speed": 0,
+                  "speedMbps": 0,
                   "mtu": 1500,
                   "inMbps": 0,
                   "outMbps": 0,
@@ -9274,120 +9327,14 @@
                   "macAddr": null,
                   "connectedDevice": null,
                   "connectedEquipmentId": null,
-                  "portRole": "cellular",
+                  "portRole": "wan",
                   "meta": {
-                    "type": "cellular",
-                    "publicIp": null,
-                    "gateway": null,
-                    "dns": null,
-                    "isp": "USB",
-                    "signalDbm": null,
-                    "carrier": null,
-                    "latencyMs": null,
-                    "vpnUp": null,
-                    "connId": 4,
-                    "uptime": null
+                    "type": "wan"
                   },
                   "isUplink": true
                 },
                 {
                   "index": 5,
-                  "name": "Wi-Fi WAN on 2.4 GHz",
-                  "ifAlias": "Disabled",
-                  "status": "disabled",
-                  "speed": 1000,
-                  "speedMbps": 1000,
-                  "mtu": 1500,
-                  "inMbps": 0,
-                  "outMbps": 0,
-                  "poeWatts": null,
-                  "poeStatus": null,
-                  "vlan": null,
-                  "macAddr": null,
-                  "connectedDevice": null,
-                  "connectedEquipmentId": null,
-                  "portRole": "wan",
-                  "meta": {
-                    "type": "wan",
-                    "publicIp": null,
-                    "gateway": null,
-                    "dns": null,
-                    "isp": "Wi-Fi WAN on 2.4 GHz",
-                    "signalDbm": null,
-                    "carrier": null,
-                    "latencyMs": null,
-                    "vpnUp": null,
-                    "connId": 5,
-                    "uptime": null
-                  },
-                  "isUplink": true
-                },
-                {
-                  "index": 6,
-                  "name": "Wi-Fi WAN on 5 GHz",
-                  "ifAlias": "Scanning...",
-                  "status": "down",
-                  "speed": 1000,
-                  "speedMbps": 1000,
-                  "mtu": 1500,
-                  "inMbps": 0,
-                  "outMbps": 0,
-                  "poeWatts": null,
-                  "poeStatus": null,
-                  "vlan": null,
-                  "macAddr": null,
-                  "connectedDevice": null,
-                  "connectedEquipmentId": null,
-                  "portRole": "wan",
-                  "meta": {
-                    "type": "wan",
-                    "publicIp": null,
-                    "gateway": null,
-                    "dns": null,
-                    "isp": "Wi-Fi WAN on 5 GHz",
-                    "signalDbm": null,
-                    "carrier": null,
-                    "latencyMs": null,
-                    "vpnUp": null,
-                    "connId": 6,
-                    "uptime": null
-                  },
-                  "isUplink": true
-                },
-                {
-                  "index": 7,
-                  "name": "VLAN WAN 1",
-                  "ifAlias": "Disabled",
-                  "status": "disabled",
-                  "speed": 1000,
-                  "speedMbps": 1000,
-                  "mtu": 1500,
-                  "inMbps": 0,
-                  "outMbps": 0,
-                  "poeWatts": null,
-                  "poeStatus": null,
-                  "vlan": null,
-                  "macAddr": null,
-                  "connectedDevice": null,
-                  "connectedEquipmentId": null,
-                  "portRole": "wan",
-                  "meta": {
-                    "type": "wan",
-                    "publicIp": null,
-                    "gateway": null,
-                    "dns": null,
-                    "isp": "VLAN WAN 1",
-                    "signalDbm": null,
-                    "carrier": null,
-                    "latencyMs": null,
-                    "vpnUp": null,
-                    "connId": 7,
-                    "uptime": null
-                  },
-                  "isUplink": true
-                },
-                {
-                  "index": 8,
                   "name": "LAN",
                   "ifAlias": "",
                   "status": "up",
@@ -9404,252 +9351,295 @@
                   "connectedEquipmentId": null,
                   "portRole": "lan",
                   "meta": {
-                    "type": "lan",
-                    "mac": "d4:13:f8:98:b3:60"
+                    "type": "lan"
                   },
                   "isUplink": false
+                },
+                {
+                  "index": 6,
+                  "name": "LAN2",
+                  "ifAlias": "",
+                  "status": "up",
+                  "speed": 1000,
+                  "speedMbps": 1000,
+                  "mtu": 1500,
+                  "inMbps": 0,
+                  "outMbps": 0,
+                  "poeWatts": null,
+                  "poeStatus": null,
+                  "vlan": null,
+                  "macAddr": null,
+                  "connectedDevice": null,
+                  "connectedEquipmentId": null,
+                  "portRole": "lan",
+                  "meta": {
+                    "type": "lan"
+                  },
+                  "isUplink": false
+                },
+                {
+                  "index": 7,
+                  "name": "SFP+",
+                  "ifAlias": "",
+                  "status": "up",
+                  "speed": 10000,
+                  "speedMbps": 10000,
+                  "mtu": 1500,
+                  "inMbps": 0,
+                  "outMbps": 0,
+                  "poeWatts": null,
+                  "poeStatus": null,
+                  "vlan": null,
+                  "macAddr": null,
+                  "connectedDevice": null,
+                  "connectedEquipmentId": null,
+                  "portRole": "uplink",
+                  "meta": {
+                    "type": "uplink"
+                  },
+                  "isUplink": true
                 }
               ],
               "trafficHistory": [
                 {
-                  "time": "22:17",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:42",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:18",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:43",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:19",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:44",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:20",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:45",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:21",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:46",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:22",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:47",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:23",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:48",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:24",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:49",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:25",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:50",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:26",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:51",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:27",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:52",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:28",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:53",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:29",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:54",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:30",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:55",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:31",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:56",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:32",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:57",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:33",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:58",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:34",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "16:59",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:35",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:00",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:36",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:01",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:37",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:02",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:38",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:03",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:39",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:04",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:40",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:05",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:41",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:06",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:42",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:07",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:43",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:08",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:44",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:09",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:45",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:10",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:46",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:11",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:47",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:12",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:48",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:13",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:49",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:14",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:50",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:15",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:51",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:16",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:52",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:17",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:53",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:18",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:54",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:19",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:55",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:20",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:56",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:21",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:57",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:22",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:58",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:23",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "22:59",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:24",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "23:00",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:25",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "23:01",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:26",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "23:02",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:27",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "23:03",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:28",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 },
                 {
-                  "time": "23:04",
-                  "inMbps": 0,
-                  "outMbps": 0
+                  "time": "17:29",
+                  "inMbps": 49,
+                  "outMbps": 18.3
                 }
               ],
               "peplinkMeta": {
@@ -9678,14 +9668,14 @@
       "key": "general",
       "category": "general",
       "value": {
-        "name": "yo",
-        "displayName": "totyo",
-        "homePort": "Palma de Mallorca",
-        "timezone": "Europe/London",
+        "name": "M/Y Albatros",
+        "displayName": "",
+        "homePort": "Singapore",
+        "timezone": "Singapore",
         "notes": "",
-        "appTitle": "iulian's ",
+        "appTitle": "Wave Guard",
         "appSubtitle": "",
-        "logoUrl": "data:image/png;base64,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"
+        "logoUrl": null
       }
     },
     {
@@ -9877,1818 +9867,13 @@
       "id": "setting-1779829524234",
       "key": "lighting-house",
       "value": {
-        "house": {
-          "fileName": "Integration Report.pdf",
-          "processorId": null,
-          "parsedAt": "2026-05-27T21:19:35.620Z",
-          "counts": {
-            "areas": 16,
-            "zones": 21,
-            "scenes": 80,
-            "devices": 12,
-            "buttons": 51,
-            "leds": 27,
-            "hvacZones": 0,
-            "shadeGroups": 4,
-            "scheduledLoads": 0,
-            "panels": 0
-          }
-        },
-        "areas": [
-          {
-            "href": "/area/750",
-            "id": "750",
-            "fullPath": "EXTERIOR\\DRIVEWAY",
-            "floor": "EXTERIOR",
-            "name": "DRIVEWAY"
-          },
-          {
-            "href": "/area/738",
-            "id": "738",
-            "fullPath": "EXTERIOR\\LANDSCAPE",
-            "floor": "EXTERIOR",
-            "name": "LANDSCAPE"
-          },
-          {
-            "href": "/area/726",
-            "id": "726",
-            "fullPath": "EXTERIOR\\POOL",
-            "floor": "EXTERIOR",
-            "name": "POOL"
-          },
-          {
-            "href": "/area/582",
-            "id": "582",
-            "fullPath": "GROUND FLOOR\\BATH",
-            "floor": "GROUND FLOOR",
-            "name": "BATH"
-          },
-          {
-            "href": "/area/594",
-            "id": "594",
-            "fullPath": "GROUND FLOOR\\BEDROOM",
-            "floor": "GROUND FLOOR",
-            "name": "BEDROOM"
-          },
-          {
-            "href": "/area/702",
-            "id": "702",
-            "fullPath": "GROUND FLOOR\\DINING ROOM",
-            "floor": "GROUND FLOOR",
-            "name": "DINING ROOM"
-          },
-          {
-            "href": "/area/558",
-            "id": "558",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1",
-            "floor": "GROUND FLOOR",
-            "name": "EQUIPMENT ROOM 1"
-          },
-          {
-            "href": "/area/570",
-            "id": "570",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2",
-            "floor": "GROUND FLOOR",
-            "name": "EQUIPMENT ROOM 2"
-          },
-          {
-            "href": "/area/630",
-            "id": "630",
-            "fullPath": "GROUND FLOOR\\FAMILY ROOM",
-            "floor": "GROUND FLOOR",
-            "name": "FAMILY ROOM"
-          },
-          {
-            "href": "/area/690",
-            "id": "690",
-            "fullPath": "GROUND FLOOR\\FOYER",
-            "floor": "GROUND FLOOR",
-            "name": "FOYER"
-          },
-          {
-            "href": "/area/714",
-            "id": "714",
-            "fullPath": "GROUND FLOOR\\GARAGE",
-            "floor": "GROUND FLOOR",
-            "name": "GARAGE"
-          },
-          {
-            "href": "/area/618",
-            "id": "618",
-            "fullPath": "GROUND FLOOR\\KITCHEN",
-            "floor": "GROUND FLOOR",
-            "name": "KITCHEN"
-          },
-          {
-            "href": "/area/678",
-            "id": "678",
-            "fullPath": "GROUND FLOOR\\LIVING ROOM",
-            "floor": "GROUND FLOOR",
-            "name": "LIVING ROOM"
-          },
-          {
-            "href": "/area/666",
-            "id": "666",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "floor": "GROUND FLOOR",
-            "name": "MASTER SUITE · MASTER BATH"
-          },
-          {
-            "href": "/area/654",
-            "id": "654",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "floor": "GROUND FLOOR",
-            "name": "MASTER SUITE · MASTER BEDROOM"
-          },
-          {
-            "href": "/area/606",
-            "id": "606",
-            "fullPath": "GROUND FLOOR\\OFFICE",
-            "floor": "GROUND FLOOR",
-            "name": "OFFICE"
-          }
-        ],
-        "zones": [
-          {
-            "href": "/zone/822",
-            "id": "822",
-            "fullPath": "GROUND FLOOR\\BATH\\Bath Lights",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "areaFullPath": "GROUND FLOOR\\BATH",
-            "name": "Bath Lights",
-            "kind": "light",
-            "area_id": "582"
-          },
-          {
-            "href": "/zone/1267",
-            "id": "1267",
-            "fullPath": "GROUND FLOOR\\BATH\\Bath Fan",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "areaFullPath": "GROUND FLOOR\\BATH",
-            "name": "Bath Fan",
-            "kind": "load",
-            "area_id": "582"
-          },
-          {
-            "href": "/zone/969",
-            "id": "969",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\Bedroom Lights",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "Bedroom Lights",
-            "kind": "light",
-            "area_id": "594"
-          },
-          {
-            "href": "/zone/988",
-            "id": "988",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\His Lamp",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "His Lamp",
-            "kind": "load",
-            "area_id": "594"
-          },
-          {
-            "href": "/zone/1007",
-            "id": "1007",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\Her Lamp",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "Her Lamp",
-            "kind": "load",
-            "area_id": "594"
-          },
-          {
-            "href": "/zone/1280",
-            "id": "1280",
-            "fullPath": "GROUND FLOOR\\OFFICE\\Downlights",
-            "floor": "GROUND FLOOR",
-            "area": "OFFICE",
-            "areaFullPath": "GROUND FLOOR\\OFFICE",
-            "name": "Downlights",
-            "kind": "light",
-            "area_id": "606"
-          },
-          {
-            "href": "/zone/1289",
-            "id": "1289",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Pendant",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Pendant",
-            "kind": "light",
-            "area_id": "618"
-          },
-          {
-            "href": "/zone/1298",
-            "id": "1298",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Sink Light",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Sink Light",
-            "kind": "light",
-            "area_id": "618"
-          },
-          {
-            "href": "/zone/1307",
-            "id": "1307",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Kitchen Table",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Kitchen Table",
-            "kind": "load",
-            "area_id": "618"
-          },
-          {
-            "href": "/zone/1316",
-            "id": "1316",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Under Cabinets",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Under Cabinets",
-            "kind": "light",
-            "area_id": "618"
-          },
-          {
-            "href": "/zone/1382",
-            "id": "1382",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Downlights",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Downlights",
-            "kind": "light",
-            "area_id": "654"
-          },
-          {
-            "href": "/zone/1391",
-            "id": "1391",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Bed Wall Lights",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Bed Wall Lights",
-            "kind": "light",
-            "area_id": "654"
-          },
-          {
-            "href": "/zone/1574",
-            "id": "1574",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Shutters",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Shutters",
-            "kind": "blind",
-            "area_id": "654"
-          },
-          {
-            "href": "/zone/1364",
-            "id": "1364",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH\\Downloghts",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "name": "Downloghts",
-            "kind": "load",
-            "area_id": "666"
-          },
-          {
-            "href": "/zone/1373",
-            "id": "1373",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH\\Shower Lights",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "name": "Shower Lights",
-            "kind": "light",
-            "area_id": "666"
-          },
-          {
-            "href": "/zone/1325",
-            "id": "1325",
-            "fullPath": "GROUND FLOOR\\FOYER\\West Wall Lights",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "West Wall Lights",
-            "kind": "light",
-            "area_id": "690"
-          },
-          {
-            "href": "/zone/1346",
-            "id": "1346",
-            "fullPath": "GROUND FLOOR\\FOYER\\Pendant",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "Pendant",
-            "kind": "light",
-            "area_id": "690"
-          },
-          {
-            "href": "/zone/1355",
-            "id": "1355",
-            "fullPath": "GROUND FLOOR\\FOYER\\East Wall Lights",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "East Wall Lights",
-            "kind": "light",
-            "area_id": "690"
-          },
-          {
-            "href": "/zone/1409",
-            "id": "1409",
-            "fullPath": "EXTERIOR\\POOL\\Spa Jets",
-            "floor": "EXTERIOR",
-            "area": "POOL",
-            "areaFullPath": "EXTERIOR\\POOL",
-            "name": "Spa Jets",
-            "kind": "load",
-            "area_id": "726"
-          },
-          {
-            "href": "/zone/1418",
-            "id": "1418",
-            "fullPath": "EXTERIOR\\POOL\\Pool Pump",
-            "floor": "EXTERIOR",
-            "area": "POOL",
-            "areaFullPath": "EXTERIOR\\POOL",
-            "name": "Pool Pump",
-            "kind": "load",
-            "area_id": "726"
-          },
-          {
-            "href": "/zone/1427",
-            "id": "1427",
-            "fullPath": "EXTERIOR\\LANDSCAPE\\Landscape",
-            "floor": "EXTERIOR",
-            "area": "LANDSCAPE",
-            "areaFullPath": "EXTERIOR\\LANDSCAPE",
-            "name": "Landscape",
-            "kind": "load",
-            "area_id": "738"
-          }
-        ],
-        "scenes": [
-          {
-            "href": "/areascene/562",
-            "id": "562",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 1",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1",
-            "name": "Off Scene",
-            "area_id": "558"
-          },
-          {
-            "href": "/areascene/563",
-            "id": "563",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 1",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1",
-            "name": "Scene 001",
-            "area_id": "558"
-          },
-          {
-            "href": "/areascene/564",
-            "id": "564",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 1",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1",
-            "name": "Scene 002",
-            "area_id": "558"
-          },
-          {
-            "href": "/areascene/565",
-            "id": "565",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 1",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1",
-            "name": "Scene 003",
-            "area_id": "558"
-          },
-          {
-            "href": "/areascene/566",
-            "id": "566",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 1",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 1",
-            "name": "Scene 004",
-            "area_id": "558"
-          },
-          {
-            "href": "/areascene/574",
-            "id": "574",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 2",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2",
-            "name": "Off Scene",
-            "area_id": "570"
-          },
-          {
-            "href": "/areascene/575",
-            "id": "575",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 2",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2",
-            "name": "Scene 001",
-            "area_id": "570"
-          },
-          {
-            "href": "/areascene/576",
-            "id": "576",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 2",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2",
-            "name": "Scene 002",
-            "area_id": "570"
-          },
-          {
-            "href": "/areascene/577",
-            "id": "577",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 2",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2",
-            "name": "Scene 003",
-            "area_id": "570"
-          },
-          {
-            "href": "/areascene/578",
-            "id": "578",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT ROOM 2",
-            "areaFullPath": "GROUND FLOOR\\EQUIPMENT ROOM 2",
-            "name": "Scene 004",
-            "area_id": "570"
-          },
-          {
-            "href": "/areascene/586",
-            "id": "586",
-            "fullPath": "GROUND FLOOR\\BATH\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "areaFullPath": "GROUND FLOOR\\BATH",
-            "name": "Off Scene",
-            "area_id": "582"
-          },
-          {
-            "href": "/areascene/587",
-            "id": "587",
-            "fullPath": "GROUND FLOOR\\BATH\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "areaFullPath": "GROUND FLOOR\\BATH",
-            "name": "Scene 001",
-            "area_id": "582"
-          },
-          {
-            "href": "/areascene/588",
-            "id": "588",
-            "fullPath": "GROUND FLOOR\\BATH\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "areaFullPath": "GROUND FLOOR\\BATH",
-            "name": "Scene 002",
-            "area_id": "582"
-          },
-          {
-            "href": "/areascene/589",
-            "id": "589",
-            "fullPath": "GROUND FLOOR\\BATH\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "areaFullPath": "GROUND FLOOR\\BATH",
-            "name": "Scene 003",
-            "area_id": "582"
-          },
-          {
-            "href": "/areascene/590",
-            "id": "590",
-            "fullPath": "GROUND FLOOR\\BATH\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "areaFullPath": "GROUND FLOOR\\BATH",
-            "name": "Scene 004",
-            "area_id": "582"
-          },
-          {
-            "href": "/areascene/598",
-            "id": "598",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "Off Scene",
-            "area_id": "594"
-          },
-          {
-            "href": "/areascene/599",
-            "id": "599",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "Scene 001",
-            "area_id": "594"
-          },
-          {
-            "href": "/areascene/600",
-            "id": "600",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "Scene 002",
-            "area_id": "594"
-          },
-          {
-            "href": "/areascene/601",
-            "id": "601",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "Scene 003",
-            "area_id": "594"
-          },
-          {
-            "href": "/areascene/602",
-            "id": "602",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "areaFullPath": "GROUND FLOOR\\BEDROOM",
-            "name": "Scene 004",
-            "area_id": "594"
-          },
-          {
-            "href": "/areascene/610",
-            "id": "610",
-            "fullPath": "GROUND FLOOR\\OFFICE\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "OFFICE",
-            "areaFullPath": "GROUND FLOOR\\OFFICE",
-            "name": "Off Scene",
-            "area_id": "606"
-          },
-          {
-            "href": "/areascene/611",
-            "id": "611",
-            "fullPath": "GROUND FLOOR\\OFFICE\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "OFFICE",
-            "areaFullPath": "GROUND FLOOR\\OFFICE",
-            "name": "Scene 001",
-            "area_id": "606"
-          },
-          {
-            "href": "/areascene/612",
-            "id": "612",
-            "fullPath": "GROUND FLOOR\\OFFICE\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "OFFICE",
-            "areaFullPath": "GROUND FLOOR\\OFFICE",
-            "name": "Scene 002",
-            "area_id": "606"
-          },
-          {
-            "href": "/areascene/613",
-            "id": "613",
-            "fullPath": "GROUND FLOOR\\OFFICE\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "OFFICE",
-            "areaFullPath": "GROUND FLOOR\\OFFICE",
-            "name": "Scene 003",
-            "area_id": "606"
-          },
-          {
-            "href": "/areascene/614",
-            "id": "614",
-            "fullPath": "GROUND FLOOR\\OFFICE\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "OFFICE",
-            "areaFullPath": "GROUND FLOOR\\OFFICE",
-            "name": "Scene 004",
-            "area_id": "606"
-          },
-          {
-            "href": "/areascene/622",
-            "id": "622",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Off Scene",
-            "area_id": "618"
-          },
-          {
-            "href": "/areascene/623",
-            "id": "623",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Scene 001",
-            "area_id": "618"
-          },
-          {
-            "href": "/areascene/624",
-            "id": "624",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Scene 002",
-            "area_id": "618"
-          },
-          {
-            "href": "/areascene/625",
-            "id": "625",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Scene 003",
-            "area_id": "618"
-          },
-          {
-            "href": "/areascene/626",
-            "id": "626",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "areaFullPath": "GROUND FLOOR\\KITCHEN",
-            "name": "Scene 004",
-            "area_id": "618"
-          },
-          {
-            "href": "/areascene/634",
-            "id": "634",
-            "fullPath": "GROUND FLOOR\\FAMILY ROOM\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "FAMILY ROOM",
-            "areaFullPath": "GROUND FLOOR\\FAMILY ROOM",
-            "name": "Off Scene",
-            "area_id": "630"
-          },
-          {
-            "href": "/areascene/635",
-            "id": "635",
-            "fullPath": "GROUND FLOOR\\FAMILY ROOM\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "FAMILY ROOM",
-            "areaFullPath": "GROUND FLOOR\\FAMILY ROOM",
-            "name": "Scene 001",
-            "area_id": "630"
-          },
-          {
-            "href": "/areascene/636",
-            "id": "636",
-            "fullPath": "GROUND FLOOR\\FAMILY ROOM\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "FAMILY ROOM",
-            "areaFullPath": "GROUND FLOOR\\FAMILY ROOM",
-            "name": "Scene 002",
-            "area_id": "630"
-          },
-          {
-            "href": "/areascene/637",
-            "id": "637",
-            "fullPath": "GROUND FLOOR\\FAMILY ROOM\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "FAMILY ROOM",
-            "areaFullPath": "GROUND FLOOR\\FAMILY ROOM",
-            "name": "Scene 003",
-            "area_id": "630"
-          },
-          {
-            "href": "/areascene/638",
-            "id": "638",
-            "fullPath": "GROUND FLOOR\\FAMILY ROOM\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "FAMILY ROOM",
-            "areaFullPath": "GROUND FLOOR\\FAMILY ROOM",
-            "name": "Scene 004",
-            "area_id": "630"
-          },
-          {
-            "href": "/areascene/658",
-            "id": "658",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Off Scene",
-            "area_id": "654"
-          },
-          {
-            "href": "/areascene/659",
-            "id": "659",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Scene 001",
-            "area_id": "654"
-          },
-          {
-            "href": "/areascene/660",
-            "id": "660",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Scene 002",
-            "area_id": "654"
-          },
-          {
-            "href": "/areascene/661",
-            "id": "661",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Scene 003",
-            "area_id": "654"
-          },
-          {
-            "href": "/areascene/662",
-            "id": "662",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM",
-            "name": "Scene 004",
-            "area_id": "654"
-          },
-          {
-            "href": "/areascene/670",
-            "id": "670",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "name": "Off Scene",
-            "area_id": "666"
-          },
-          {
-            "href": "/areascene/671",
-            "id": "671",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "name": "Scene 001",
-            "area_id": "666"
-          },
-          {
-            "href": "/areascene/672",
-            "id": "672",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "name": "Scene 002",
-            "area_id": "666"
-          },
-          {
-            "href": "/areascene/673",
-            "id": "673",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "name": "Scene 003",
-            "area_id": "666"
-          },
-          {
-            "href": "/areascene/674",
-            "id": "674",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER SUITE",
-            "areaFullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BATH",
-            "name": "Scene 004",
-            "area_id": "666"
-          },
-          {
-            "href": "/areascene/682",
-            "id": "682",
-            "fullPath": "GROUND FLOOR\\LIVING ROOM\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "LIVING ROOM",
-            "areaFullPath": "GROUND FLOOR\\LIVING ROOM",
-            "name": "Off Scene",
-            "area_id": "678"
-          },
-          {
-            "href": "/areascene/683",
-            "id": "683",
-            "fullPath": "GROUND FLOOR\\LIVING ROOM\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "LIVING ROOM",
-            "areaFullPath": "GROUND FLOOR\\LIVING ROOM",
-            "name": "Scene 001",
-            "area_id": "678"
-          },
-          {
-            "href": "/areascene/684",
-            "id": "684",
-            "fullPath": "GROUND FLOOR\\LIVING ROOM\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "LIVING ROOM",
-            "areaFullPath": "GROUND FLOOR\\LIVING ROOM",
-            "name": "Scene 002",
-            "area_id": "678"
-          },
-          {
-            "href": "/areascene/685",
-            "id": "685",
-            "fullPath": "GROUND FLOOR\\LIVING ROOM\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "LIVING ROOM",
-            "areaFullPath": "GROUND FLOOR\\LIVING ROOM",
-            "name": "Scene 003",
-            "area_id": "678"
-          },
-          {
-            "href": "/areascene/686",
-            "id": "686",
-            "fullPath": "GROUND FLOOR\\LIVING ROOM\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "LIVING ROOM",
-            "areaFullPath": "GROUND FLOOR\\LIVING ROOM",
-            "name": "Scene 004",
-            "area_id": "678"
-          },
-          {
-            "href": "/areascene/694",
-            "id": "694",
-            "fullPath": "GROUND FLOOR\\FOYER\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "Off Scene",
-            "area_id": "690"
-          },
-          {
-            "href": "/areascene/695",
-            "id": "695",
-            "fullPath": "GROUND FLOOR\\FOYER\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "Scene 001",
-            "area_id": "690"
-          },
-          {
-            "href": "/areascene/696",
-            "id": "696",
-            "fullPath": "GROUND FLOOR\\FOYER\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "Scene 002",
-            "area_id": "690"
-          },
-          {
-            "href": "/areascene/697",
-            "id": "697",
-            "fullPath": "GROUND FLOOR\\FOYER\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "Scene 003",
-            "area_id": "690"
-          },
-          {
-            "href": "/areascene/698",
-            "id": "698",
-            "fullPath": "GROUND FLOOR\\FOYER\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "areaFullPath": "GROUND FLOOR\\FOYER",
-            "name": "Scene 004",
-            "area_id": "690"
-          },
-          {
-            "href": "/areascene/706",
-            "id": "706",
-            "fullPath": "GROUND FLOOR\\DINING ROOM\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "DINING ROOM",
-            "areaFullPath": "GROUND FLOOR\\DINING ROOM",
-            "name": "Off Scene",
-            "area_id": "702"
-          },
-          {
-            "href": "/areascene/707",
-            "id": "707",
-            "fullPath": "GROUND FLOOR\\DINING ROOM\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "DINING ROOM",
-            "areaFullPath": "GROUND FLOOR\\DINING ROOM",
-            "name": "Scene 001",
-            "area_id": "702"
-          },
-          {
-            "href": "/areascene/708",
-            "id": "708",
-            "fullPath": "GROUND FLOOR\\DINING ROOM\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "DINING ROOM",
-            "areaFullPath": "GROUND FLOOR\\DINING ROOM",
-            "name": "Scene 002",
-            "area_id": "702"
-          },
-          {
-            "href": "/areascene/709",
-            "id": "709",
-            "fullPath": "GROUND FLOOR\\DINING ROOM\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "DINING ROOM",
-            "areaFullPath": "GROUND FLOOR\\DINING ROOM",
-            "name": "Scene 003",
-            "area_id": "702"
-          },
-          {
-            "href": "/areascene/710",
-            "id": "710",
-            "fullPath": "GROUND FLOOR\\DINING ROOM\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "DINING ROOM",
-            "areaFullPath": "GROUND FLOOR\\DINING ROOM",
-            "name": "Scene 004",
-            "area_id": "702"
-          },
-          {
-            "href": "/areascene/718",
-            "id": "718",
-            "fullPath": "GROUND FLOOR\\GARAGE\\Off Scene",
-            "floor": "GROUND FLOOR",
-            "area": "GARAGE",
-            "areaFullPath": "GROUND FLOOR\\GARAGE",
-            "name": "Off Scene",
-            "area_id": "714"
-          },
-          {
-            "href": "/areascene/719",
-            "id": "719",
-            "fullPath": "GROUND FLOOR\\GARAGE\\Scene 001",
-            "floor": "GROUND FLOOR",
-            "area": "GARAGE",
-            "areaFullPath": "GROUND FLOOR\\GARAGE",
-            "name": "Scene 001",
-            "area_id": "714"
-          },
-          {
-            "href": "/areascene/720",
-            "id": "720",
-            "fullPath": "GROUND FLOOR\\GARAGE\\Scene 002",
-            "floor": "GROUND FLOOR",
-            "area": "GARAGE",
-            "areaFullPath": "GROUND FLOOR\\GARAGE",
-            "name": "Scene 002",
-            "area_id": "714"
-          },
-          {
-            "href": "/areascene/721",
-            "id": "721",
-            "fullPath": "GROUND FLOOR\\GARAGE\\Scene 003",
-            "floor": "GROUND FLOOR",
-            "area": "GARAGE",
-            "areaFullPath": "GROUND FLOOR\\GARAGE",
-            "name": "Scene 003",
-            "area_id": "714"
-          },
-          {
-            "href": "/areascene/722",
-            "id": "722",
-            "fullPath": "GROUND FLOOR\\GARAGE\\Scene 004",
-            "floor": "GROUND FLOOR",
-            "area": "GARAGE",
-            "areaFullPath": "GROUND FLOOR\\GARAGE",
-            "name": "Scene 004",
-            "area_id": "714"
-          },
-          {
-            "href": "/areascene/730",
-            "id": "730",
-            "fullPath": "EXTERIOR\\POOL\\Off Scene",
-            "floor": "EXTERIOR",
-            "area": "POOL",
-            "areaFullPath": "EXTERIOR\\POOL",
-            "name": "Off Scene",
-            "area_id": "726"
-          },
-          {
-            "href": "/areascene/731",
-            "id": "731",
-            "fullPath": "EXTERIOR\\POOL\\Scene 001",
-            "floor": "EXTERIOR",
-            "area": "POOL",
-            "areaFullPath": "EXTERIOR\\POOL",
-            "name": "Scene 001",
-            "area_id": "726"
-          },
-          {
-            "href": "/areascene/732",
-            "id": "732",
-            "fullPath": "EXTERIOR\\POOL\\Scene 002",
-            "floor": "EXTERIOR",
-            "area": "POOL",
-            "areaFullPath": "EXTERIOR\\POOL",
-            "name": "Scene 002",
-            "area_id": "726"
-          },
-          {
-            "href": "/areascene/733",
-            "id": "733",
-            "fullPath": "EXTERIOR\\POOL\\Scene 003",
-            "floor": "EXTERIOR",
-            "area": "POOL",
-            "areaFullPath": "EXTERIOR\\POOL",
-            "name": "Scene 003",
-            "area_id": "726"
-          },
-          {
-            "href": "/areascene/734",
-            "id": "734",
-            "fullPath": "EXTERIOR\\POOL\\Scene 004",
-            "floor": "EXTERIOR",
-            "area": "POOL",
-            "areaFullPath": "EXTERIOR\\POOL",
-            "name": "Scene 004",
-            "area_id": "726"
-          },
-          {
-            "href": "/areascene/742",
-            "id": "742",
-            "fullPath": "EXTERIOR\\LANDSCAPE\\Off Scene",
-            "floor": "EXTERIOR",
-            "area": "LANDSCAPE",
-            "areaFullPath": "EXTERIOR\\LANDSCAPE",
-            "name": "Off Scene",
-            "area_id": "738"
-          },
-          {
-            "href": "/areascene/743",
-            "id": "743",
-            "fullPath": "EXTERIOR\\LANDSCAPE\\Scene 001",
-            "floor": "EXTERIOR",
-            "area": "LANDSCAPE",
-            "areaFullPath": "EXTERIOR\\LANDSCAPE",
-            "name": "Scene 001",
-            "area_id": "738"
-          },
-          {
-            "href": "/areascene/744",
-            "id": "744",
-            "fullPath": "EXTERIOR\\LANDSCAPE\\Scene 002",
-            "floor": "EXTERIOR",
-            "area": "LANDSCAPE",
-            "areaFullPath": "EXTERIOR\\LANDSCAPE",
-            "name": "Scene 002",
-            "area_id": "738"
-          },
-          {
-            "href": "/areascene/745",
-            "id": "745",
-            "fullPath": "EXTERIOR\\LANDSCAPE\\Scene 003",
-            "floor": "EXTERIOR",
-            "area": "LANDSCAPE",
-            "areaFullPath": "EXTERIOR\\LANDSCAPE",
-            "name": "Scene 003",
-            "area_id": "738"
-          },
-          {
-            "href": "/areascene/746",
-            "id": "746",
-            "fullPath": "EXTERIOR\\LANDSCAPE\\Scene 004",
-            "floor": "EXTERIOR",
-            "area": "LANDSCAPE",
-            "areaFullPath": "EXTERIOR\\LANDSCAPE",
-            "name": "Scene 004",
-            "area_id": "738"
-          },
-          {
-            "href": "/areascene/754",
-            "id": "754",
-            "fullPath": "EXTERIOR\\DRIVEWAY\\Off Scene",
-            "floor": "EXTERIOR",
-            "area": "DRIVEWAY",
-            "areaFullPath": "EXTERIOR\\DRIVEWAY",
-            "name": "Off Scene",
-            "area_id": "750"
-          },
-          {
-            "href": "/areascene/755",
-            "id": "755",
-            "fullPath": "EXTERIOR\\DRIVEWAY\\Scene 001",
-            "floor": "EXTERIOR",
-            "area": "DRIVEWAY",
-            "areaFullPath": "EXTERIOR\\DRIVEWAY",
-            "name": "Scene 001",
-            "area_id": "750"
-          },
-          {
-            "href": "/areascene/756",
-            "id": "756",
-            "fullPath": "EXTERIOR\\DRIVEWAY\\Scene 002",
-            "floor": "EXTERIOR",
-            "area": "DRIVEWAY",
-            "areaFullPath": "EXTERIOR\\DRIVEWAY",
-            "name": "Scene 002",
-            "area_id": "750"
-          },
-          {
-            "href": "/areascene/757",
-            "id": "757",
-            "fullPath": "EXTERIOR\\DRIVEWAY\\Scene 003",
-            "floor": "EXTERIOR",
-            "area": "DRIVEWAY",
-            "areaFullPath": "EXTERIOR\\DRIVEWAY",
-            "name": "Scene 003",
-            "area_id": "750"
-          },
-          {
-            "href": "/areascene/758",
-            "id": "758",
-            "fullPath": "EXTERIOR\\DRIVEWAY\\Scene 004",
-            "floor": "EXTERIOR",
-            "area": "DRIVEWAY",
-            "areaFullPath": "EXTERIOR\\DRIVEWAY",
-            "name": "Scene 004",
-            "area_id": "750"
-          }
-        ],
-        "devices": [
-          {
-            "href": "/device/5272",
-            "id": "5272",
-            "model": "",
-            "fullPath": "GROUND FLOOR\\EQUIPMENT QSE-IO\\ROOM 1\\DPM Panel 001\\Enclosure Device 012",
-            "floor": "GROUND FLOOR",
-            "area": "EQUIPMENT QSE-IO",
-            "location": "ROOM 1 · DPM Panel 001 · Enclosure Device 012",
-            "buttons": [],
-            "leds": []
-          },
-          {
-            "href": "/device/780",
-            "id": "780",
-            "model": "PK2-4B-TAW-L21",
-            "fullPath": "GROUND FLOOR\\BATH\\BATH\\ENTRY\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "location": "BATH · ENTRY · Device 1",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 1,
-                "href": "/button/784",
-                "componentName": "On GRP 1"
-              },
-              {
-                "kind": "button",
-                "index": 2,
-                "href": "/button/787",
-                "componentName": "Off GRP 1"
-              },
-              {
-                "kind": "button",
-                "index": 3,
-                "href": "/button/791",
-                "componentName": "On GRP 2"
-              },
-              {
-                "kind": "button",
-                "index": 4,
-                "href": "/button/794",
-                "componentName": "Off GRP 2"
-              }
-            ],
-            "leds": []
-          },
-          {
-            "href": "/device/805",
-            "id": "805",
-            "model": "LRF3-OWLB-P-WH",
-            "fullPath": "GROUND FLOOR\\BATH\\RF\\Occupancy Sensor - BATH\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "BATH",
-            "location": "RF · Occupancy Sensor - BATH · Device 1",
-            "buttons": [],
-            "leds": []
-          },
-          {
-            "href": "/device/856",
-            "id": "856",
-            "model": "PK2-4B-TAW-L31",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\BEDROOM ENTRY\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "location": "BEDROOM ENTRY · Device 1",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 1,
-                "href": "/button/860",
-                "componentName": "Bedroom"
-              },
-              {
-                "kind": "button",
-                "index": 2,
-                "href": "/button/863",
-                "componentName": "Morning"
-              },
-              {
-                "kind": "button",
-                "index": 3,
-                "href": "/button/866",
-                "componentName": "Goodnight"
-              },
-              {
-                "kind": "button",
-                "index": 4,
-                "href": "/button/869",
-                "componentName": "All Off"
-              }
-            ],
-            "leds": []
-          },
-          {
-            "href": "/device/929",
-            "id": "929",
-            "model": "GROUND FLOOR\\BEDROOM HQWT-S-PRW-WH",
-            "fullPath": "\\PALLADIOM\\Device 1",
-            "floor": "PALLADIOM",
-            "area": "Device 1",
-            "location": "",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 1,
-                "href": "/button/938",
-                "componentName": "1"
-              },
-              {
-                "kind": "button",
-                "index": 2,
-                "href": "/button/942",
-                "componentName": "2"
-              },
-              {
-                "kind": "button",
-                "index": 3,
-                "href": "/button/946",
-                "componentName": "3"
-              },
-              {
-                "kind": "button",
-                "index": 16,
-                "href": "/button/950",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 17,
-                "href": "/button/952",
-                "componentName": null
-              }
-            ],
-            "leds": [
-              {
-                "kind": "led",
-                "index": 1,
-                "href": "/led/934",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 2,
-                "href": "/led/935",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 3,
-                "href": "/led/936",
-                "componentName": null
-              }
-            ]
-          },
-          {
-            "href": "/device/5304",
-            "id": "5304",
-            "model": "PK2-3BRL-TAW-L01",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\BEDSIDE PICO\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "BEDROOM",
-            "location": "BEDSIDE PICO · Device 1",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 0,
-                "href": "/button/5308",
-                "componentName": "Open"
-              },
-              {
-                "kind": "button",
-                "index": 1,
-                "href": "/button/5311",
-                "componentName": "50% Open"
-              },
-              {
-                "kind": "button",
-                "index": 2,
-                "href": "/button/5314",
-                "componentName": "Close"
-              },
-              {
-                "kind": "button",
-                "index": 3,
-                "href": "/button/5317",
-                "componentName": "Raise"
-              },
-              {
-                "kind": "button",
-                "index": 4,
-                "href": "/button/5320",
-                "componentName": "Lower"
-              }
-            ],
-            "leds": []
-          },
-          {
-            "href": "/device/1018",
-            "id": "1018",
-            "model": "HWIS-2B-I-AW",
-            "fullPath": "GROUND FLOOR\\OFFICE\\OFFICE ENTRY\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "OFFICE",
-            "location": "OFFICE ENTRY · Device 1",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 7,
-                "href": "/button/1028",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 9,
-                "href": "/button/1032",
-                "componentName": null
-              }
-            ],
-            "leds": [
-              {
-                "kind": "led",
-                "index": 8,
-                "href": "/led/1025",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 10,
-                "href": "/led/1026",
-                "componentName": null
-              }
-            ]
-          },
-          {
-            "href": "/device/1040",
-            "id": "1040",
-            "model": "HWIS-5BRL-I-MC",
-            "fullPath": "GROUND FLOOR\\KITCHEN\\KITCHEN ENTRY\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "KITCHEN",
-            "location": "KITCHEN ENTRY · Device 1",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 6,
-                "href": "/button/1053",
-                "componentName": "All On"
-              },
-              {
-                "kind": "button",
-                "index": 7,
-                "href": "/button/1057",
-                "componentName": "Prep"
-              },
-              {
-                "kind": "button",
-                "index": 8,
-                "href": "/button/1061",
-                "componentName": "Entertain"
-              },
-              {
-                "kind": "button",
-                "index": 9,
-                "href": "/button/1065",
-                "componentName": "Cabinets"
-              },
-              {
-                "kind": "button",
-                "index": 10,
-                "href": "/button/1069",
-                "componentName": "All Off"
-              },
-              {
-                "kind": "button",
-                "index": 18,
-                "href": "/button/1073",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 19,
-                "href": "/button/1075",
-                "componentName": null
-              }
-            ],
-            "leds": [
-              {
-                "kind": "led",
-                "index": 7,
-                "href": "/led/1047",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 8,
-                "href": "/led/1048",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 9,
-                "href": "/led/1049",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 10,
-                "href": "/led/1050",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 11,
-                "href": "/led/1051",
-                "componentName": null
-              }
-            ]
-          },
-          {
-            "href": "/device/1164",
-            "id": "1164",
-            "model": "HWIS-5BRL-I-AW",
-            "fullPath": "GROUND FLOOR\\MASTER\\SUITE\\MASTER BEDROOM\\MASTER BED ENTRY\\Device\\1\tButton 8 /button/1185\\SUITE\\MASTER BEDROOM\\MASTER BED ENTRY\\Device\\1\tLed 11 /led/1175",
-            "floor": "GROUND FLOOR",
-            "area": "MASTER",
-            "location": "SUITE · MASTER BEDROOM · MASTER BED ENTRY · Device · 1\tButton 8 /button/1185 · SUITE · MASTER BEDROOM · MASTER BED ENTRY · Device · 1\tLed 11 /led/1175",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 6,
-                "href": "/button/1177",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 7,
-                "href": "/button/1181",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 9,
-                "href": "/button/1189",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 10,
-                "href": "/button/1193",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 18,
-                "href": "/button/1197",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 19,
-                "href": "/button/1199",
-                "componentName": null
-              }
-            ],
-            "leds": [
-              {
-                "kind": "led",
-                "index": 7,
-                "href": "/led/1171",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 8,
-                "href": "/led/1172",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 9,
-                "href": "/led/1173",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 10,
-                "href": "/led/1174",
-                "componentName": null
-              }
-            ]
-          },
-          {
-            "href": "/device/1208",
-            "id": "1208",
-            "model": "GROUND FLOOR\\MASTER HQWA-W5BRLN-WH",
-            "fullPath": "SUITE\\MASTER BATH\\MASTER BATH ENTRY\\Device 1\tButton 3 /button/1229",
-            "floor": "SUITE",
-            "area": "MASTER BATH",
-            "location": "MASTER BATH ENTRY · Device 1\tButton 3 /button/1229",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 1,
-                "href": "/button/1221",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 2,
-                "href": "/button/1225",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 4,
-                "href": "/button/1233",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 5,
-                "href": "/button/1237",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 18,
-                "href": "/button/1241",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 19,
-                "href": "/button/1243",
-                "componentName": null
-              }
-            ],
-            "leds": [
-              {
-                "kind": "led",
-                "index": 1,
-                "href": "/led/1215",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 2,
-                "href": "/led/1216",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 3,
-                "href": "/led/1217",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 4,
-                "href": "/led/1218",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 5,
-                "href": "/led/1219",
-                "componentName": null
-              }
-            ]
-          },
-          {
-            "href": "/device/1130",
-            "id": "1130",
-            "model": "HQWA-W3BSRLN-WH",
-            "fullPath": "GROUND FLOOR\\LIVING\\ROOM\\LIVING ROOM ENTRY\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "LIVING",
-            "location": "ROOM · LIVING ROOM ENTRY · Device 1",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 1,
-                "href": "/button/1141",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 3,
-                "href": "/button/1145",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 5,
-                "href": "/button/1149",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 18,
-                "href": "/button/1153",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 19,
-                "href": "/button/1155",
-                "componentName": null
-              }
-            ],
-            "leds": [
-              {
-                "kind": "led",
-                "index": 1,
-                "href": "/led/1137",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 3,
-                "href": "/led/1138",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 5,
-                "href": "/led/1139",
-                "componentName": null
-              }
-            ]
-          },
-          {
-            "href": "/device/1084",
-            "id": "1084",
-            "model": "HQWA-W5BRLN-WH",
-            "fullPath": "GROUND FLOOR\\FOYER\\FOYER ENTRY\\Device 1",
-            "floor": "GROUND FLOOR",
-            "area": "FOYER",
-            "location": "FOYER ENTRY · Device 1",
-            "buttons": [
-              {
-                "kind": "button",
-                "index": 1,
-                "href": "/button/1097",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 2,
-                "href": "/button/1101",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 3,
-                "href": "/button/1105",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 4,
-                "href": "/button/1109",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 5,
-                "href": "/button/1113",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 18,
-                "href": "/button/1117",
-                "componentName": null
-              },
-              {
-                "kind": "button",
-                "index": 19,
-                "href": "/button/1119",
-                "componentName": null
-              }
-            ],
-            "leds": [
-              {
-                "kind": "led",
-                "index": 1,
-                "href": "/led/1091",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 2,
-                "href": "/led/1092",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 3,
-                "href": "/led/1093",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 4,
-                "href": "/led/1094",
-                "componentName": null
-              },
-              {
-                "kind": "led",
-                "index": 5,
-                "href": "/led/1095",
-                "componentName": null
-              }
-            ]
-          }
-        ],
+        "house": null,
+        "areas": [],
+        "zones": [],
+        "scenes": [],
+        "devices": [],
         "hvacZones": [],
-        "shadeGroups": [
-          {
-            "href": "/zone/3646",
-            "id": "3646",
-            "fullPath": "GROUND FLOOR\\BEDROOM\\BR Blackouts",
-            "name": "BR Blackouts"
-          },
-          {
-            "href": "/zone/1464",
-            "id": "1464",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\MBR Sunscreens",
-            "name": "MBR Sunscreens"
-          },
-          {
-            "href": "/zone/1624",
-            "id": "1624",
-            "fullPath": "GROUND FLOOR\\MASTER SUITE\\MASTER BEDROOM\\MBR Blackouts",
-            "name": "MBR Blackouts"
-          },
-          {
-            "href": "/zone/1720",
-            "id": "1720",
-            "fullPath": "GROUND FLOOR\\LIVING ROOM\\Living Room Venetian",
-            "name": "Living Room Venetian"
-          }
-        ],
+        "shadeGroups": [],
         "loadSchedule": [],
         "floorOrder": {
           "lights": [],
@@ -11785,16 +9970,16 @@
           "updatedAt": "2026-06-02T21:43:32.003Z"
         },
         "/zone/988": {
-          "level": 16,
+          "level": 31,
           "on": true,
           "fade": 0,
-          "updatedAt": "2026-06-04T20:23:20.574Z"
+          "updatedAt": "2026-06-05T19:39:10.741Z"
         },
         "/zone/1007": {
-          "level": 100,
+          "level": 80,
           "on": true,
           "fade": 0,
-          "updatedAt": "2026-06-04T20:23:13.700Z"
+          "updatedAt": "2026-06-05T19:39:28.830Z"
         },
         "/zone/969": {
           "level": 0,
@@ -11809,546 +9994,6 @@
       "key": "lighting-event-log",
       "value": {
         "events": [
-          {
-            "id": "evt-mplnxocs-4xa6yh",
-            "ts": "2026-05-25T20:32:40.588Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 50,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplnxofy-xaqpgl",
-            "ts": "2026-05-25T20:32:40.702Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 60,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplnxojm-v7an0z",
-            "ts": "2026-05-25T20:32:40.834Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 69,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplnxomt-cfr50d",
-            "ts": "2026-05-25T20:32:40.949Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 79,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplnxorh-0oligs",
-            "ts": "2026-05-25T20:32:41.117Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 88,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplnxotp-io58br",
-            "ts": "2026-05-25T20:32:41.197Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 100,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplnxoy4-3c8qh6",
-            "ts": "2026-05-25T20:32:41.356Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 88,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplnxp0v-pf1q6j",
-            "ts": "2026-05-25T20:32:41.455Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 78,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo318j-rk13ow",
-            "ts": "2026-05-25T20:36:50.563Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 77,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo3206-iynd90",
-            "ts": "2026-05-25T20:36:51.558Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 47,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo32gi-qjg95g",
-            "ts": "2026-05-25T20:36:52.146Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 42,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo32k0-d10vdr",
-            "ts": "2026-05-25T20:36:52.272Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 11,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo32nd-kpgzos",
-            "ts": "2026-05-25T20:36:52.393Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 0,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo32xs-aqjfyz",
-            "ts": "2026-05-25T20:36:52.768Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 4,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo330w-5le5cm",
-            "ts": "2026-05-25T20:36:52.880Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 15,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo3340-brli6y",
-            "ts": "2026-05-25T20:36:52.992Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 25,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo339l-1gx3vb",
-            "ts": "2026-05-25T20:36:53.193Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 30,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo33bg-cai125",
-            "ts": "2026-05-25T20:36:53.260Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 54,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo33em-1tr1l7",
-            "ts": "2026-05-25T20:36:53.374Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 47,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo33jx-cu9dk8",
-            "ts": "2026-05-25T20:36:53.565Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 54,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo33ma-tzrb5f",
-            "ts": "2026-05-25T20:36:53.650Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 83,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo33qy-1moqdo",
-            "ts": "2026-05-25T20:36:53.818Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 70,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo33ug-v9qewq",
-            "ts": "2026-05-25T20:36:53.944Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 91,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo33x4-196rjq",
-            "ts": "2026-05-25T20:36:54.040Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 68,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo341w-attiz2",
-            "ts": "2026-05-25T20:36:54.212Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 60,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo344w-2xp2r4",
-            "ts": "2026-05-25T20:36:54.320Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 44,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo3480-bqo6or",
-            "ts": "2026-05-25T20:36:54.432Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 37,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo34bf-hsckwx",
-            "ts": "2026-05-25T20:36:54.555Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 25,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo34f4-f0vr2v",
-            "ts": "2026-05-25T20:36:54.688Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 15,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo34i7-uoief5",
-            "ts": "2026-05-25T20:36:54.799Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 31,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo34l8-25qsfl",
-            "ts": "2026-05-25T20:36:54.908Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 30,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo34oq-zza9ir",
-            "ts": "2026-05-25T20:36:55.034Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 11,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo34sh-suxek2",
-            "ts": "2026-05-25T20:36:55.169Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 23,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo34vu-sfc3pw",
-            "ts": "2026-05-25T20:36:55.290Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 41,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo3507-hui1ps",
-            "ts": "2026-05-25T20:36:55.447Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 50,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo352b-7zvfem",
-            "ts": "2026-05-25T20:36:55.523Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 60,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo356o-oqhn40",
-            "ts": "2026-05-25T20:36:55.680Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 62,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo359p-65ywvu",
-            "ts": "2026-05-25T20:36:55.789Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 69,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo35d9-y6llaj",
-            "ts": "2026-05-25T20:36:55.917Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 73,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo35gr-yeh1t0",
-            "ts": "2026-05-25T20:36:56.043Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 72,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo35lb-eug3wj",
-            "ts": "2026-05-25T20:36:56.207Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 66,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo35n8-t7cx4u",
-            "ts": "2026-05-25T20:36:56.276Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 56,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo35qj-uk1i8v",
-            "ts": "2026-05-25T20:36:56.395Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 49,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo35u5-op1ash",
-            "ts": "2026-05-25T20:36:56.525Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 41,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
-          {
-            "id": "evt-mplo35x9-o6h9e4",
-            "ts": "2026-05-25T20:36:56.637Z",
-            "kind": "zone",
-            "severity": "info",
-            "zoneHref": "/zone/1424",
-            "zoneName": null,
-            "action": "setLevel",
-            "level": 53,
-            "result": "fallback",
-            "message": "Processor unreachable — applied to local mock engine instead."
-          },
           {
             "id": "evt-mplo3615-vtpbfw",
             "ts": "2026-05-25T20:36:56.777Z",
@@ -14208,6 +11853,546 @@
             "level": 20,
             "result": "success",
             "message": "Processor set /zone/988 to 20%"
+          },
+          {
+            "id": "evt-mq1buhp5-4dndte",
+            "ts": "2026-06-05T19:38:35.417Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 80,
+            "result": "success",
+            "message": "Processor set /zone/988 to 80%"
+          },
+          {
+            "id": "evt-mq1buk5z-ile1d5",
+            "ts": "2026-06-05T19:38:38.615Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 0%"
+          },
+          {
+            "id": "evt-mq1bukuh-s8cz8k",
+            "ts": "2026-06-05T19:38:39.497Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 80,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 80%"
+          },
+          {
+            "id": "evt-mq1bum40-ml11kf",
+            "ts": "2026-06-05T19:38:41.136Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/988 to 0%"
+          },
+          {
+            "id": "evt-mq1bumu1-jhwikb",
+            "ts": "2026-06-05T19:38:42.073Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 80,
+            "result": "success",
+            "message": "Processor set /zone/988 to 80%"
+          },
+          {
+            "id": "evt-mq1bunqw-20if7x",
+            "ts": "2026-06-05T19:38:43.256Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 0%"
+          },
+          {
+            "id": "evt-mq1buoel-xqw1fy",
+            "ts": "2026-06-05T19:38:44.109Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 80,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 80%"
+          },
+          {
+            "id": "evt-mq1bupk2-6rkcjm",
+            "ts": "2026-06-05T19:38:45.602Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/988 to 0%"
+          },
+          {
+            "id": "evt-mq1buqar-nvmv40",
+            "ts": "2026-06-05T19:38:46.563Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 80,
+            "result": "success",
+            "message": "Processor set /zone/988 to 80%"
+          },
+          {
+            "id": "evt-mq1bur0i-9jr4mz",
+            "ts": "2026-06-05T19:38:47.490Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/988 to 0%"
+          },
+          {
+            "id": "evt-mq1burim-geayng",
+            "ts": "2026-06-05T19:38:48.142Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 80,
+            "result": "success",
+            "message": "Processor set /zone/988 to 80%"
+          },
+          {
+            "id": "evt-mq1bv6gs-s8onyp",
+            "ts": "2026-06-05T19:39:07.516Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/988 to 0%"
+          },
+          {
+            "id": "evt-mq1bv7f9-cns6ls",
+            "ts": "2026-06-05T19:39:08.757Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 0%"
+          },
+          {
+            "id": "evt-mq1bv89p-gybf67",
+            "ts": "2026-06-05T19:39:09.853Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 2,
+            "result": "success",
+            "message": "Processor set /zone/988 to 2%"
+          },
+          {
+            "id": "evt-mq1bv8dn-71ffa5",
+            "ts": "2026-06-05T19:39:09.995Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 31,
+            "result": "success",
+            "message": "Processor set /zone/988 to 31%"
+          },
+          {
+            "id": "evt-mq1bv8h3-eqb94t",
+            "ts": "2026-06-05T19:39:10.119Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 19,
+            "result": "success",
+            "message": "Processor set /zone/988 to 19%"
+          },
+          {
+            "id": "evt-mq1bv8kk-azi22f",
+            "ts": "2026-06-05T19:39:10.244Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/988",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 21,
+            "result": "success",
+            "message": "Processor set /zone/988 to 21%"
+          },
+          {
+            "id": "evt-mq1bvcpu-nblhto",
+            "ts": "2026-06-05T19:39:15.618Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 27,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 27%"
+          },
+          {
+            "id": "evt-mq1bvcqe-e4rnoo",
+            "ts": "2026-06-05T19:39:15.638Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 3,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 3%"
+          },
+          {
+            "id": "evt-mq1bvctj-r5u9we",
+            "ts": "2026-06-05T19:39:15.751Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 30,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 30%"
+          },
+          {
+            "id": "evt-mq1bvd5g-reyfzy",
+            "ts": "2026-06-05T19:39:16.180Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 11,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 11%"
+          },
+          {
+            "id": "evt-mq1bvdng-zwbpo9",
+            "ts": "2026-06-05T19:39:16.828Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 10,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 10%"
+          },
+          {
+            "id": "evt-mq1bvdtk-3in556",
+            "ts": "2026-06-05T19:39:17.048Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 28,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 28%"
+          },
+          {
+            "id": "evt-mq1bve1n-7g7b8j",
+            "ts": "2026-06-05T19:39:17.339Z",
+            "kind": "zone",
+            "severity": "warning",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 5,
+            "result": "failed",
+            "message": "HTTP 503"
+          },
+          {
+            "id": "evt-mq1bve5h-406ld8",
+            "ts": "2026-06-05T19:39:17.477Z",
+            "kind": "zone",
+            "severity": "warning",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 21,
+            "result": "failed",
+            "message": "HTTP 503"
+          },
+          {
+            "id": "evt-mq1bve5j-8cwhev",
+            "ts": "2026-06-05T19:39:17.479Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 8,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 8%"
+          },
+          {
+            "id": "evt-mq1bvefc-uhsmsh",
+            "ts": "2026-06-05T19:39:17.832Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 20,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 20%"
+          },
+          {
+            "id": "evt-mq1bvek8-aylcqq",
+            "ts": "2026-06-05T19:39:18.008Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 0%"
+          },
+          {
+            "id": "evt-mq1bveoy-57xyaz",
+            "ts": "2026-06-05T19:39:18.178Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "fallback",
+            "message": "Processor unreachable — applied to local mock engine instead."
+          },
+          {
+            "id": "evt-mq1bvep6-3y4axz",
+            "ts": "2026-06-05T19:39:18.186Z",
+            "kind": "zone",
+            "severity": "warning",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "failed",
+            "message": "HTTP 503"
+          },
+          {
+            "id": "evt-mq1bveq4-k84bpn",
+            "ts": "2026-06-05T19:39:18.220Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 13,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 13%"
+          },
+          {
+            "id": "evt-mq1bvesr-0p1oxz",
+            "ts": "2026-06-05T19:39:18.315Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 10,
+            "result": "fallback",
+            "message": "Processor unreachable — applied to local mock engine instead."
+          },
+          {
+            "id": "evt-mq1bvet0-n58eir",
+            "ts": "2026-06-05T19:39:18.324Z",
+            "kind": "zone",
+            "severity": "warning",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "failed",
+            "message": "HTTP 503"
+          },
+          {
+            "id": "evt-mq1bvgpd-h1x123",
+            "ts": "2026-06-05T19:39:20.785Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 1,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 1%"
+          },
+          {
+            "id": "evt-mq1bvgsx-3x0ezl",
+            "ts": "2026-06-05T19:39:20.913Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 22,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 22%"
+          },
+          {
+            "id": "evt-mq1bvgxp-912fg6",
+            "ts": "2026-06-05T19:39:21.085Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 7,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 7%"
+          },
+          {
+            "id": "evt-mq1bvh05-6ihvwo",
+            "ts": "2026-06-05T19:39:21.173Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 9,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 9%"
+          },
+          {
+            "id": "evt-mq1bvidu-vf22et",
+            "ts": "2026-06-05T19:39:22.962Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 10,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 10%"
+          },
+          {
+            "id": "evt-mq1bvii2-ba1x4n",
+            "ts": "2026-06-05T19:39:23.114Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 31,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 31%"
+          },
+          {
+            "id": "evt-mq1bvini-5hc8zk",
+            "ts": "2026-06-05T19:39:23.310Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 32,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 32%"
+          },
+          {
+            "id": "evt-mq1bvjy7-f34lgx",
+            "ts": "2026-06-05T19:39:24.991Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 35,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 35%"
+          },
+          {
+            "id": "evt-mq1bvk3i-zhixr6",
+            "ts": "2026-06-05T19:39:25.182Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 94,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 94%"
+          },
+          {
+            "id": "evt-mq1bvk7b-7dk3xj",
+            "ts": "2026-06-05T19:39:25.319Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 100,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 100%"
+          },
+          {
+            "id": "evt-mq1bvlcs-dzy0az",
+            "ts": "2026-06-05T19:39:26.812Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 0,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 0%"
+          },
+          {
+            "id": "evt-mq1bvmdv-r5w5qx",
+            "ts": "2026-06-05T19:39:28.147Z",
+            "kind": "zone",
+            "severity": "info",
+            "zoneHref": "/zone/1007",
+            "zoneName": null,
+            "action": "setLevel",
+            "level": 80,
+            "result": "success",
+            "message": "Processor set /zone/1007 to 80%"
           }
         ]
       }
@@ -14298,6 +12483,13 @@
       "key": "appearance",
       "value": {
         "theme": "dark"
+      }
+    },
+    {
+      "id": "setting-1780829506890",
+      "key": "platform-mode",
+      "value": {
+        "mode": "live"
       }
     }
   ],
@@ -15490,6 +13682,51 @@
       "portIndex": 1,
       "id": "2368712f-59f7-4c94-97ba-985a0b9eb7ad",
       "savedAt": "2026-06-04T21:46:46.478Z"
+    },
+    {
+      "success": true,
+      "downloadMbps": 249.4,
+      "uploadMbps": 42.5,
+      "latencyMs": 18,
+      "jitterMs": 6,
+      "server": "Starlink Maritime — WaveGuard mock",
+      "isp": "Starlink Maritime",
+      "source": "mock",
+      "testedAt": "2026-06-05T19:38:15.194Z",
+      "profileId": "snmp-sw-eq-192-168-1-128",
+      "portIndex": 1,
+      "id": "c8a42345-117f-47d7-84bd-ed20c9ed0f89",
+      "savedAt": "2026-06-05T19:38:15.474Z"
+    },
+    {
+      "success": true,
+      "downloadMbps": 235.3,
+      "uploadMbps": 44.3,
+      "latencyMs": 18,
+      "jitterMs": 4,
+      "server": "Starlink Maritime — WaveGuard mock",
+      "isp": "Starlink Maritime",
+      "source": "mock",
+      "testedAt": "2026-06-05T19:40:32.999Z",
+      "profileId": "snmp-sw-eq-192-168-1-128",
+      "portIndex": 1,
+      "id": "141b0fd5-a348-4768-a1bf-1e895847ad3f",
+      "savedAt": "2026-06-05T19:40:33.256Z"
+    },
+    {
+      "success": true,
+      "downloadMbps": 241.2,
+      "uploadMbps": 41.1,
+      "latencyMs": 18,
+      "jitterMs": 5,
+      "server": "Starlink Maritime — WaveGuard mock",
+      "isp": "Starlink Maritime",
+      "source": "mock",
+      "testedAt": "2026-06-05T19:52:25.706Z",
+      "profileId": "snmp-sw-eq-192-168-1-128",
+      "portIndex": 1,
+      "id": "4c4949c0-2f79-4bc4-9b9b-2826acab2076",
+      "savedAt": "2026-06-05T19:52:25.960Z"
     }
   ]
 }

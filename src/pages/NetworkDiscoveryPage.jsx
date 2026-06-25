@@ -1,18 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Radar, Play, Settings, Loader2, AlertTriangle, Search, Download,
-  History, PanelLeft, PanelLeftClose,
+  PanelLeft, PanelLeftClose,
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import {
   DEFAULT_DISCOVERY_SETTINGS,
-  saveDiscoverySettingsLocal,
   normalizeSubnetList,
 } from "@/lib/discoverySettings";
-import { discoverSubnets, networkScan, checkScannerHealth, loadScanHistory, saveScanHistory, deleteScanHistory } from "@/lib/discoveryApi";
-import { registerDiscoveredDevice, registerDiscoveredDevices } from "@/lib/discoveryRegistration";
-import { toast } from "sonner";
+import { useDiscovery } from "@/contexts/DiscoveryContext";
 import DiscoveryResultsTable from "../components/discovery/DiscoveryResultsTable";
 import DiscoverySubnetConfig from "../components/discovery/DiscoverySubnetConfig";
 import DiscoverySummaryBar from "../components/discovery/DiscoverySummaryBar";
@@ -23,215 +20,49 @@ export default function NetworkDiscoveryPage() {
     "discovery",
     DEFAULT_DISCOVERY_SETTINGS
   );
-  const [subnets, setSubnets] = useState(DEFAULT_DISCOVERY_SETTINGS.subnets);
-  const [scanType, setScanType] = useState("ping");
-  const [scanning, setScanning] = useState(false);
-  const [scanResult, setScanResult] = useState(null);
-  const [error, setError] = useState(null);
-  const [devices, setDevices] = useState([]);
+  const {
+    subnets, setSubnets,
+    scanType, setScanType,
+    scanning,
+    scanResult,
+    progress,
+    devices,
+    error,
+    scannerHealth,
+    registeringId,
+    scanHistory,
+    historyLoading,
+    activeScanId,
+    setDiscoverySettings,
+    runScan,
+    handleDetectSubnets,
+    classify,
+    classifyAll,
+    selectScan,
+    deleteScan,
+    clearScan,
+  } = useDiscovery();
+
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [classFilter, setClassFilter] = useState("all");
   const [showConfig, setShowConfig] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [scannerHealth, setScannerHealth] = useState(null);
-  const [registeringId, setRegisteringId] = useState(null);
-  const [scanHistory, setScanHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [activeScanId, setActiveScanId] = useState(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     if (!settingsLoading && discoveryCfg) {
       setSubnets(normalizeSubnetList(discoveryCfg.subnets));
       setScanType(discoveryCfg.scanType || "ping");
+      setDiscoverySettings(discoveryCfg);
     }
-  }, [settingsLoading, discoveryCfg]);
+  }, [settingsLoading, discoveryCfg, setSubnets, setScanType, setDiscoverySettings]);
 
-  useEffect(() => {
-    loadScanHistory().then((list) => {
-      setScanHistory(list);
-      setHistoryLoading(false);
-    }).catch(() => setHistoryLoading(false));
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const health = await checkScannerHealth(discoveryCfg?.agentUrl);
-      if (!cancelled) setScannerHealth(health);
-    })();
-    return () => { cancelled = true; };
-  }, [discoveryCfg?.agentUrl]);
-
-  const runScan = async () => {
-    let scanSubnets = normalizeSubnetList(subnets);
-    if (scanSubnets.length === 0) {
-      try {
-        const detected = await discoverSubnets(discoveryCfg?.agentUrl);
-        scanSubnets = detected.subnets || [];
-        if (scanSubnets.length) setSubnets(scanSubnets);
-      } catch {
-        /* handled below */
-      }
-    }
-    if (scanSubnets.length === 0) {
-      setError("Add at least one subnet (CIDR), or use Detect local subnets.");
-      setShowConfig(true);
-      return;
-    }
-
-    setScanning(true);
-    setError(null);
-    setScanResult(null);
-    setDevices([]);
-    setProgress(0);
-
-    saveDiscoverySettingsLocal({ ...discoveryCfg, subnets: scanSubnets, scanType });
-
-    const progressInterval = setInterval(() => {
-      setProgress((p) => {
-        if (p >= 88) {
-          clearInterval(progressInterval);
-          return 88;
-        }
-        return p + Math.random() * 8;
-      });
-    }, 400);
-
-    try {
-      const isFullScan = scanType === "full";
-      const data = await networkScan({
-        subnets: scanSubnets,
-        scanType,
-        snmpEnabled: discoveryCfg.snmpEnabled,
-        snmpCommunity: discoveryCfg.snmpCommunity,
-        snmpVersion: discoveryCfg.snmpVersion,
-        maxConcurrent: isFullScan
-          ? Math.min(32, discoveryCfg.maxConcurrent || 64)
-          : discoveryCfg.maxConcurrent,
-        timeoutMs: isFullScan
-          ? Math.max(2000, discoveryCfg.timeoutMs || 1500)
-          : discoveryCfg.timeoutMs,
-        autoDetectLocalSubnets: discoveryCfg.autoDetectLocalSubnets,
-      }, discoveryCfg?.agentUrl);
-      clearInterval(progressInterval);
-      setProgress(100);
-      if (data?.success === false && data?.error) {
-        throw new Error(data.error);
-      }
-      setScanResult(data);
-      setDevices(data.devices || []);
-      const saved = await saveScanHistory(data).catch(() => null);
-      if (saved?.scanHistory) {
-        setScanHistory((prev) => {
-          const updated = [saved.scanHistory, ...prev];
-          if (updated.length > 50) updated.length = 50;
-          return updated;
-        });
-        setActiveScanId(saved.scanHistory.id);
-      }
-    } catch (e) {
-      clearInterval(progressInterval);
-      const msg = e.message || "Scan failed";
-      setError(
-        /reading 'map'/.test(msg)
-          ? `${msg} — restart the scanner: stop npm run mock, then run it again (npm run dev:all).`
-          : msg
-      );
-    } finally {
-      setScanning(false);
-    }
+  const handleRunScan = () => {
+    runScan(subnets, scanType, discoveryCfg);
   };
 
-  const handleDetectSubnets = useCallback(async () => {
-    const data = await discoverSubnets(discoveryCfg?.agentUrl);
-    const list = data?.subnets || [];
-    if (list.length) {
-      setSubnets((prev) => [...new Set([...normalizeSubnetList(prev), ...normalizeSubnetList(list)])]);
-    }
-    if (data?.scanInterface) {
-      setScannerHealth((h) => ({ ...h, ok: true, scanInterface: data.scanInterface, localSubnets: list }));
-    }
-    return list;
-  }, [discoveryCfg?.agentUrl]);
-
-  const classify = async (id, classification) => {
-    const device = devices.find((d) => d.id === id);
-    if (!device) return;
-
-    setRegisteringId(id);
-    setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, classification } : d)));
-
-    try {
-      const result = await registerDiscoveredDevice(device, classification);
-      const n = result.groupsUpdated?.length || 0;
-      if (classification === "monitored") {
-        toast.success(
-          n > 0
-            ? `${device.ip} is now monitored (${n} group${n > 1 ? "s" : ""})`
-            : `${device.ip} is now monitored`
-        );
-      } else if (classification === "inventory") {
-        toast.success(
-          n > 0
-            ? `${device.ip} added to inventory (${n} group${n > 1 ? "s" : ""})`
-            : `${device.ip} added to inventory`
-        );
-      } else if (classification === "ignored") {
-        toast.success(`${device.ip} ignored`);
-      }
-    } catch (e) {
-      setDevices((prev) => prev.map((d) => (d.id === id ? { ...d, classification: "unclassified" } : d)));
-      toast.error(e.message || "Could not register device");
-    } finally {
-      setRegisteringId(null);
-    }
-  };
-
-  const handleSelectScan = (entry) => {
-    setActiveScanId(entry.id);
-    setScanResult(entry);
-    setDevices(entry.devices || []);
-    setError(null);
-    if (entry.subnets) setSubnets(normalizeSubnetList(entry.subnets));
-  };
-
-  const handleDeleteScan = async (id) => {
-    try {
-      await deleteScanHistory(id);
-      setScanHistory((prev) => prev.filter((s) => s.id !== id));
-      if (activeScanId === id) {
-        setActiveScanId(null);
-        setScanResult(null);
-        setDevices([]);
-      }
-      toast.success("Scan removed");
-    } catch (e) {
-      toast.error(e.message || "Failed to delete scan");
-    }
-  };
-
-  const classifyAll = async (ids, classification) => {
-    const targets = devices.filter((d) => ids.includes(d.id));
-    if (!targets.length) return;
-
-    setRegisteringId("bulk");
-    setDevices((prev) => prev.map((d) => (ids.includes(d.id) ? { ...d, classification } : d)));
-
-    try {
-      await registerDiscoveredDevices(targets, classification);
-      toast.success(
-        `${targets.length} device${targets.length > 1 ? "s" : ""} marked as ${classification}`
-      );
-    } catch (e) {
-      setDevices((prev) =>
-        prev.map((d) => (ids.includes(d.id) ? { ...d, classification: "unclassified" } : d))
-      );
-      toast.error(e.message || "Bulk registration failed");
-    } finally {
-      setRegisteringId(null);
-    }
+  const handleDetect = () => {
+    handleDetectSubnets(discoveryCfg?.agentUrl);
   };
 
   const filtered = devices.filter((d) => {
@@ -287,14 +118,9 @@ export default function NetworkDiscoveryPage() {
         <ScanHistoryPanel
           history={scanHistory}
           activeScanId={activeScanId}
-          onSelectScan={handleSelectScan}
-          onDeleteScan={handleDeleteScan}
-          onRunNew={() => {
-            setActiveScanId(null);
-            setScanResult(null);
-            setDevices([]);
-            setError(null);
-          }}
+          onSelectScan={selectScan}
+          onDeleteScan={deleteScan}
+          onRunNew={clearScan}
           loading={historyLoading}
         />
       </div>
@@ -343,7 +169,7 @@ export default function NetworkDiscoveryPage() {
               <Settings size={12} /> Configure
             </button>
             <button
-              onClick={runScan}
+              onClick={handleRunScan}
               disabled={scanning || settingsLoading}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-black font-bold text-sm hover:bg-cyan-400 transition-colors disabled:opacity-60"
             >
@@ -367,9 +193,8 @@ export default function NetworkDiscoveryPage() {
                 scanType={scanType}
                 onScanTypeChange={(t) => {
                   setScanType(t);
-                  setError(null);
                 }}
-                onDetectSubnets={handleDetectSubnets}
+                onDetectSubnets={handleDetect}
               />
             </motion.div>
           )}
@@ -430,7 +255,7 @@ export default function NetworkDiscoveryPage() {
                 Configure subnets
               </button>
               <button
-                onClick={runScan}
+                onClick={handleRunScan}
                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 text-black font-bold text-sm hover:bg-cyan-400 transition-colors"
               >
                 <Play size={14} /> Start Scan

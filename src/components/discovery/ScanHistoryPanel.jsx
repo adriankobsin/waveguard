@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Clock, Trash2, Play, Search, Loader2, X } from "lucide-react";
+import { Clock, Trash2, Play, Search, Loader2 } from "lucide-react";
 
 const SCAN_TYPE_LABEL = { ping: "Ping", arp: "ARP", full: "Full" };
 

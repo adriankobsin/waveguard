@@ -3520,9 +3520,13 @@ pollAllSwitchProfiles().then(() => {
 });
 console.log(`[bgPoll] background loop every ${DEFAULT_POLL_INTERVAL_MS / 1000}s`);
 setInterval(pollAllSwitchProfiles, DEFAULT_POLL_INTERVAL_MS);
-
 import createAudioRouter from "./audioRoutes.js";
+import createHVACRouter from "./hvacRoutes.js";
+import createCrestronGatewayRouter from "./crestronHVACGateway.js";
+
 app.use(`/api/apps/${APP_ID}/audio`, createAudioRouter(db, broadcast));
+app.use("/api/hvac", createHVACRouter());
+app.use("/cws/api", createCrestronGatewayRouter());
 
 app.listen(PORT, () => {
   console.log(`[mock-base44] Server running at http://localhost:${PORT}`);

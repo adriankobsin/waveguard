@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import {
   Wifi, Camera, Monitor, Zap, AlertTriangle, CheckCircle2,
-  WifiOff, Activity, Globe, ArrowDownToLine, ArrowUpFromLine,
+  WifiOff, Activity, Globe,
   Radio, BarChart3, Server, Clock, Lightbulb, Cpu, Loader2, ArrowRight, Gauge,
 } from "lucide-react";
 import {

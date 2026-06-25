@@ -137,11 +137,25 @@ async function callOllama(messages, ollamaHost) {
     ...messages.filter(m => m.role !== 'system'),
   ];
 
-  const res = await fetch(`${ollamaHost}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'llama3.2', messages: ollamaMessages, stream: false }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+  let res;
+  try {
+    res = await fetch(`${ollamaHost}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'llama3.2', messages: ollamaMessages, stream: false }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') {
+      throw new Error('Ollama is loading the model. Please wait a moment and try again — the first request can take up to 2 minutes on a cold start.');
+    }
+    throw err;
+  }
+  clearTimeout(timeoutId);
 
   if (!res.ok) {
     const text = await res.text();
@@ -178,7 +192,8 @@ app.post('/chat', async (req, res) => {
         response = await callOpenAI([{ role: 'system', content: SYSTEM_PROMPT }, ...messages], apiKey);
         break;
       }
-      case 'offline': {
+      case 'offline':
+      case 'local': {
         response = await callOllama(messages, ollamaHost);
         break;
       }
@@ -228,4 +243,16 @@ app.listen(PORT, () => {
   console.log(`[waveguard-chat] Running on port ${PORT}`);
   console.log(`[waveguard-chat] OpenAI: ${process.env.OPENAI_API_KEY ? 'configured' : 'NOT configured'}`);
   console.log(`[waveguard-chat] Ollama: ${process.env.OLLAMA_HOST || 'http://localhost:11434'}`);
+
+  // Pre-warm Ollama model to avoid cold-start delay on first user request
+  const ollamaHost = process.env.OLLAMA_HOST || 'http://localhost:11434';
+  fetch(`${ollamaHost}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'llama3.2', prompt: 'hello', keep_alive: '5m' }),
+  }).then(r => {
+    console.log(`[waveguard-chat] Ollama warmup: ${r.ok ? 'ok' : `${r.status}`}`);
+  }).catch(() => {
+    console.log('[waveguard-chat] Ollama warmup: unavailable (startup)');
+  });
 });

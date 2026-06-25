@@ -5,9 +5,12 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useSettings } from "@/hooks/useSettings";
+import { useAuth } from "@/lib/AuthContext";
+import { isAdmin } from "@/lib/permissions";
 import { testLightingProcessor } from "@/api/lightingApi";
-import { getIntegrationDashboard, getIntegrationTypes, getIntegrationConfigs, createIntegrationConfig, deleteIntegrationConfig, testIntegrationConfig, getIntegrationLogs } from "@/api/integrationApi";
-import { getCategoryLabel, getCategoryIcon, getProtocolLabel, CATEGORY_ORDER } from "@/lib/integrations/integrationRegistry";
+import { getIntegrationTypes, getIntegrationConfigs, createIntegrationConfig, deleteIntegrationConfig, testIntegrationConfig, getIntegrationLogs } from "@/api/integrationApi";
+import { getCategoryLabel, CATEGORY_ORDER } from "@/lib/integrations/integrationRegistry";
+import { WIDGET_TYPES } from "@/components/dashboard/widgets/DashboardWidgets";
 import {
   testIntegration,
   testOpenAiKey,
