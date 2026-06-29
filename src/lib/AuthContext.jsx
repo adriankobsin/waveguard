@@ -105,9 +105,23 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('User auth check failed:', error);
       setIsLoadingAuth(false);
-      setIsAuthenticated(false);
       setAuthChecked(true);
-      
+
+      // Local mock server: keep full settings access when /User/me is unreachable
+      if (isMockServer) {
+        setUser({
+          id: "user-admin",
+          username: "WaveAdmin",
+          role: "admin",
+          name: "Wave Admin",
+          full_name: "Wave Admin",
+        });
+        setIsAuthenticated(true);
+        return;
+      }
+
+      setIsAuthenticated(false);
+
       // If user auth fails, it might be an expired token
       if (error.status === 401 || error.status === 403) {
         setAuthError({

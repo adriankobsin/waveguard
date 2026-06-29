@@ -1,6 +1,15 @@
 import { base44, isMockServer, MOCK_SERVER_URL } from "@/api/base44Client";
+import { isDemoModeActive } from "@/lib/platformMode";
 
 const MOCK_APP = "mock-app";
+
+function guardDemoWrite() {
+  if (isDemoModeActive()) {
+    throw new Error(
+      "Demo mode is read-only. Switch to Live in Settings → Platform mode to edit equipment."
+    );
+  }
+}
 
 function authHeaders() {
   const token = typeof window !== "undefined" ? localStorage.getItem("base44_access_token") : null;
@@ -72,6 +81,7 @@ export async function findEquipmentByName(name) {
 }
 
 export async function createEquipment(data) {
+  guardDemoWrite();
   if (isMockServer) {
     return mockApi("/entities/Equipment", {
       method: "POST",
@@ -82,6 +92,7 @@ export async function createEquipment(data) {
 }
 
 export async function updateEquipment(id, data) {
+  guardDemoWrite();
   if (isMockServer) {
     return mockApi(`/entities/Equipment/${id}`, {
       method: "PUT",
@@ -92,6 +103,7 @@ export async function updateEquipment(id, data) {
 }
 
 export async function deleteEquipment(id) {
+  guardDemoWrite();
   if (isMockServer) {
     return mockApi(`/entities/Equipment/${id}`, { method: "DELETE" });
   }

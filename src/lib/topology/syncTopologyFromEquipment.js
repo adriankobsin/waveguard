@@ -22,6 +22,7 @@ export function equipmentToTopologyNode(eq) {
     model: eq.model || eq.vendor || "Unknown",
     ip: eq.ip || "",
     mac: eq.mac || "",
+    make: eq.make || "",
     status: eq.status || "online",
     location: eq.location || "",
     serial: eq.serial || "",

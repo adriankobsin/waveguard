@@ -11,7 +11,81 @@ import {
   getHealth,
   buildTopologyConnections,
   mapDevicesToTopology,
+  pollSwitchPorts,
+  testSwitchInterface,
+  buildPollAllResponse,
+  isSnmpWalkAvailable,
 } from "../scanner/index.js";
+import {
+  SNMP_SWITCHES_SETTINGS_KEY,
+  PEPLINK_CREDENTIALS_KEY,
+  normalizeSnmpSwitchesState,
+  normalizeSnmpSwitchProfile,
+  mergePollIntoProfile,
+  buildConnectionMap,
+  portCountFromModel,
+  buildDefaultProfileFields,
+  profileIdForEquipment,
+  normalizeSnmpPort,
+} from "../src/lib/snmp/snmpSwitchProfiles.js";
+import {
+  CREDENTIALS_VAULT_KEY,
+  normalizeCredentialsVault,
+} from "../src/lib/credentials/credentialsVault.js";
+import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
+import { lookupIpGeolocation } from "../scanner/integrations/geo/ipGeolocation.js";
+import { fetchOpenMeteoForecast } from "../scanner/integrations/weather/openMeteo.js";
+import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
+import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
+import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
+import { buildMockCrestronEngine } from "../src/lib/integrations/crestron/crestronAdapter.js";
+import { buildMockDaliEngine } from "../src/lib/integrations/dali/daliAdapter.js";
+import { buildMockDmxEngine } from "../src/lib/integrations/dmx/dmxAdapter.js";
+import {
+  getLutronClient,
+  closeLutronClient,
+  integrationIdFromHref,
+  probeLutronPorts,
+  recommendationFromPorts,
+} from "../scanner/integrations/lutron/lutronClient.js";
+import {
+  getLeapClient,
+  closeLeapClient,
+  isPaired,
+  startPairing,
+  mockPairing,
+  getPairingStatus,
+  getPairingDetails,
+  getPairedHosts,
+  removePairedHost,
+  cancelPairing,
+  testConnection as testLeapConnection,
+} from "../scanner/integrations/lutron/leapClient.js";
+import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
+import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
+import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
+import { getModbusClient, closeModbusClient, probeModbusPorts, recommendationFromPorts as modbusRecommendation } from "../scanner/integrations/modbus/modbusClient.js";
+import { getCoolmasterClient, closeCoolmasterClient, probeCoolmasterPorts, recommendationFromPorts as coolmasterRecommendation } from "../scanner/integrations/coolmaster/coolmasterClient.js";
+import { getRs485Client, closeRs485Client, probeRs485Ports, recommendationFromPorts as rs485Recommendation } from "../scanner/integrations/rs485/rs485Client.js";
+import { buildMockModbusEngine } from "../src/lib/integrations/modbus/modbusAdapter.js";
+import { buildMockCoolmasterEngine } from "../src/lib/integrations/coolmaster/coolmasterAdapter.js";
+import { buildMockRs485Engine } from "../src/lib/integrations/rs485/rs485Adapter.js";
+import {
+  getCiscoSwitchClient,
+  closeCiscoSwitchClient,
+  probeCiscoPorts,
+  recommendationFromPorts as ciscoRecommendation,
+} from "../scanner/integrations/cisco/ciscoSwitchClient.js";
+import { mergeCiscoIntoPoll } from "../src/lib/integrations/cisco/ciscoAdapter.js";
+import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, LIGHTING_SYSTEMS_CONFIG_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
+import {
+  NETWORK_CISCO_SWITCHES_KEY,
+  normalizeCiscoSwitches,
+  normalizeCiscoSwitch,
+  CISCO_LIVE_POLL_INTERVAL_MS,
+  CISCO_BACKGROUND_POLL_INTERVAL_MS,
+} from "../src/lib/network/ciscoSwitchSettings.js";
+import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Set WAVEGUARD_USE_MOCK_SCAN=true only for demos without LAN access. */
@@ -249,7 +323,7 @@ function generateMockEquipment(count) {
   const items = [
     { name: "SW-Bridge", model: "Cisco CBS350-24P", category: "Network", ip: "192.168.10.2", location: "Bridge Rack", serial: "FOC2241X0AB", condition: "Excellent" },
     { name: "SW-CCTV", model: "Cisco CBS350-8P", category: "Network", ip: "192.168.10.3", location: "Bridge Rack", serial: "FOC2241X0AC", condition: "Good" },
-    { name: "Router-WAN", model: "Cisco ISR 1100", category: "Network", ip: "10.0.0.1", location: "Bridge Rack", serial: "ISR1100-001", condition: "Excellent" },
+    { name: "Router-WAN", make: "Peplink", model: "Balance 2500 EC", category: "Network", ip: "10.0.0.1", location: "Bridge Rack", serial: "PPL-B2500-001", condition: "Excellent", notes: "Primary WAN router — Starlink + 4G failover" },
     { name: "UPS-Main", model: "APC SRT 3000", category: "Power", ip: "192.168.10.100", location: "Engine Room", serial: "APC-SRT-001", condition: "Good" },
     { name: "Cam-Bow-01", model: "Dahua IPC-HFW2831T", category: "Camera", ip: "192.168.20.10", location: "Bow - External", serial: "DAHUA-001", condition: "Fair" },
     { name: "Cam-Stern-01", model: "Dahua IPC-HFW2831T", category: "Camera", ip: "192.168.20.11", location: "Stern - External", serial: "DAHUA-002", condition: "Excellent" },
@@ -261,6 +335,9 @@ function generateMockEquipment(count) {
     { name: "TV-Saloon-01", model: "Samsung QLED 75\"", category: "AV", ip: "192.168.30.10", location: "Saloon Wall", serial: "SAM-001", condition: "Good", avRole: "display", ruHeight: 1 },
     { name: "TV-Saloon-02", model: "Samsung QLED 55\"", category: "AV", ip: "192.168.30.11", location: "Saloon Wall", serial: "SAM-002", condition: "Good", avRole: "display", ruHeight: 1 },
     { name: "Lighting-Controller", model: "Lutron QS", category: "Lighting", ip: "192.168.40.2", location: "AV Rack", serial: "LUT-001", condition: "Good", controlType: "KNX" },
+    { name: "KNX-Gateway", model: "KNX IP Router 753", category: "Lighting", ip: "192.168.40.10", location: "AV Rack", serial: "KNX-001", condition: "Good", controlType: "KNX" },
+    { name: "DALI-Gateway", model: "DALI USB 2.0 LC", category: "Lighting", ip: "192.168.40.11", location: "AV Rack", serial: "DALI-001", condition: "Good", controlType: "DALI" },
+    { name: "Art-Net-Node", model: "DMX King Art-Net Pro", category: "Lighting", ip: "192.168.40.12", location: "Stage Rack", serial: "DMX-001", condition: "Good", controlType: "Art-Net" },
     { name: "Sirius-Weather", model: "Sirius XM Weather", category: "Other", ip: "192.168.10.200", location: "Bridge Console", serial: "SIRIUS-001", condition: "Excellent" },
     { name: "Starlink", model: "Starlink Standard", category: "Network", ip: "10.0.0.2", location: "Upper Deck", serial: "SLINK-001", condition: "Good" },
     { name: "SW-AV-Rack", model: "Cisco CBS350-8P", category: "Network", ip: "192.168.30.1", location: "AV Rack", serial: "FOC2241X0AD", condition: "Excellent" },
@@ -345,6 +422,17 @@ function generateDefaultRackLayout() {
 }
 
 const DEVICE_STATUS_POOL = ["online", "online", "online", "online", "warning", "offline"];
+
+function normalizeEquipmentRow(e, idx = 0) {
+  const status = e.status || DEVICE_STATUS_POOL[idx % DEVICE_STATUS_POOL.length];
+  const meta = enrichEquipmentMeta({ ...e, status });
+  return {
+    ...e,
+    status,
+    ...meta,
+    telemetry: e.telemetry || meta.telemetry,
+  };
+}
 
 function getMockDevices() {
   const devices = db.equipment.map((e, idx) => {
@@ -523,9 +611,7 @@ app.post("/api/apps/:appId/auth/change-password", (req, res) => {
 });
 
 app.get("/api/apps/:appId/entities/User/me", (req, res) => {
-  const token = req.headers["authorization"]?.replace("Bearer ", "");
-  const userId = db.sessions[token];
-  const user = userId ? db.users.find((u) => u.id === userId) : db.users[0];
+  const user = getRequestUser(req);
   res.json(sanitizeUser(user || db.users[0]));
 });
 
@@ -596,34 +682,99 @@ app.get("/api/apps/:appId/scanner/health", (_req, res) => {
   res.json(getHealth());
 });
 
+app.post("/api/apps/:appId/functions/geoLocation", async (req, res) => {
+  try {
+    const ip = typeof req.body?.ip === "string" ? req.body.ip.trim() : "";
+    const result = await lookupIpGeolocation(ip || undefined);
+    res.json(result);
+  } catch (err) {
+    console.error("[geoLocation]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Geolocation lookup failed",
+      source: "ipapi.co",
+      lookedUpAt: new Date().toISOString(),
+    });
+  }
+});
+
+app.post("/api/apps/:appId/functions/weatherForecast", async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body || {};
+    const result = await fetchOpenMeteoForecast(latitude, longitude);
+    res.json(result);
+  } catch (err) {
+    console.error("[weatherForecast]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Weather lookup failed",
+      source: "open-meteo.com",
+      fetchedAt: new Date().toISOString(),
+    });
+  }
+});
+
 app.post("/api/apps/:appId/functions/discoverSubnets", (_req, res) => {
   const subnets = detectLocalSubnets();
   res.json({ success: true, subnets, scanInterface: getHealth().scanInterface });
 });
 
+function mapMockDiscoveryDevices(rawDevices, scanType, scanSubnets) {
+  const subnet = scanSubnets?.[0] || "192.168.10.0/24";
+  return rawDevices.map((d, idx) => ({
+    id: d.id || `disc-${String(d.ip || idx).replace(/\./g, "-")}`,
+    ip: d.ip,
+    hostname: d.hostname || d.name || d.ip,
+    mac: d.mac || "",
+    vendor: d.vendor || (d.model ? String(d.model).split(" ")[0] : ""),
+    model: d.model || "",
+    category: d.category || "Unknown",
+    openPorts:
+      d.openPorts ||
+      (scanType === "full" ? [22, 80, 443, 161] : scanType === "arp" ? [80] : []),
+    responseTimeMs: d.responseTimeMs ?? Math.floor(Math.random() * 40 + 5),
+    status: "discovered",
+    classification: "unclassified",
+    firstSeen: d.firstSeen || new Date().toISOString(),
+    subnet: d.subnet || subnet,
+  }));
+}
+
 app.post("/api/apps/:appId/functions/networkScan", async (req, res) => {
   if (USE_MOCK_SCAN) {
     const { subnets, scanType, target } = req.body;
-    const devices = getMockDevices();
     const scanSubnets = subnets || ["192.168.10.0/24"];
+    const mode = scanType || "ping";
+    const raw = getMockDevices();
+    const devices = mapMockDiscoveryDevices(raw, mode, scanSubnets);
     if (target) {
-      const device = devices.find((d) => d.ip === target) || {
-        id: "scan-" + Date.now(),
-        name: target,
-        ip: target,
-        status: "online",
-        category: "Network",
-        responseTimeMs: Math.floor(Math.random() * 40 + 5),
-      };
+      const device =
+        devices.find((d) => d.ip === target) ||
+        mapMockDiscoveryDevices(
+          [
+            {
+              id: "scan-" + Date.now(),
+              name: target,
+              ip: target,
+              hostname: target,
+              category: "Network",
+              openPorts: mode === "full" ? [22, 80, 443] : [],
+              responseTimeMs: Math.floor(Math.random() * 40 + 5),
+            },
+          ],
+          mode,
+          scanSubnets
+        )[0];
       return res.json({
         success: true,
         devices: [device],
         target,
         totalFound: 1,
         scanInterface: "eth0",
-        durationMs: 200,
+        durationMs: mode === "full" ? 1200 : 200,
         subnets: scanSubnets,
-        scanType: scanType || "ping",
+        scanType: mode,
+        scannedAt: new Date().toISOString(),
       });
     }
     return res.json({
@@ -631,9 +782,10 @@ app.post("/api/apps/:appId/functions/networkScan", async (req, res) => {
       devices,
       totalFound: devices.length,
       scanInterface: "eth0",
-      durationMs: 1500,
+      durationMs: mode === "full" ? 2500 : 1500,
       subnets: scanSubnets,
-      scanType: scanType || "ping",
+      scanType: mode,
+      scannedAt: new Date().toISOString(),
     });
   }
 
@@ -747,31 +899,1692 @@ app.post("/api/apps/:appId/functions/registerDiscoveredDevice", (req, res) => {
   }
 });
 
-app.post("/api/apps/:appId/functions/snmpPortMap", (req, res) => {
-  const switches = db.equipment.filter(e => e.model && e.model.includes("CBS"));
-  const connectionMap = switches.map(sw => ({
-    name: sw.name,
-    ip: sw.ip,
-    portsUp: Math.floor(Math.random() * 10 + 4),
-    portsDown: Math.floor(Math.random() * 2),
-    ports: Array.from({ length: Math.floor(Math.random() * 12 + 8) }, (_, i) => ({
-      port: i + 1,
-      ifOperStatus: Math.random() > 0.15 ? "up" : "down",
-      ifAlias: `Port ${i + 1}`,
-      connectedDevice: Math.random() > 0.4 ? `device-${Math.floor(Math.random() * 20 + 1)}` : null,
-      macAddr: `00:1A:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}:${String(Math.floor(Math.random() * 255)).padStart(2, "0")}`,
-      ifSpeed: ["10M", "100M", "1G", "10G"][Math.floor(Math.random() * 4)],
-      vlan: Math.floor(Math.random() * 10 + 1) * 100,
-    })),
-  }));
-  res.json({
-    success: true,
-    connectionMap,
-    totalConnections: connectionMap.reduce((a, s) => a + s.ports.filter(p => p.connectedDevice).length, 0),
-    disconnectedPorts: connectionMap.reduce((a, s) => a + s.portsDown, 0),
-    switches: connectionMap,
-    polledAt: new Date().toISOString(),
+function getSnmpSwitchesState() {
+  const row = db.systemSettings.find((s) => s.key === SNMP_SWITCHES_SETTINGS_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeSnmpSwitchesState(raw || { profiles: [] });
+}
+
+/** Ensure Router-WAN is registered in Core Network with polled Peplink WAN ports. */
+function ensureDefaultWanRouterProfile() {
+  const routerEq = db.equipment.find((e) => /router-wan/i.test(e.name || ""));
+  if (!routerEq) return;
+
+  const state = getSnmpSwitchesState();
+  let profile = state.profiles.find((p) => p.equipmentId === routerEq.id);
+  if (!profile) {
+    const defaults = buildDefaultProfileFields(routerEq);
+    profile = normalizeSnmpSwitchProfile({
+      equipmentId: routerEq.id,
+      location: routerEq.location || "",
+      ...defaults,
+      enabled: true,
+    });
+    state.profiles.push(profile);
+  }
+
+  const hasWanPorts = (profile.lastPoll?.ports || []).some(
+    (p) => p.meta?.type === "wan" || p.meta?.type === "cellular" || /wan|cell/i.test(p.name || "")
+  );
+  if (!hasWanPorts) {
+    const ip = equipmentIp(routerEq);
+    const pep = buildMockPeplinkPoll(routerEq.model, ip);
+    const poll = {
+      ...pep,
+      sysName: routerEq.name,
+      ports: (pep.ports || []).map((p) => normalizeSnmpPort(p)).filter(Boolean),
+    };
+    const updated = mergePollIntoProfile(profile, poll, { equipment: routerEq });
+    const idx = state.profiles.findIndex((p) => p.id === updated.id);
+    if (idx >= 0) state.profiles[idx] = updated;
+    else state.profiles.push(updated);
+    saveSnmpSwitchesState(state);
+  }
+}
+
+function resolveWanProfile(profileId) {
+  const state = getSnmpSwitchesState();
+  let profile = state.profiles.find((p) => p.id === profileId);
+  if (profile) return { profile, state };
+
+  const equipmentId = String(profileId || "").replace(/^snmp-sw-/, "");
+  const eq = db.equipment.find((e) => e.id === equipmentId);
+  if (!eq) return { profile: null, state };
+
+  const defaults = buildDefaultProfileFields(eq);
+  profile = normalizeSnmpSwitchProfile({
+    id: profileIdForEquipment(eq.id),
+    equipmentId: eq.id,
+    location: eq.location || "",
+    ...defaults,
+    enabled: true,
   });
+  return { profile, state };
+}
+
+function saveSnmpSwitchesState(state) {
+  const normalized = normalizeSnmpSwitchesState(state);
+  const row = db.systemSettings.find((s) => s.key === SNMP_SWITCHES_SETTINGS_KEY);
+  if (row) row.value = normalized;
+  else {
+    db.systemSettings.push({
+      id: `setting-${Date.now()}`,
+      key: SNMP_SWITCHES_SETTINGS_KEY,
+      value: normalized,
+    });
+  }
+  return normalized;
+}
+
+function syncProfileEquipmentLocation(profile) {
+  const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+  if (!eq) return;
+  if (profile.deckId != null) eq.deckId = profile.deckId;
+  if (profile.roomId != null) eq.roomId = profile.roomId;
+  if (profile.location != null) eq.location = profile.location;
+  eq.updated_date = new Date().toISOString();
+}
+
+function equipmentIp(eq) {
+  return String(eq?.ip ?? eq?.ip_address ?? eq?.ipAddress ?? "").trim();
+}
+
+function resolveProfilePollOpts(profile) {
+  const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+  const disc = getDiscoverySettings();
+  return {
+    ip: equipmentIp(eq),
+    name: eq?.name || profile.id,
+    community: profile.snmpCommunity || disc.snmpCommunity,
+    version: profile.snmpVersion || disc.snmpVersion,
+    timeoutMs: disc.timeoutMs,
+    portCount: portCountFromModel(eq?.model, profile.portCount),
+    equipmentList: db.equipment,
+    counterSnapshot: profile.counterSnapshot,
+    lastPollAt: profile.lastPollAt,
+    forceMock: !disc.snmpEnabled,
+  };
+}
+
+function getPeplinkCredentials() {
+  const row = db.systemSettings.find((s) => s.key === PEPLINK_CREDENTIALS_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return raw || {
+    incontrolClientId: process.env.PEPLINK_INCONTROL_CLIENT_ID || "",
+    incontrolClientSecret: process.env.PEPLINK_INCONTROL_CLIENT_SECRET || "",
+    incontrolOrgId: process.env.PEPLINK_INCONTROL_ORG_ID || "",
+  };
+}
+
+function savePeplinkCredentials(creds) {
+  const row = db.systemSettings.find((s) => s.key === PEPLINK_CREDENTIALS_KEY);
+  if (row) row.value = creds;
+  else {
+    db.systemSettings.push({
+      id: `setting-peplink-${Date.now()}`,
+      key: PEPLINK_CREDENTIALS_KEY,
+      value: creds,
+    });
+  }
+  return creds;
+}
+
+async function pollProfileAndSave(profile) {
+  const opts = resolveProfilePollOpts(profile);
+  if (!opts.ip) {
+    return { profile, poll: null, error: "Device has no IP address in Equipment" };
+  }
+  const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+  const disc = getDiscoverySettings();
+  let poll = await pollSwitchPorts(opts.ip, opts);
+
+  const usePeplink =
+    profile.pollMethod === "peplink_hybrid" || profile.integrationVendor === "peplink";
+  if (usePeplink) {
+    try {
+      const pep = await fetchPeplinkStatus(profile, {
+        ip: opts.ip,
+        equipment: eq,
+        forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
+        globalPeplinkCreds: getPeplinkCredentials(),
+      });
+      poll = mergePeplinkIntoPoll(poll, pep);
+    } catch (err) {
+      console.warn("[pollProfileAndSave] Peplink enrich failed:", err.message);
+      if (!poll?.ports?.length) {
+        poll = { ...poll, error: err.message };
+      }
+    }
+  }
+
+  const useCisco =
+    profile.pollMethod === "cisco_ssh" || profile.integrationVendor === "cisco";
+  if (useCisco) {
+    try {
+      const ciscoConn = resolveCiscoConnectionForProfile(profile, eq);
+      if (ciscoConn) {
+        const client = getCiscoSwitchClient(ciscoConn);
+        const snapshot = await client.pollAll({
+          snmpCommunity: profile.snmpCommunity || disc.snmpCommunity,
+          snmpVersion: profile.snmpVersion === "3" ? "3" : "2c",
+        });
+        poll = mergeCiscoIntoPoll(poll, snapshot, eq);
+      }
+    } catch (err) {
+      console.warn("[pollProfileAndSave] Cisco enrich failed:", err.message);
+      if (!poll?.ports?.length) {
+        poll = { ...poll, error: err.message };
+      }
+    }
+  }
+
+  const global = getSnmpSwitchesState().global;
+  const updated = mergePollIntoProfile(profile, poll, {
+    trafficHistorySamples: global?.trafficHistorySamples,
+    equipment: eq,
+  });
+  return { profile: updated, poll, error: poll.error };
+}
+
+app.get("/api/apps/:appId/snmp/switches", (_req, res) => {
+  res.json(getSnmpSwitchesState());
+});
+
+app.put("/api/apps/:appId/snmp/switches", (req, res) => {
+  const state = saveSnmpSwitchesState(req.body);
+  for (const p of state.profiles) syncProfileEquipmentLocation(p);
+  res.json(state);
+});
+
+app.post("/api/apps/:appId/functions/snmpPollSwitch", async (req, res) => {
+  try {
+    const { equipmentId, ip } = req.body || {};
+    const state = getSnmpSwitchesState();
+    let profile = state.profiles.find((p) => p.equipmentId === equipmentId);
+    if (!profile && ip) {
+      const eq = db.equipment.find((e) => e.ip === ip);
+      if (eq) profile = state.profiles.find((p) => p.equipmentId === eq.id);
+    }
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "Managed switch profile not found" });
+    }
+    const { profile: updated, poll, error } = await pollProfileAndSave(profile);
+    const idx = state.profiles.findIndex((p) => p.id === updated.id);
+    if (idx >= 0) state.profiles[idx] = updated;
+    saveSnmpSwitchesState(state);
+    res.json({
+      success: true,
+      profile: updated,
+      poll,
+      snmpWalkAvailable: await isSnmpWalkAvailable(),
+      source: poll.source,
+      error,
+    });
+  } catch (err) {
+    console.error("[snmpPollSwitch]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/snmpPollAll", async (_req, res) => {
+  try {
+    const state = getSnmpSwitchesState();
+    const enabled = state.profiles.filter((p) => p.enabled !== false);
+    const pollResults = [];
+    for (const profile of enabled) {
+      const { profile: updated, poll, error } = await pollProfileAndSave(profile);
+      const idx = state.profiles.findIndex((p) => p.id === updated.id);
+      if (idx >= 0) state.profiles[idx] = updated;
+      const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+      if (poll) {
+        pollResults.push({
+          ...poll,
+          ip: poll.ip || equipmentIp(eq),
+          name: poll.name || eq?.name,
+          location: updated.location || eq?.location,
+          deckId: updated.deckId,
+          roomId: updated.roomId,
+          equipmentId: profile.equipmentId,
+          error: error || poll.error,
+        });
+      }
+    }
+    saveSnmpSwitchesState(state);
+    const aggregate = buildPollAllResponse(pollResults);
+    res.json({
+      ...aggregate,
+      profiles: state.profiles,
+      snmpWalkAvailable: await isSnmpWalkAvailable(),
+    });
+  } catch (err) {
+    console.error("[snmpPollAll]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+function getCredentialsVault() {
+  const row = db.systemSettings.find((s) => s.key === CREDENTIALS_VAULT_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeCredentialsVault(raw || []);
+}
+
+function saveCredentialsVault(credentials) {
+  const normalized = normalizeCredentialsVault(credentials);
+  const row = db.systemSettings.find((s) => s.key === CREDENTIALS_VAULT_KEY);
+  if (row) row.value = normalized;
+  else {
+    db.systemSettings.push({
+      id: `setting-cred-vault-${Date.now()}`,
+      key: CREDENTIALS_VAULT_KEY,
+      value: normalized,
+    });
+  }
+  return normalized;
+}
+
+app.get("/api/apps/:appId/credentials/vault", (_req, res) => {
+  res.json(getCredentialsVault());
+});
+
+app.put("/api/apps/:appId/credentials/vault", (req, res) => {
+  const saved = saveCredentialsVault(req.body);
+  res.json(saved);
+});
+
+app.get("/api/apps/:appId/peplink/credentials", (_req, res) => {
+  const creds = getPeplinkCredentials();
+  res.json({
+    incontrolOrgId: creds.incontrolOrgId || "",
+    incontrolClientId: creds.incontrolClientId ? "••••••••" : "",
+    hasClientSecret: !!creds.incontrolClientSecret,
+  });
+});
+
+app.put("/api/apps/:appId/peplink/credentials", (req, res) => {
+  const existing = getPeplinkCredentials();
+  const body = req.body || {};
+  savePeplinkCredentials({
+    incontrolOrgId: body.incontrolOrgId ?? existing.incontrolOrgId,
+    incontrolClientId: body.incontrolClientId || existing.incontrolClientId,
+    incontrolClientSecret:
+      body.incontrolClientSecret || existing.incontrolClientSecret,
+  });
+  res.json({ success: true });
+});
+
+app.post("/api/apps/:appId/functions/peplinkTestConnection", async (req, res) => {
+  try {
+    const { equipmentId, profile: draft } = req.body || {};
+    const state = getSnmpSwitchesState();
+    let profile = state.profiles.find((p) => p.equipmentId === equipmentId);
+    if (draft?.equipmentId) profile = { ...profile, ...draft };
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "Managed device profile not found" });
+    }
+    const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+    const disc = getDiscoverySettings();
+    const result = await testPeplinkConnection(profile, {
+      ip: equipmentIp(eq),
+      equipment: eq,
+      forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
+      globalPeplinkCreds: getPeplinkCredentials(),
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[peplinkTestConnection]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wanSpeedTest", async (req, res) => {
+  try {
+    const { profileId, portIndex, portName } = req.body || {};
+    const { profile } = resolveWanProfile(profileId);
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "WAN management router not found" });
+    }
+    const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+    const disc = getDiscoverySettings();
+    const result = await runWanSpeedTest(profile, {
+      ip: equipmentIp(eq),
+      equipment: eq,
+      wanIndex: Number(portIndex) || 1,
+      portName: portName || "",
+      forceMock: !disc.snmpEnabled || process.env.PEPLINK_USE_MOCK === "1",
+    });
+    res.json({ ...result, profileId: profile.id, portIndex: Number(portIndex) || 1 });
+  } catch (err) {
+    console.error("[wanSpeedTest]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── Lighting engines (mock + live) ──────────────────────────────────────
+const lutronEngine = buildMockLutronEngine();
+const knxEngine = buildMockKnxEngine();
+const daliEngine = buildMockDaliEngine();
+const dmxEngine = buildMockDmxEngine();
+const crestronEngine = buildMockCrestronEngine();
+
+function engineForSystemType(systemType) {
+  switch (systemType) {
+    case "knx": return knxEngine;
+    case "dali": return daliEngine;
+    case "dmx":
+    case "pharos":
+      return dmxEngine;
+    case "crestron":
+      return crestronEngine;
+    default: return lutronEngine;
+  }
+}
+
+/** Pull the saved Lutron processor connection from the in-memory settings. */
+function getStoredLutronConnection() {
+  const row = db.systemSettings.find((s) => s.key === LIGHTING_LUTRON_CONNECTION_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return raw && typeof raw === "object" ? raw : null;
+}
+
+/** Pull per-system connection from the multi-system config, with legacy fallback. */
+function getStoredSystemConnection(systemType) {
+  const row = db.systemSettings.find((s) => s.key === LIGHTING_SYSTEMS_CONFIG_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  if (raw?.connections?.[systemType]) {
+    const conn = raw.connections[systemType];
+    if (conn?.host) return conn;
+  }
+  if (systemType === "lutron") {
+    return getStoredLutronConnection();
+  }
+  const generic = getStoredLightingConnection(systemType);
+  if (generic) return generic;
+  return null;
+}
+
+/** Pull the stored generic lighting connection by systemType. */
+function getStoredLightingConnection(systemType) {
+  const row = db.systemSettings.find((s) => s.key === LIGHTING_CONNECTION_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  const conn = raw && typeof raw === "object" ? raw : null;
+  if (!conn) return null;
+  if (systemType && conn.systemType !== systemType) return null;
+  return conn;
+}
+
+/**
+ * Decide whether the live integration should handle a command. We
+ * honour any per-request override (so the connection-test modal can validate
+ * draft values without saving) and otherwise fall back to the stored
+ * connection.
+ */
+function resolveLiveConnection(reqBody = {}) {
+  const systemType = reqBody.systemType || "lutron";
+  const override = reqBody.host
+    ? {
+        enabled: true,
+        host: reqBody.host,
+        port: reqBody.port,
+        protocol: reqBody.protocol || "telnet",
+        username: reqBody.username,
+        password: reqBody.password,
+      }
+    : null;
+  const stored = getStoredSystemConnection(systemType);
+  const conn = override || stored;
+  if (!conn?.enabled || !conn.host) return null;
+  const protocol = conn.protocol === "leap" ? "leap" : conn.protocol || "telnet";
+  const USERNAME_OPTIONAL = new Set(["knx", "dali", "dmx", "pharos", "crestron"]);
+  // LEAP uses TLS certificate authentication — username/password not required
+  if (protocol !== "leap" && !conn.username && !USERNAME_OPTIONAL.has(systemType)) return null;
+  return {
+    enabled: true,
+    host: conn.host,
+    port: Number(conn.port) || defaultPortForProtocol(protocol, systemType),
+    protocol,
+    username: conn.username,
+    password: conn.password,
+  };
+}
+
+// ── Cisco helpers (per-host singleton lookup + cred resolution) ─────────
+
+function getStoredCiscoSwitches() {
+  const row = db.systemSettings.find((s) => s.key === NETWORK_CISCO_SWITCHES_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeCiscoSwitches(raw || { switches: [] });
+}
+
+function findStoredCiscoSwitch(hostOrId) {
+  if (!hostOrId) return null;
+  const stored = getStoredCiscoSwitches();
+  const needle = String(hostOrId).toLowerCase().trim();
+  return (
+    stored.switches.find(
+      (s) =>
+        s.host.toLowerCase() === needle ||
+        s.id === hostOrId ||
+        s.equipmentId === hostOrId
+    ) || null
+  );
+}
+
+function saveStoredCiscoSwitches(payload) {
+  const normalized = normalizeCiscoSwitches(payload);
+  const row = db.systemSettings.find((s) => s.key === NETWORK_CISCO_SWITCHES_KEY);
+  if (row) row.value = normalized;
+  else {
+    db.systemSettings.push({
+      id: `setting-${Date.now()}`,
+      key: NETWORK_CISCO_SWITCHES_KEY,
+      value: normalized,
+    });
+  }
+  return normalized;
+}
+
+function updateCiscoSwitchPollMeta(host, { snapshot = null, error = null } = {}) {
+  if (!host) return;
+  const stored = getStoredCiscoSwitches();
+  const idx = stored.switches.findIndex(
+    (s) => s.host.toLowerCase() === String(host).toLowerCase()
+  );
+  if (idx < 0) return;
+  stored.switches[idx] = {
+    ...stored.switches[idx],
+    system: snapshot?.system || stored.switches[idx].system,
+    lastConnectedAt: error ? stored.switches[idx].lastConnectedAt : new Date().toISOString(),
+    lastError: error,
+    updatedAt: new Date().toISOString(),
+  };
+  saveStoredCiscoSwitches(stored);
+}
+
+async function pollStoredCiscoSwitch(sw) {
+  const client = getCiscoSwitchClient(sw);
+  if (!client) return null;
+  try {
+    const snapshot = await client.pollAll({
+      snmpCommunity: sw.snmpCommunity,
+      snmpVersion: sw.snmpVersion,
+    });
+    updateCiscoSwitchPollMeta(sw.host, { snapshot });
+    return snapshot;
+  } catch (err) {
+    updateCiscoSwitchPollMeta(sw.host, { error: err?.message || String(err) });
+    throw err;
+  }
+}
+
+async function pollAllStoredCiscoSwitches() {
+  const stored = getStoredCiscoSwitches();
+  for (const sw of stored.switches.filter((s) => s.enabled !== false && s.host)) {
+    try {
+      await pollStoredCiscoSwitch(sw);
+    } catch (err) {
+      console.warn(`[ciscoPoll] ${sw.host} failed:`, err?.message || err);
+    }
+  }
+}
+
+function resolveCiscoConnection(reqBody = {}) {
+  // Per-request override wins so the modal "Test connection" path doesn't
+  // need a saved switch first.
+  if (reqBody.host && (reqBody.sshPassword || reqBody.password)) {
+    return normalizeCiscoSwitch({
+      host: reqBody.host,
+      sshPort: reqBody.sshPort,
+      sshUsername: reqBody.sshUsername || reqBody.username || "cisco",
+      sshPassword: reqBody.sshPassword || reqBody.password,
+      enablePassword: reqBody.enablePassword,
+      platform: reqBody.platform,
+      snmpEnabled: reqBody.snmpEnabled,
+      snmpPort: reqBody.snmpPort,
+      snmpVersion: reqBody.snmpVersion,
+      snmpCommunity: reqBody.snmpCommunity,
+      snmpv3User: reqBody.snmpv3User,
+      snmpv3AuthProto: reqBody.snmpv3AuthProto,
+      snmpv3AuthPass: reqBody.snmpv3AuthPass,
+      snmpv3PrivProto: reqBody.snmpv3PrivProto,
+      snmpv3PrivPass: reqBody.snmpv3PrivPass,
+    });
+  }
+  return findStoredCiscoSwitch(reqBody.host || reqBody.switchId);
+}
+
+function resolveCiscoConnectionForProfile(profile, equipment) {
+  const host = equipment?.ip || equipment?.ipAddress || null;
+  if (!host) return null;
+  const stored = findStoredCiscoSwitch(host);
+  if (stored) return stored;
+  // Fall back to whatever creds the operator put on the SNMP profile —
+  // useful for the demo path where the fleet profile carries SSH login
+  // info even before the operator opens the Cisco Switches page.
+  const ciscoCfg = profile.ciscoConfig || {};
+  if (!ciscoCfg.sshPassword) return null;
+  return normalizeCiscoSwitch({
+    host,
+    sshPort: ciscoCfg.sshPort,
+    sshUsername: ciscoCfg.sshUsername || "cisco",
+    sshPassword: ciscoCfg.sshPassword,
+    enablePassword: ciscoCfg.enablePassword,
+    snmpCommunity: profile.snmpCommunity,
+    snmpVersion: profile.snmpVersion,
+  });
+}
+
+/** Best-effort scene number from the scene name in the integration report. */
+function sceneNumberFromName(name = "") {
+  if (/off\s+scene/i.test(name)) return 0;
+  const m = /(\d+)/.exec(String(name));
+  return m ? Math.min(16, Math.max(1, parseInt(m[1], 10))) : null;
+}
+
+app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
+  try {
+    const {
+      op,
+      zoneHref,
+      zoneKind,
+      sceneHref,
+      sceneName,
+      sceneAreaId,
+      buttonHref,
+      deviceHref,
+      componentNumber,
+      level,
+      fadeSeconds,
+      sceneZones,
+      scene,
+      hrefs,
+      host,
+      port,
+      protocol: bodyProtocol,
+      username,
+      systemType: bodySystemType,
+    } = req.body || {};
+
+    const systemType = bodySystemType || "lutron";
+    const engine = engineForSystemType(systemType);
+
+    const live = resolveLiveConnection(req.body);
+    // Diagnostic logging
+    const storedConn = getStoredLutronConnection();
+    console.log(`[lutronCommand] op=${op} systemType=${systemType} live=${live ? "yes" : "no"} stored=${storedConn ? "yes" : "no"} storedHost=${storedConn?.host || "none"} storedProtocol=${storedConn?.protocol || "none"} storedEnabled=${storedConn?.enabled}`);
+    // Live client based on system type
+    let liveClient = null;
+    if (live) {
+      if (systemType === "lutron" && live.protocol === "telnet") {
+        liveClient = getLutronClient(live);
+      } else if (systemType === "lutron" && live.protocol === "leap") {
+        liveClient = getLeapClient(live);
+        console.log(`[lutronCommand] getLeapClient(${live.host}) returned ${liveClient ? "client" : "NULL (certs not found)"}`);
+        if (liveClient) {
+          console.log(`[lutronCommand] LEAP client state=${liveClient.state} host=${liveClient.host} port=${liveClient.port}`);
+        }
+      } else if (systemType === "knx") {
+        liveClient = getKnxClient(live);
+      } else if (systemType === "dali") {
+        liveClient = getDaliClient(live);
+      } else if (systemType === "dmx") {
+        liveClient = getDmxClient(live);
+      }
+    }
+    // For testProcessor we let the dedicated branch handle connectivity so it
+    // can run the port scan and produce a precise recommendation even when
+    // the Telnet socket refuses to open. For every other op we eagerly try
+    // to connect here so a transient disconnection retries cleanly.
+    if (liveClient && op !== "testProcessor") {
+      try {
+        console.log(`[lutronCommand] calling ${liveClient.constructor?.name || "client"}.connect()...`);
+        await liveClient.connect();
+        console.log(`[lutronCommand] connect() succeeded, state=${liveClient.state}`);
+      } catch (err) {
+        console.warn(`[lutronCommand] connect failed: ${err.message}`, err.stack?.split("\n").slice(0, 4).join("\n"));
+        return res.json({
+          success: false,
+          mode: "live",
+          error: `LEAP connect failed: ${err.message}`,
+        });
+      }
+    } else if (op !== "testProcessor") {
+      console.log(`[lutronCommand] liveClient unavailable: live=${!!live}, mode will be MOCK`);
+    }
+
+    switch (op) {
+      case "setZoneLevel": {
+        if (!zoneHref) {
+          return res.status(400).json({ success: false, error: "zoneHref required" });
+        }
+        if (liveClient) {
+          const integrationId = integrationIdFromHref(zoneHref);
+          if (!integrationId) {
+            return res.json({
+              success: false,
+              mode: "live",
+              error: `Cannot extract Lutron integration ID from href ${zoneHref}`,
+            });
+          }
+          const result = await liveClient.setOutput(
+            integrationId,
+            level,
+            fadeSeconds || 0,
+            zoneKind || null
+          );
+          return res.json({
+            success: true,
+            mode: "live",
+            zone: {
+              href: zoneHref,
+              integrationId,
+              level: result.level,
+              on: result.on,
+              kind: result.kind,
+              fade: fadeSeconds || 0,
+              updatedAt: result.updatedAt,
+            },
+          });
+        }
+        const zone = engine.setZoneLevel(zoneHref, level, fadeSeconds || 0);
+        return res.json({ success: true, mode: "mock", zone });
+      }
+
+      case "raiseLowerStop": {
+        if (!zoneHref) {
+          return res.status(400).json({ success: false, error: "zoneHref required" });
+        }
+        const action = req.body?.action || "stop";
+        if (liveClient) {
+          const integrationId = integrationIdFromHref(zoneHref);
+          if (!integrationId) {
+            return res.json({
+              success: false,
+              mode: "live",
+              error: `Cannot extract Lutron integration ID from href ${zoneHref}`,
+            });
+          }
+          await liveClient.raiseLower(integrationId, action, zoneKind || null);
+          return res.json({ success: true, mode: "live", href: zoneHref, action });
+        }
+        const zone = engine.raiseLower(zoneHref, action);
+        return res.json({ success: true, mode: "mock", zone });
+      }
+
+      case "activateScene": {
+        if (!sceneHref) {
+          return res.status(400).json({ success: false, error: "sceneHref required" });
+        }
+        const zonesList = Array.isArray(sceneZones) ? sceneZones : [];
+        if (liveClient) {
+          // Prefer the dedicated #AREA scene command when we have an area
+          // integration ID and a usable scene number from the report.
+          const areaId = sceneAreaId ? String(sceneAreaId) : null;
+          const sceneNumber = sceneNumberFromName(sceneName || "");
+          const results = [];
+          let areaCommandIssued = false;
+          if (areaId && sceneNumber !== null) {
+            try {
+              await liveClient.activateAreaScene(areaId, sceneNumber);
+              areaCommandIssued = true;
+            } catch (err) {
+              console.warn("[lutronCommand] activateAreaScene failed:", err.message);
+            }
+          }
+          // Always also apply per-zone targets so the platform's commanded
+          // levels match what the operator sees on the slider, regardless of
+          // whether the processor's saved scene levels are in sync.
+          for (const z of zonesList) {
+            const id = integrationIdFromHref(z.href);
+            if (!id) continue;
+            try {
+              const r = await liveClient.setOutput(
+                id,
+                z.level,
+                z.fadeSeconds || 0,
+                z.kind || null
+              );
+              results.push({
+                href: z.href,
+                integrationId: id,
+                level: r.level,
+                on: r.on,
+                kind: r.kind,
+                updatedAt: r.updatedAt,
+              });
+            } catch (err) {
+              results.push({ href: z.href, error: err.message });
+            }
+          }
+          return res.json({
+            success: true,
+            mode: "live",
+            sceneHref,
+            areaCommandIssued,
+            zones: results,
+          });
+        }
+        const result = engine.activateScene(sceneHref, zonesList);
+        return res.json({ success: true, mode: "mock", ...result });
+      }
+
+      case "pressButton": {
+        const targetHref = buttonHref || deviceHref;
+        if (!targetHref) {
+          return res.status(400).json({ success: false, error: "buttonHref required" });
+        }
+        if (liveClient) {
+          // The integration report exposes a button as `/button/<componentId>`
+          // and the parent device as `/device/<deviceId>`; both are needed for
+          // a #DEVICE press. The frontend passes them via componentNumber +
+          // deviceHref; if only buttonHref is supplied we fall back to it.
+          const deviceId = deviceHref ? integrationIdFromHref(deviceHref) : null;
+          const componentId = componentNumber != null
+            ? String(componentNumber)
+            : integrationIdFromHref(buttonHref);
+          if (!deviceId || !componentId) {
+            return res.json({
+              success: false,
+              mode: "live",
+              error:
+                "deviceHref + componentNumber required to press a button on a live processor",
+            });
+          }
+          const entry = await liveClient.pressButton(deviceId, componentId);
+          return res.json({ success: true, mode: "live", buttonHref: targetHref, ...entry });
+        }
+        const entry = engine.pressButton(targetHref);
+        return res.json({ success: true, mode: "mock", ...entry });
+      }
+
+      case "customScene": {
+        // User-authored scene from the Scenes page. Three kinds:
+        //   area_scene     → { areaId, sceneN }
+        //   leap_href      → { href: "/area/<id>/scene/<n>" }
+        //   phantom_button → { deviceHref, componentNumber }
+        if (!scene || typeof scene !== "object") {
+          return res
+            .status(400)
+            .json({ success: false, error: "scene payload required" });
+        }
+        const kind = scene.kind || "leap_href";
+
+        // Derive (areaId, sceneN) for area_scene + leap_href dispatch.
+        let areaId = null;
+        let sceneN = null;
+        if (kind === "area_scene") {
+          areaId = scene.areaId ? String(scene.areaId).trim() : null;
+          sceneN = Number(scene.sceneN);
+        } else if (kind === "leap_href") {
+          const m = String(scene.href || "").match(/\/area\/(\d+)\/scene\/(\d+)/i);
+          if (m) {
+            areaId = m[1];
+            sceneN = Number(m[2]);
+          }
+        }
+
+        if (kind === "area_scene" || kind === "leap_href") {
+          if (!areaId || !Number.isFinite(sceneN)) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "area_scene / leap_href requires an Area ID and Scene number (got href '" +
+                (scene.href || `${scene.areaId}/${scene.sceneN}`) +
+                "').",
+            });
+          }
+          if (liveClient) {
+            try {
+              await liveClient.activateAreaScene(areaId, sceneN);
+              return res.json({
+                success: true,
+                mode: "live",
+                scene,
+                areaId,
+                sceneN,
+              });
+            } catch (err) {
+              console.warn("[lutronCommand] customScene activateAreaScene failed:", err.message);
+              return res.json({
+                success: false,
+                mode: "live",
+                scene,
+                error: err.message || "Processor rejected scene activation",
+              });
+            }
+          }
+          // No live client — simulate via the local engine if it has
+          // a matching scene href, otherwise just report success.
+          const fakeHref = `/area/${areaId}/scene/${sceneN}`;
+          try {
+            const result = engine.activateScene(fakeHref, []);
+            return res.json({ success: true, mode: "mock", scene, ...result });
+          } catch {
+            return res.json({ success: true, mode: "mock", scene });
+          }
+        }
+
+        if (kind === "phantom_button") {
+          const deviceId = scene.deviceHref
+            ? integrationIdFromHref(scene.deviceHref)
+            : null;
+          const componentId =
+            scene.componentNumber != null ? String(scene.componentNumber) : null;
+          if (!deviceId || !componentId) {
+            return res.status(400).json({
+              success: false,
+              error:
+                "phantom_button requires a Device href and Component number",
+            });
+          }
+          if (liveClient) {
+            try {
+              const entry = await liveClient.pressButton(deviceId, componentId);
+              return res.json({
+                success: true,
+                mode: "live",
+                scene,
+                deviceId,
+                componentId,
+                ...entry,
+              });
+            } catch (err) {
+              console.warn("[lutronCommand] customScene pressButton failed:", err.message);
+              return res.json({
+                success: false,
+                mode: "live",
+                scene,
+                error: err.message || "Processor rejected button press",
+              });
+            }
+          }
+          const entry = engine.pressButton(scene.deviceHref || `/device/${deviceId}`);
+          return res.json({ success: true, mode: "mock", scene, ...entry });
+        }
+
+        return res
+          .status(400)
+          .json({ success: false, error: `Unknown scene kind '${kind}'` });
+      }
+
+      case "pollZones": {
+        const wanted = Array.isArray(hrefs) ? hrefs : [];
+        if (liveClient && wanted.length) {
+          const ids = wanted
+            .map((h) => ({ href: h, id: integrationIdFromHref(h) }))
+            .filter((row) => !!row.id);
+          await liveClient.pollOutputs(ids.map((row) => row.id));
+          const zones = ids.map((row) => {
+            const cached = liveClient.lastLevels.get(row.id);
+            return {
+              href: row.href,
+              integrationId: row.id,
+              level: cached?.level ?? 0,
+              on: cached?.on ?? false,
+              updatedAt: cached?.updatedAt || new Date().toISOString(),
+            };
+          });
+          return res.json({ success: true, mode: "live", zones });
+        }
+        const zones = engine.pollZones(wanted);
+        return res.json({ success: true, mode: "mock", zones });
+      }
+
+      case "snapshot":
+        return res.json({ success: true, mode: liveClient ? "live" : "mock", ...engine.snapshot() });
+
+      case "testProcessor": {
+        const resolvedProtocol = (bodyProtocol || live?.protocol) || "telnet";
+        const defaultPort = defaultPortForProtocol(resolvedProtocol, systemType);
+        const effectivePort = port || live?.port || defaultPort;
+        const targetHost = host || live?.host || "";
+        const target = targetHost ? `${targetHost}:${effectivePort}` : "(mock)";
+        const api = (resolvedProtocol || "").toUpperCase().replace(/-/g, " ");
+        const effectiveUser = username || live?.username || "";
+
+        if (!targetHost) {
+          return res.json({
+            success: true,
+            mode: "mock",
+            processor: target,
+            protocol: resolvedProtocol,
+            product: `${systemType.toUpperCase()} Engine (mock)`,
+            firmware: "1.0.0",
+            api,
+            message: "Local mock engine active — no host configured.",
+          });
+        }
+
+        // Lutron-specific probing (Telnet port scan, LEAP detection)
+        if (systemType === "lutron") {
+          const availablePorts = await probeLutronPorts(targetHost);
+          const openPorts = availablePorts.filter((p) => p.open).map((p) => p.port);
+          const recommendation = recommendationFromPorts(availablePorts, resolvedProtocol);
+          const buildResponse = (overrides) => ({
+            processor: target,
+            protocol: resolvedProtocol,
+            api,
+            availablePorts,
+            openPorts,
+            recommendation,
+            ...overrides,
+          });
+
+          if (!effectiveUser && resolvedProtocol !== "leap") {
+            return res.json(
+              buildResponse({
+                success: false,
+                mode: "live",
+                message: "Integration username is required by the processor.",
+              })
+            );
+          }
+
+          const probeRole = resolvedProtocol === "leap" ? "leap" : "telnet";
+          const probed = availablePorts.find((p) => p.role === probeRole);
+          const portProbeFailed = probed && !probed.open;
+
+          if (liveClient) {
+            try {
+              await liveClient.connect();
+              await liveClient.ping();
+              const msg = portProbeFailed
+                ? `Connected to ${target} (${probeRole} probe showed closed — connection succeeded anyway).`
+                : `Connected to ${target} and authenticated as ${effectiveUser}.`;
+              return res.json(
+                buildResponse({
+                  success: true,
+                  mode: "live",
+                  authenticatedAs: effectiveUser,
+                  product: "Lutron HomeWorks processor",
+                  message: msg,
+                })
+              );
+            } catch (err) {
+              return res.json(
+                buildResponse({
+                  success: false,
+                  mode: "live",
+                  message: err.message,
+                  recommendation: portProbeFailed
+                    ? recommendation
+                    : `${resolvedProtocol === "leap" ? "LEAP" : "Telnet"} connection to ${target} failed: ${err.message}. Verify the processor IP, port ${resolvedProtocol === "leap" ? "8081 (LEAP) / 8083 (pairing)" : "23"} is open, and integration is enabled in Lutron Designer.`,
+                })
+              );
+            }
+          }
+          // LEAP with no paired certificates — tell the user to pair first
+          if (resolvedProtocol === "leap") {
+            const paired = isPaired(targetHost);
+            return res.json(
+              buildResponse({
+                success: false,
+                mode: "live",
+                message: paired
+                  ? `Certificates found for ${targetHost} but connection failed. Verify the processor is online and reachable on port ${effectivePort}.`
+                  : `No LEAP certificates found for ${targetHost}. Use the LEAP Pairing workflow to generate a certificate by pressing the physical button on the processor.`,
+                recommendation: paired
+                  ? `Delete the existing certificates for ${targetHost} and re-pair, or verify network connectivity.`
+                  : `Navigate to Lighting Settings → LEAP Pairing, enter ${targetHost}, and press the processor's physical button when prompted.`,
+              })
+            );
+          }
+
+          // Telnet with no liveClient — report port scan findings
+          return res.json(
+            buildResponse({
+              success: false,
+              mode: "live",
+              message: `Telnet client could not be created for ${target}. Verify the integration username is correct.`,
+            })
+          );
+      } // end if (systemType === "lutron")
+
+      // KNX / DALI / DMX — probe ports and try live client
+      async function probeNonLutron() {
+        let availablePorts = [];
+        if (systemType === "knx") {
+          availablePorts = await probeKnxPorts(targetHost);
+        } else if (systemType === "dali") {
+          availablePorts = await probeDaliPorts(targetHost);
+        } else if (systemType === "dmx") {
+          availablePorts = await probeDmxPorts(targetHost);
+        }
+        const openPorts = availablePorts.filter((p) => p.open).map((p) => p.port);
+        const recFn = systemType === "knx" ? knxRecommendation : systemType === "dali" ? daliRecommendation : dmxRecommendation;
+        const recommendation = recFn(availablePorts, resolvedProtocol);
+        if (liveClient) {
+          try {
+            await liveClient.connect();
+            await liveClient.ping();
+            return res.json({
+              success: true,
+              mode: "live",
+              processor: target,
+              protocol: resolvedProtocol,
+              api,
+              product: `${systemType.toUpperCase()} controller`,
+              firmware: "1.0.0",
+              availablePorts,
+              openPorts,
+              recommendation,
+              message: `Connected to ${systemType.toUpperCase()} controller at ${target}.`,
+            });
+          } catch (err) {
+            return res.json({
+              success: false,
+              mode: "live",
+              processor: target,
+              protocol: resolvedProtocol,
+              api,
+              availablePorts,
+              openPorts,
+              recommendation,
+              message: err.message,
+            });
+          }
+        }
+        return res.json({
+          success: true,
+          mode: "mock",
+          processor: target,
+          protocol: resolvedProtocol,
+          product: `${systemType.toUpperCase()} Engine (mock)`,
+          firmware: "1.0.0",
+          api,
+          availablePorts,
+          openPorts,
+          recommendation,
+          message: `Mock ${systemType.toUpperCase()} engine — no host configured.`,
+        });
+      }
+      return probeNonLutron();
+
+      } // end case "testProcessor"
+
+      default:
+        return res.status(400).json({ success: false, error: `Unknown lutron op: ${op}` });
+    }
+  } catch (err) {
+    console.error("[lutronCommand]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ── Live lighting events (SSE) ───────────────────────────────────────────
+//
+// Server-Sent Events stream that pipes every zone-level change the LEAP /
+// Telnet client observes (initial snapshot + wall-keypad presses + scene
+// activations + the platform's own commands) back to the browser, so the
+// Lighting page reflects the processor's real state without polling.
+//
+// The browser opens this with `new EventSource(...)`; events are emitted as
+//   event: snapshot   → { zones: [{ href, integrationId, level, on, kind, updatedAt }, ...] }
+//   event: zoneLevel  → { href, integrationId, level, on, kind, updatedAt }
+//   event: ping       → {}
+//   event: error      → { message }
+app.get("/api/apps/:appId/functions/lutronEvents", async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  // Disable any intermediate buffering (Nginx, Cloudflare, etc.) so single
+  // SSE frames are flushed to the browser immediately.
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const writeEvent = (event, data) => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {
+      /* socket already closed */
+    }
+  };
+
+  const conn = getStoredLutronConnection();
+  if (!conn?.enabled || !conn?.host) {
+    writeEvent("error", {
+      message: "No Lutron processor configured — open Lighting → Set credentials.",
+    });
+    res.end();
+    return;
+  }
+
+  let liveClient = null;
+  if (conn.protocol === "leap") {
+    liveClient = getLeapClient(conn);
+  } else {
+    liveClient = getLutronClient(conn);
+  }
+  if (!liveClient) {
+    writeEvent("error", {
+      message:
+        conn.protocol === "leap"
+          ? `No LEAP certificates found for ${conn.host}. Pair the processor first.`
+          : `Telnet client could not be created for ${conn.host}.`,
+    });
+    res.end();
+    return;
+  }
+
+  try {
+    await liveClient.connect();
+  } catch (err) {
+    writeEvent("error", { message: `Connect failed: ${err.message}` });
+    res.end();
+    return;
+  }
+
+  // Initial snapshot from whatever the subscription/poll cache has so far.
+  const snapshot = [];
+  for (const [id, entry] of liveClient.lastLevels) {
+    snapshot.push({
+      href: `/zone/${id}`,
+      integrationId: String(id),
+      level: entry.level ?? 0,
+      on: entry.on ?? false,
+      kind: entry.kind || "dimmed",
+      updatedAt: entry.updatedAt || new Date().toISOString(),
+    });
+  }
+  writeEvent("snapshot", {
+    processor: `${conn.host}:${conn.port || (conn.protocol === "leap" ? 8081 : 23)}`,
+    protocol: conn.protocol,
+    zones: snapshot,
+  });
+
+  // LEAP wrapper emits `zoneLevel`; Telnet client emits `output`. Subscribe
+  // to both so this single endpoint speaks every Lutron protocol.
+  const forward = (entry) => {
+    writeEvent("zoneLevel", {
+      href: `/zone/${entry.id}`,
+      integrationId: String(entry.id),
+      level: entry.level ?? 0,
+      on: entry.on != null ? entry.on : (entry.level ?? 0) > 0,
+      kind: entry.kind || "dimmed",
+      updatedAt: entry.updatedAt || new Date().toISOString(),
+    });
+  };
+  liveClient.on("zoneLevel", forward);
+  liveClient.on("output", forward);
+
+  // Periodic keep-alive comment frame; SSE proxies typically close idle
+  // connections after ~60s without traffic.
+  const keepAlive = setInterval(() => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+    } catch {
+      /* */
+    }
+  }, 25_000);
+
+  const cleanup = () => {
+    clearInterval(keepAlive);
+    try { liveClient.off("zoneLevel", forward); } catch { /* */ }
+    try { liveClient.off("output", forward); } catch { /* */ }
+  };
+  req.on("close", cleanup);
+  req.on("aborted", cleanup);
+  res.on("close", cleanup);
+});
+
+// ── Cisco Catalyst 1300 / CBS350 SSH+SNMP commands ───────────────────────
+//
+// Mirrors the Lutron `lutronCommand` endpoint above. Operations:
+//   - testSwitch     → probe ports + try SSH login + grab system info
+//   - getSystem      → `show version` + `show system` parsed
+//   - getInterfaces  → `show interfaces status/description/power inline`
+//   - getMacTable    → `show mac address-table dynamic`
+//   - getNeighbors   → `show lldp neighbors detail` + `show cdp ...`
+//   - pollAll        → all of the above in one call
+//   - setPortEnabled → reserved for future write support (returns 501)
+//
+// Per-request credentials override the stored connection so the modal can
+// run a "Test connection" before saving anything.
+
+app.post("/api/apps/:appId/functions/ciscoCommand", async (req, res) => {
+  try {
+    const { op } = req.body || {};
+    const conn = resolveCiscoConnection(req.body);
+    if (!conn) {
+      return res.status(400).json({
+        success: false,
+        error: "host + sshPassword required (or save the switch first)",
+      });
+    }
+    const client = getCiscoSwitchClient(conn);
+    if (!client) {
+      return res.status(500).json({ success: false, error: "client unavailable" });
+    }
+    switch (op) {
+      case "testSwitch": {
+        const result = await client.testConnection();
+        return res.json(result);
+      }
+      case "getSystem": {
+        const system = await client.getSystem();
+        return res.json({ success: true, system });
+      }
+      case "getInterfaces": {
+        const interfaces = await client.getInterfaces();
+        return res.json({ success: true, interfaces });
+      }
+      case "getMacTable": {
+        const macs = await client.getMacTable();
+        return res.json({ success: true, macs });
+      }
+      case "getNeighbors": {
+        const neighbors = await client.getNeighbors();
+        return res.json({ success: true, neighbors });
+      }
+      case "pollAll": {
+        const snapshot = await client.pollAll({
+          snmpCommunity: conn.snmpCommunity,
+          snmpVersion: conn.snmpVersion,
+        });
+        updateCiscoSwitchPollMeta(conn.host, { snapshot });
+        return res.json({ success: true, host: conn.host, snapshot });
+      }
+      case "probePorts": {
+        const ports = await probeCiscoPorts(conn.host);
+        return res.json({
+          success: true,
+          host: conn.host,
+          ports,
+          recommendation: ciscoRecommendation(ports),
+        });
+      }
+      case "disconnect": {
+        closeCiscoSwitchClient(conn.host);
+        return res.json({ success: true, host: conn.host });
+      }
+      case "setPortEnabled": {
+        // Reserved — write support is a follow-up PR.
+        return res.status(501).json({
+          success: false,
+          error: "Port admin shutdown not yet supported. Coming in the next release.",
+        });
+      }
+      default:
+        return res.status(400).json({ success: false, error: `unknown op ${op}` });
+    }
+  } catch (err) {
+    console.error("[ciscoCommand]", err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
+// SSE for live Cisco switch updates — initial `snapshot`, then `portChange`
+// events whenever the poller observes a change in interface status.
+//
+//   event: snapshot   → { host, system, interfaces, macs, neighbors }
+//   event: portChange → { host, ifIndex, portName, status, prevStatus }
+//   event: ping       → {}
+//   event: error      → { message }
+app.get("/api/apps/:appId/functions/ciscoEvents", async (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders?.();
+
+  const writeEvent = (event, data) => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    } catch {
+      /* socket already closed */
+    }
+  };
+
+  const hostFilter = (req.query?.host || "").toString().trim();
+  const stored = getStoredCiscoSwitches();
+  const targets = hostFilter
+    ? stored.switches.filter((s) => s.host.toLowerCase() === hostFilter.toLowerCase())
+    : stored.switches.filter((s) => s.enabled);
+
+  if (targets.length === 0) {
+    writeEvent("error", {
+      message: "No Cisco switches configured — open Cisco Switches → Add switch.",
+    });
+    res.end();
+    return;
+  }
+
+  // Initial snapshot for each tracked switch. Pull from the in-memory cache
+  // if available; otherwise poll once.
+  const cleanups = [];
+  for (const sw of targets) {
+    const client = getCiscoSwitchClient(sw);
+    try {
+      const snap = client.lastSnapshot || (await pollStoredCiscoSwitch(sw));
+      writeEvent("snapshot", { host: sw.host, ...snap });
+    } catch (err) {
+      writeEvent("error", { host: sw.host, message: err?.message || String(err) });
+    }
+    // Watch for snapshot/portChange events emitted by the orchestrator.
+    const lastStatusByIfIndex = new Map();
+    const onSnapshot = (snapshot) => {
+      writeEvent("snapshot", { host: sw.host, ...snapshot });
+      for (const p of snapshot.interfaces || []) {
+        const prev = lastStatusByIfIndex.get(p.index);
+        if (prev != null && prev !== p.status) {
+          writeEvent("portChange", {
+            host: sw.host,
+            ifIndex: p.index,
+            portName: p.name,
+            status: p.status,
+            prevStatus: prev,
+            ifAlias: p.ifAlias,
+            ts: snapshot.polledAt,
+          });
+        }
+        lastStatusByIfIndex.set(p.index, p.status);
+      }
+    };
+    client.on("snapshot", onSnapshot);
+    cleanups.push(() => {
+      try { client.off("snapshot", onSnapshot); } catch { /* */ }
+    });
+  }
+
+  const pollTimer = setInterval(async () => {
+    if (res.writableEnded) return;
+    for (const sw of targets) {
+      try {
+        await pollStoredCiscoSwitch(sw);
+      } catch (err) {
+        writeEvent("error", { host: sw.host, message: err?.message || String(err) });
+      }
+    }
+  }, CISCO_LIVE_POLL_INTERVAL_MS);
+
+  const keepAlive = setInterval(() => {
+    if (res.writableEnded) return;
+    try {
+      res.write(`event: ping\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+    } catch {
+      /* */
+    }
+  }, 25_000);
+
+  const cleanup = () => {
+    clearInterval(keepAlive);
+    clearInterval(pollTimer);
+    for (const fn of cleanups) {
+      try { fn(); } catch { /* */ }
+    }
+  };
+  req.on("close", cleanup);
+  req.on("aborted", cleanup);
+  res.on("close", cleanup);
+});
+
+// ── LEAP certificate pairing ──────────────────────────────────────────────
+
+// Start LEAP pairing — returns IMMEDIATELY ("pairing started"). The pairing
+// continues in the background; the client should poll lutronLeapPairingStatus
+// every 1-2 seconds for progress updates until status is "paired" or "failed".
+app.post("/api/apps/:appId/functions/lutronLeapPair", (req, res) => {
+  try {
+    const { host, port } = req.body || {};
+    if (!host) {
+      return res.status(400).json({ success: false, error: "host required" });
+    }
+
+    const status = getPairingStatus(host);
+    if (status === "pairing") {
+      const details = getPairingDetails(host);
+      return res.json({
+        success: false,
+        status: "pairing",
+        message: details.message || "Pairing already in progress.",
+      });
+    }
+    if (status === "paired") {
+      return res.json({
+        success: true,
+        status: "paired",
+        message: "Already paired with this processor.",
+      });
+    }
+
+    // Mock mode: generate self-signed certs instantly (no real processor needed)
+    if (USE_MOCK_SCAN) {
+      mockPairing(host);
+      return res.json({
+        success: true,
+        status: "paired",
+        host,
+        message: "Mock pairing successful (dev mode — no real processor required).",
+      });
+    }
+
+    // Real pairing — start it on the pairing port (8083) and return immediately.
+    startPairing(host, port || 8083);
+    const details = getPairingDetails(host);
+    res.json({
+      success: true,
+      status: "pairing",
+      host,
+      message: details.message || "Pairing started. Press the physical button on the processor.",
+      pollIntervalMs: 1500,
+    });
+  } catch (err) {
+    console.error("[lutronLeapPair]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Detailed pairing status (used for polling during pairing).
+app.post("/api/apps/:appId/functions/lutronLeapPairingStatus", (req, res) => {
+  const { host } = req.body || {};
+  const details = host ? getPairingDetails(host) : { status: "unpaired" };
+  const hosts = getPairedHosts();
+  res.json({ host, ...details, pairedHosts: hosts });
+});
+
+// Cancel an in-progress pairing.
+app.post("/api/apps/:appId/functions/lutronLeapCancel", (req, res) => {
+  const { host } = req.body || {};
+  if (!host) {
+    return res.status(400).json({ success: false, error: "host required" });
+  }
+  cancelPairing(host);
+  res.json({ success: true, host, status: getPairingStatus(host) });
+});
+
+// Diagnostic: test raw TCP + TLS connectivity (no pairing required).
+app.post("/api/apps/:appId/functions/lutronLeapTestConnection", async (req, res) => {
+  try {
+    const { host } = req.body || {};
+    if (!host) {
+      return res.status(400).json({ success: false, error: "host required" });
+    }
+    // Auto-tests both port 8081 (LEAP) and 8083 (pairing)
+    const result = await testLeapConnection(host);
+    res.json({ success: result.reachable && result.tlsAccepted, ...result });
+  } catch (err) {
+    console.error("[lutronLeapTestConnection]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/lutronLeapUnpair", (req, res) => {
+  const { host } = req.body || {};
+  if (!host) {
+    return res.status(400).json({ success: false, error: "host required" });
+  }
+  removePairedHost(host);
+  closeLeapClient();
+  res.json({ success: true, host, status: "unpaired" });
+});
+
+// Close any active lighting client sockets on process exit so dev restarts don't leak.
+for (const sig of ["SIGINT", "SIGTERM"]) {
+  process.once(sig, () => {
+    try { closeLutronClient(); } catch { /* */ }
+    try { closeLeapClient(); } catch { /* */ }
+    try { closeKnxClient(); } catch { /* */ }
+    try { closeDaliClient(); } catch { /* */ }
+    try { closeDmxClient(); } catch { /* */ }
+    process.exit(0);
+  });
+}
+
+app.post("/api/apps/:appId/functions/snmpTestInterface", async (req, res) => {
+  try {
+    const { equipmentId, ifIndex } = req.body || {};
+    const state = getSnmpSwitchesState();
+    const profile = state.profiles.find((p) => p.equipmentId === equipmentId);
+    if (!profile) {
+      return res.status(404).json({ success: false, error: "Managed switch profile not found" });
+    }
+    const opts = resolveProfilePollOpts(profile);
+    if (!opts.ip) {
+      return res.status(400).json({ success: false, error: "Switch has no IP address" });
+    }
+    const result = await testSwitchInterface(opts.ip, ifIndex, opts);
+    if (result.success && result.port && profile.lastPoll?.ports) {
+      const ports = profile.lastPoll.ports.map((p) =>
+        p.index === Number(ifIndex) ? { ...p, ...result.port, status: result.port.status } : p
+      );
+      profile.lastPoll = { ...profile.lastPoll, ports };
+      const idx = state.profiles.findIndex((p) => p.id === profile.id);
+      if (idx >= 0) state.profiles[idx] = profile;
+      saveSnmpSwitchesState(state);
+    }
+    res.json({ ...result, snmpWalkAvailable: await isSnmpWalkAvailable() });
+  } catch (err) {
+    console.error("[snmpTestInterface]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post("/api/apps/:appId/functions/snmpPortMap", async (_req, res) => {
+  try {
+    const state = getSnmpSwitchesState();
+    const enabled = state.profiles.filter((p) => p.enabled !== false);
+    if (!enabled.length) {
+      return res.json({
+        success: true,
+        switches: [],
+        connectionMap: [],
+        totalConnections: 0,
+        disconnectedPorts: 0,
+        polledAt: new Date().toISOString(),
+        message: "No managed switches registered",
+      });
+    }
+    const pollResults = [];
+    for (const profile of enabled) {
+      const { profile: updated, poll } = await pollProfileAndSave(profile);
+      const idx = state.profiles.findIndex((p) => p.id === updated.id);
+      if (idx >= 0) state.profiles[idx] = updated;
+      const eq = db.equipment.find((e) => e.id === profile.equipmentId);
+      pollResults.push({
+        ...poll,
+        ip: poll.ip || equipmentIp(eq),
+        name: poll.name || eq?.name,
+        location: updated.location || eq?.location,
+      });
+    }
+    saveSnmpSwitchesState(state);
+    const switches = pollResults.map((r) => ({
+      ip: r.ip,
+      name: r.name,
+      location: r.location,
+      portsUp: r.ports?.filter((p) => p.status === "up").length || 0,
+      portsDown: r.ports?.filter((p) => p.status === "down").length || 0,
+      ports: (r.ports || []).map((p) => ({
+        port: p.index,
+        ifAlias: p.ifAlias,
+        ifOperStatus: p.status,
+        ifSpeed: p.speedMbps || p.speed,
+        connectedDevice: p.connectedDevice,
+        macAddr: p.macAddr,
+        vlan: p.vlan,
+        poeWatts: p.poeWatts,
+      })),
+    }));
+    const connectionMap = buildConnectionMap(
+      switches.map((sw) => ({
+        name: sw.name,
+        ip: sw.ip,
+        ports: sw.ports.map((p) => ({
+          index: p.port,
+          ifAlias: p.ifAlias,
+          status: p.ifOperStatus,
+          connectedDevice: p.connectedDevice,
+          macAddr: p.macAddr,
+          speedMbps: p.ifSpeed,
+          vlan: p.vlan,
+          poeWatts: p.poeWatts,
+        })),
+      }))
+    );
+    res.json({
+      success: true,
+      switches,
+      connectionMap,
+      totalConnections: connectionMap.length,
+      disconnectedPorts: connectionMap.filter((c) => c.status === "down").length,
+      polledAt: new Date().toISOString(),
+      snmpWalkAvailable: await isSnmpWalkAvailable(),
+    });
+  } catch (err) {
+    console.error("[snmpPortMap]", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post("/api/apps/:appId/functions/loadTopologyLayout", (req, res) => {
@@ -1132,14 +2945,17 @@ const entityHandlers = {
     delete: (id) => { db.layoutTopology = db.layoutTopology.filter(l => l.id !== id); return { success: true }; },
   },
   Equipment: {
-    list: () => db.equipment,
+    list: () => db.equipment.map((e, idx) => normalizeEquipmentRow(e, idx)),
     filter: (q) => {
-      let rows = db.equipment;
+      let rows = db.equipment.map((e, idx) => normalizeEquipmentRow(e, idx));
       if (q?.ip) rows = rows.filter((e) => e.ip === q.ip);
       if (q?.id) rows = rows.filter((e) => e.id === q.id);
       return rows;
     },
-    get: (id) => db.equipment.find(e => e.id === id),
+    get: (id) => {
+      const e = db.equipment.find((x) => x.id === id);
+      return e ? normalizeEquipmentRow(e, db.equipment.indexOf(e)) : null;
+    },
     create: (data) => {
       const nameKey = (data.name || "").trim().toLowerCase();
       const existing =
@@ -1319,12 +3135,19 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
         let parsed = { subnets: [] };
         if (existing?.value) {
           try {
-            parsed = JSON.parse(existing.value);
+            parsed = typeof existing.value === "string" ? JSON.parse(existing.value) : existing.value;
           } catch {
             parsed = { subnets: [] };
           }
         }
-        parsed.subnets = [...(parsed.subnets || []), ...subnets];
+        const toCidr = (entry) => {
+          if (!entry) return null;
+          if (typeof entry === "string") return entry.trim() || null;
+          if (typeof entry === "object" && entry.cidr) return String(entry.cidr).trim() || null;
+          return null;
+        };
+        const merge = (arr) => [...new Set((arr || []).map(toCidr).filter(Boolean))];
+        parsed.subnets = merge([...(parsed.subnets || []), ...(subnets || [])]);
         const value = JSON.stringify(parsed);
         if (existing) existing.value = value;
         else db.systemSettings.push({ id: `setting-${Date.now()}`, key, value });
@@ -1455,6 +3278,46 @@ function collectBackupSnapshot() {
   };
 }
 
+/** Resolve user from session token; aligns with GET /entities/User/me mock behaviour. */
+function getRequestUser(req) {
+  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
+  if (token === "mock-dev-token") {
+    return db.users.find((u) => u.role === "admin") ?? db.users[0];
+  }
+  const userId = token ? db.sessions[token] : null;
+  if (userId) {
+    return db.users.find((u) => u.id === userId) ?? null;
+  }
+  return db.users.find((u) => u.role === "admin") ?? db.users[0];
+}
+
+function getAdminUserFromRequest(req) {
+  const user = getRequestUser(req);
+  return user?.role === "admin" ? user : null;
+}
+
+function handlePlatformReset(req, res) {
+  if (!getAdminUserFromRequest(req)) {
+    return res.status(403).json({ message: "Administrator access required" });
+  }
+  const confirm = String(req.body?.confirm || "").trim().toUpperCase();
+  if (confirm !== PLATFORM_RESET_CONFIRM) {
+    return res.status(400).json({
+      message: `Type ${PLATFORM_RESET_CONFIRM} to confirm platform reset`,
+    });
+  }
+  applyFactoryResetToDb(db);
+  console.log("[platform] Factory reset applied — operational data cleared");
+  res.json({
+    success: true,
+    message: "Platform reset to factory defaults",
+    clearedAt: new Date().toISOString(),
+  });
+}
+
+app.post("/api/apps/:appId/platform/reset", handlePlatformReset);
+app.post("/api/apps/:appId/functions/resetPlatform", handlePlatformReset);
+
 app.get("/api/apps/:appId/backups", (req, res) => {
   res.json({ backups: db.backups });
 });
@@ -1495,14 +3358,28 @@ app.post("/api/apps/:appId/backups/:id/restore", (req, res) => {
   res.json({ success: true, message: "Configuration restored" });
 });
 
-app.post("/api/apps/:appId/integrations/test", (req, res) => {
+app.post("/api/apps/:appId/integrations/test", async (req, res) => {
   const { integrationKey, config } = req.body;
-  if (!integrationKey) return res.status(400).json({ message: "integrationKey required" });
+  if (!integrationKey) return res.status(400).json({ message: "integrationKey required", ok: false });
+
+  const key = String(integrationKey).toLowerCase();
   const host = config?.host || config?.baseUrl || config?.brokerUrl;
-  if (!host && integrationKey !== "snmp") {
+
+  if (!host && !["snmp", "mqtt"].includes(key)) {
     return res.status(400).json({ message: "Host or URL required", ok: false });
   }
-  res.json({ ok: true, message: `${integrationKey} connection test succeeded (mock)` });
+
+  try {
+    const { runIntegrationProbe } = await import("../scanner/integrations/integrationProbes.js");
+    const result = await runIntegrationProbe(key, config || {});
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, message: result.message, detail: result.detail || null });
+    }
+    return res.json({ ok: true, message: result.message, detail: result.detail || null });
+  } catch (err) {
+    console.error("[integrations/test]", err);
+    return res.status(500).json({ ok: false, message: err.message || "Integration test failed" });
+  }
 });
 
 app.post("/api/apps/:appId/ai/test-key", (req, res) => {
@@ -1566,6 +3443,16 @@ app.delete("/api/apps/:appId/users/:id", (req, res) => {
 });
 
 // ---- Start ----
+ensureDefaultWanRouterProfile();
+pollAllStoredCiscoSwitches().catch((err) => {
+  console.warn("[ciscoPoll] initial fleet poll failed:", err?.message || err);
+});
+setInterval(() => {
+  pollAllStoredCiscoSwitches().catch((err) => {
+    console.warn("[ciscoPoll] background fleet poll failed:", err?.message || err);
+  });
+}, CISCO_BACKGROUND_POLL_INTERVAL_MS);
+
 app.listen(PORT, () => {
   console.log(`[mock-base44] Server running at http://localhost:${PORT}`);
   console.log(`[mock-base44] App ID: ${APP_ID}`);
@@ -1573,6 +3460,7 @@ app.listen(PORT, () => {
   console.log(`  - Auth: /api/apps/${APP_ID}/auth/*`);
   console.log(`  - Functions: /api/apps/${APP_ID}/functions/*`);
   console.log(`  - Entities: /api/apps/${APP_ID}/entities/*`);
+  console.log(`  - Platform reset: POST /api/apps/${APP_ID}/platform/reset`);
   console.log(`  - Integrations: /api/apps/${APP_ID}/integration-endpoints/Core/*`);
   console.log(`  - Network scanner: ${USE_MOCK_SCAN ? "MOCK (demo devices only)" : "LIVE (ping/arp/full on this host)"}`);
   console.log(`  - Scanner health: GET /api/apps/${APP_ID}/scanner/health`);

@@ -4,7 +4,7 @@ import GridLayout from "react-grid-layout/legacy";
 import { useContainerWidth } from "react-grid-layout";
 import { Plus, Move, Trash2, Save, Loader2 } from "lucide-react";
 import { WIDGET_TYPES, WIDGET_COMPONENTS } from "./widgets/DashboardWidgets";
-import { DEFAULT_DASHBOARD_LAYOUT } from "@/lib/dashboardLayout";
+import { DEFAULT_DASHBOARD_LAYOUT, ensureLocationWidget } from "@/lib/dashboardLayout";
 import { useSettings } from "@/hooks/useSettings";
 import {
   Dialog,
@@ -21,6 +21,7 @@ const GRID_COLS = 12;
 const ROW_HEIGHT = 80;
 
 const CHART_TYPES = new Set(["network_traffic"]);
+const TALL_WIDGET_TYPES = new Set(["network_traffic", "system_location", "live_weather"]);
 
 function toRglLayout(layout) {
   return layout.map((widget) => {
@@ -59,8 +60,13 @@ export default function CustomizableDashboard() {
   const { width, containerRef, mounted } = useContainerWidth();
 
   useEffect(() => {
-    if (!loading && savedLayout?.layout?.length) {
-      setLayout(savedLayout.layout);
+    if (!loading) {
+      const saved = savedLayout?.layout?.filter(w => WIDGET_COMPONENTS[w.type]);
+      if (saved?.length) {
+        setLayout(ensureLocationWidget(saved));
+      } else {
+        setLayout(DEFAULT_DASHBOARD_LAYOUT);
+      }
     }
   }, [loading, savedLayout]);
 
@@ -112,7 +118,7 @@ export default function CustomizableDashboard() {
       >
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-xs md:text-sm text-muted-foreground">System overview</p>
+          <p className="text-xs text-muted-foreground mt-0.5">System Overview</p>
           {editMode && (
             <p className="hidden md:block text-xs text-primary/80 mt-1">
               Drag widgets to move · corner handle to resize
@@ -157,11 +163,12 @@ export default function CustomizableDashboard() {
               const WidgetComponent = WIDGET_COMPONENTS[widget.type];
               if (!WidgetComponent) return null;
               const isChart = CHART_TYPES.has(widget.type);
+              const isTall = TALL_WIDGET_TYPES.has(widget.type);
               return (
                 <motion.div
                   key={widget.id}
                   className="relative rounded-2xl overflow-hidden border border-border"
-                  style={{ minHeight: isChart ? 220 : 160 }}
+                  style={{ minHeight: isTall ? 280 : isChart ? 220 : 160 }}
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
                 >

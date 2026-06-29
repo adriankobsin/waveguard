@@ -1,82 +1,199 @@
 import { motion } from "framer-motion";
-import { AlertTriangle, Lightbulb } from "lucide-react";
+import { Lightbulb, Moon, Loader2, ChevronUp, ChevronDown, Square, PanelTop, Blinds, Zap, Pencil } from "lucide-react";
+import { isShadeZone } from "@/lib/lighting/lightingSettings";
+import SmoothLevelSlider from "./SmoothLevelSlider";
 
-const PROTOCOL_COLORS = {
-  DMX:    "text-purple-400 bg-purple-500/10 border-purple-500/20",
-  DALI:   "text-blue-400 bg-blue-500/10 border-blue-500/20",
-  KNX:    "text-orange-400 bg-orange-500/10 border-orange-500/20",
-  Lutron: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
+const KIND_META = {
+  light:    { label: "Light",    Icon: Lightbulb, tone: "amber" },
+  shade:    { label: "Shade",    Icon: PanelTop,  tone: "sky" },
+  blind:    { label: "Blind",    Icon: Blinds,    tone: "indigo" },
+  blackout: { label: "Blackout", Icon: Moon,      tone: "violet" },
+  load:     { label: "Load",     Icon: Zap,       tone: "emerald" },
+};
+const TONE_CLS = {
+  amber:   "text-amber-400 bg-amber-500/10 border-amber-500/30",
+  sky:     "text-sky-400 bg-sky-500/10 border-sky-500/30",
+  indigo:  "text-indigo-400 bg-indigo-500/10 border-indigo-500/30",
+  violet:  "text-violet-400 bg-violet-500/10 border-violet-500/30",
+  emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
 };
 
-export default function LightingZoneList({ zones, selectedZone, onSelectZone, onUpdateZone }) {
-  return (
-    <div className="space-y-2 max-w-3xl mx-auto">
-      {zones.map((zone, i) => {
-        const isSelected = selectedZone === zone.id;
-        const pcls = PROTOCOL_COLORS[zone.protocol] || "text-slate-400 bg-slate-500/10 border-slate-500/20";
+function meta(kind) {
+  return KIND_META[kind] || KIND_META.load;
+}
 
+export default function LightingZoneList({
+  zones,
+  zoneState,
+  pendingZones,
+  selectedHref,
+  onSelectZone,
+  onZoneLevel,
+  onZoneToggle,
+  onStopShade,
+  onEditZone,
+}) {
+  if (!zones || zones.length === 0) {
+    return (
+      <div className="max-w-3xl mx-auto py-12 px-6 text-center text-xs text-muted-foreground">
+        No loads in this floor.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 max-w-3xl mx-auto p-4">
+      {zones.map((zone, i) => {
+        const m = meta(zone.kind);
+        const Icon = m.Icon;
+        const state = zoneState?.[zone.href];
+        const level = state?.level ?? 0;
+        const isOn = state?.on ?? false;
+        const isBusy = !!pendingZones?.[zone.href];
+        const isSelected = selectedHref === zone.href;
+        const shade = isShadeZone(zone);
         return (
           <motion.div
-            key={zone.id}
+            key={zone.href}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.03 }}
-            onClick={() => onSelectZone(isSelected ? null : zone.id)}
+            transition={{ delay: i * 0.02 }}
+            onClick={() =>
+              onSelectZone?.(isSelected ? null : zone.href)
+            }
             className={`flex items-center gap-4 px-4 py-3.5 rounded-xl border cursor-pointer transition-all ${
               isSelected
                 ? "border-amber-500/40 bg-amber-500/8"
-                : zone.fault
-                ? "border-red-500/25 bg-red-500/5 hover:bg-red-500/8"
-                : "border-white/6 bg-white/2 hover:bg-white/5 hover:border-white/12"
+                : isOn
+                ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/10"
+                : "border-border bg-muted/50 hover:bg-secondary"
             }`}
           >
-            {/* Status indicator */}
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-              zone.fault ? "bg-red-500/15" : zone.on ? "bg-amber-500/15" : "bg-white/5"
-            }`}>
-              {zone.fault
-                ? <AlertTriangle size={16} className="text-red-400" />
-                : <Lightbulb size={16} className={zone.on ? "text-amber-400" : "text-slate-600"} />
-              }
-            </div>
-
-            {/* Name + location */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <p className="text-sm font-semibold text-white truncate">{zone.name}</p>
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${pcls}`}>
-                  {zone.protocol}
-                </span>
-                {zone.fault && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/12 text-red-400 flex-shrink-0">
-                    FAULT
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-slate-500 truncate">{zone.location} · {zone.fixtures} fixtures · Ch {zone.channel}</p>
-            </div>
-
-            {/* Dimmer slider */}
-            <div className="w-32 flex-shrink-0 hidden sm:block" onClick={e => e.stopPropagation()}>
-              <div className="flex justify-between text-[10px] mb-1">
-                <span className="text-slate-600">Level</span>
-                <span className={zone.on ? "text-amber-400 font-bold" : "text-slate-600"}>{zone.on ? `${zone.level}%` : "Off"}</span>
-              </div>
-              <input
-                type="range" min={0} max={100} value={zone.level}
-                onChange={e => onUpdateZone(zone.id, { level: +e.target.value, on: +e.target.value > 0 })}
-                className="w-full h-1.5 cursor-pointer"
-                style={{ accentColor: "#f59e0b" }}
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                isOn ? "bg-amber-500/15" : "bg-secondary"
+              }`}
+            >
+              <Icon
+                size={16}
+                className={
+                  isOn ? "text-amber-400" : "text-muted-foreground"
+                }
               />
             </div>
 
-            {/* Toggle */}
-            <button
-              onClick={e => { e.stopPropagation(); onUpdateZone(zone.id, { on: !zone.on }); }}
-              className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${zone.on ? "bg-amber-500" : "bg-white/10"}`}
-            >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${zone.on ? "translate-x-5" : "translate-x-0"}`} />
-            </button>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-semibold text-foreground truncate">
+                  {zone.name}
+                </p>
+                <span
+                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex-shrink-0 ${TONE_CLS[m.tone]}`}
+                >
+                  {m.label}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {zone.area} · <span className="font-mono">{zone.href}</span>
+              </p>
+            </div>
+
+            {shade ? (
+              <div
+                className="flex items-center gap-1.5 flex-shrink-0"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => onZoneLevel(zone, 100)}
+                  disabled={isBusy}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+                  title="Open"
+                >
+                  <ChevronUp size={14} className="text-sky-400" />
+                </button>
+                <button
+                  onClick={() => onZoneLevel(zone, 0)}
+                  disabled={isBusy}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+                  title="Close"
+                >
+                  <ChevronDown size={14} className="text-sky-400" />
+                </button>
+                {onStopShade && (
+                  <button
+                    onClick={() => onStopShade(zone)}
+                    disabled={isBusy}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary disabled:opacity-40 transition-colors"
+                    title="Stop"
+                  >
+                    <Square size={12} className="text-muted-foreground" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div
+                className="w-32 flex-shrink-0 hidden sm:block"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex justify-between text-[10px] mb-1">
+                  <span className="text-muted-foreground">Level</span>
+                  <span
+                    className={
+                      isOn
+                        ? "text-amber-400 font-bold"
+                        : "text-muted-foreground"
+                    }
+                  >
+                    {isOn ? `${level}%` : "Off"}
+                  </span>
+                </div>
+                <SmoothLevelSlider
+                  value={level}
+                  busy={isBusy}
+                  onChange={(v) => onZoneLevel(zone, v)}
+                  className="w-full h-1.5 cursor-pointer"
+                />
+              </div>
+            )}
+
+            {!shade && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onZoneToggle(zone, !isOn);
+                }}
+                disabled={isBusy}
+                className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-50 ${
+                  isOn ? "bg-amber-500" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${
+                    isOn ? "translate-x-5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            )}
+
+            {isBusy && (
+              <Loader2
+                size={12}
+                className="text-amber-400 animate-spin flex-shrink-0"
+              />
+            )}
+
+            {onEditZone && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditZone(zone);
+                }}
+                className="w-8 h-8 rounded-lg flex items-center justify-center border border-border bg-muted hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                title="Edit name or integration address"
+                type="button"
+              >
+                <Pencil size={12} />
+              </button>
+            )}
           </motion.div>
         );
       })}

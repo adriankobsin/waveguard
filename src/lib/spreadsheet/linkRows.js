@@ -3,12 +3,14 @@ import {
   endpointToEquipment,
   chassisToEquipment,
   applianceToEquipment,
+  genericRowToEquipment,
   patchToCable,
   switchPortToCable,
   collectSiteLocations,
   vlansToDiscoverySubnets,
   racksToLayout,
 } from "./normalize.js";
+import { stripVesselEquipmentName } from "./equipmentName.js";
 
 function equipmentKey(eq) {
   return (eq.name || "").trim().toLowerCase();
@@ -58,9 +60,10 @@ export function buildImportPayload(parsed, options = {}) {
       for (const row of sheet.ports || []) {
         const cable = switchPortToCable(row);
         if (cable) cables.push(cable);
-        if (row.endDevice && !equipmentByName.has(equipmentKey({ name: row.endDevice }))) {
+        const endName = stripVesselEquipmentName(row.endDevice || "");
+        if (endName && !equipmentByName.has(equipmentKey({ name: endName }))) {
           addEquipment({
-            name: row.endDevice,
+            name: endName,
             model: "",
             category: "Other",
             location: row.location || "",
@@ -75,6 +78,11 @@ export function buildImportPayload(parsed, options = {}) {
       for (const row of sheet.rows || []) {
         const cable = patchToCable(row, floorMap);
         if (cable.label) cables.push(cable);
+      }
+    } else if (sheet.sheetType === SHEET_GROUPS.generic) {
+      for (const row of sheet.rows || []) {
+        const eq = genericRowToEquipment(row, floorMap);
+        if (eq) addEquipment(eq);
       }
     }
   }

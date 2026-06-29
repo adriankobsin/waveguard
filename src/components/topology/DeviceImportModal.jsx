@@ -112,15 +112,15 @@ AP-Deck,192.168.1.20,00:1A:2B:3C:4D:61,Network,Deck,UniFi 6 Pro,JKL012,7.4.156,O
           </DialogTitle>
           <DialogDescription>
             Upload a CSV file to bulk import devices into your network topology.
-            For full vessel workbooks (Device List, Patch Panels, switches), use Inventory → Import spreadsheet.
+            For full vessel workbooks (Device List, Patch Panels, switches), use Equipment → Import spreadsheet.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
           {/* Step 1: Download template */}
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-slate-200">Step 1: Get the template</h4>
-            <p className="text-xs text-slate-400">
+            <h4 className="text-sm font-medium text-foreground">Step 1: Get the template</h4>
+            <p className="text-xs text-muted-foreground">
               Download our CSV template with the required columns and example data.
             </p>
             <Button
@@ -135,26 +135,26 @@ AP-Deck,192.168.1.20,00:1A:2B:3C:4D:61,Network,Deck,UniFi 6 Pro,JKL012,7.4.156,O
 
           {/* Step 2: Upload file */}
           <div className="space-y-2">
-            <h4 className="text-sm font-medium text-slate-200">Step 2: Upload your CSV</h4>
-            <p className="text-xs text-slate-400">
+            <h4 className="text-sm font-medium text-foreground">Step 2: Upload your CSV</h4>
+            <p className="text-xs text-muted-foreground">
               Upload your filled CSV file. Supported format: .csv
             </p>
             
             {!uploadedFile ? (
               <label className="block">
-                <div className="border-2 border-dashed border-slate-700 rounded-lg p-8 text-center hover:border-cyan-500/50 transition-colors cursor-pointer">
+                <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-cyan-500/50 transition-colors cursor-pointer">
                   {uploading ? (
-                    <div className="flex items-center justify-center gap-2 text-slate-400">
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground">
                       <Loader2 size={20} className="animate-spin" />
                       <span>Uploading...</span>
                     </div>
                   ) : (
                     <>
-                      <Upload className="w-8 h-8 text-slate-500 mx-auto mb-2" />
-                      <p className="text-sm text-slate-400">
+                      <Upload className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">
                         Click to upload or drag and drop
                       </p>
-                      <p className="text-xs text-slate-500 mt-1">
+                      <p className="text-xs text-muted-foreground mt-1">
                         CSV files only
                       </p>
                     </>
@@ -190,8 +190,8 @@ AP-Deck,192.168.1.20,00:1A:2B:3C:4D:61,Network,Deck,UniFi 6 Pro,JKL012,7.4.156,O
           {/* Step 3: Import */}
           {uploadedFile && !importResult && (
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-slate-200">Step 3: Import devices</h4>
-              <p className="text-xs text-slate-400">
+              <h4 className="text-sm font-medium text-foreground">Step 3: Import devices</h4>
+              <p className="text-xs text-muted-foreground">
                 Click the button below to import all devices from your CSV file.
               </p>
               <Button

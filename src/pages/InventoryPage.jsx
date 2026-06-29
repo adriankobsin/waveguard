@@ -1,13 +1,22 @@
-import { useState, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Package, Plus, Search, X, Filter, Pencil, Trash2,
-  Wifi, Camera, Monitor, Zap, Server, HardDrive, Check,
-  LayoutGrid, List, Download, FileSpreadsheet
+  Package, Plus, Search, X, Pencil, Trash2,
+  Wifi, Camera, Monitor, Zap, Server, HardDrive,
+  LayoutGrid, List, Download, FileSpreadsheet, Lightbulb,
 } from "lucide-react";
 import InventoryExportModal from "../components/inventory/InventoryExportModal";
 import VesselSpreadsheetImportModal from "../components/inventory/VesselSpreadsheetImportModal";
+import InventoryFilters from "../components/inventory/InventoryFilters";
+import EquipmentEditModal from "../components/inventory/EquipmentEditModal";
+import {
+  EMPTY_INVENTORY_FILTERS,
+  buildInventoryFilterOptions,
+  applyInventoryFilters,
+  getEquipmentArea,
+  getEquipmentRoom,
+} from "@/lib/inventory/inventoryFilters";
 import { listEquipment, upsertEquipment, updateEquipment, deleteEquipment } from "@/api/equipmentApi";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
 import { toast } from "sonner";
@@ -15,8 +24,9 @@ import { useBulkSelection } from "@/hooks/useBulkSelection";
 import BulkActionBar from "@/components/shared/BulkActionBar";
 import BulkEditModal from "@/components/shared/BulkEditModal";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DEVICE_CATEGORIES } from "@/lib/equipment/deviceFormConstants";
 
-const CATEGORIES = ["All", "Network", "Camera", "AV", "Power", "Control", "Other"];
+const CATEGORIES = DEVICE_CATEGORIES;
 const CONDITIONS = ["Excellent", "Good", "Fair", "Poor", "Decommissioned"];
 
 const TYPE_ICONS = {
@@ -25,10 +35,34 @@ const TYPE_ICONS = {
   AV: { icon: Monitor, color: "text-blue-400", bg: "bg-blue-500/10" },
   Power: { icon: Zap, color: "text-yellow-400", bg: "bg-yellow-500/10" },
   Control: { icon: Server, color: "text-green-400", bg: "bg-green-500/10" },
+  Server: { icon: Server, color: "text-slate-300", bg: "bg-slate-500/10" },
+  Lighting: { icon: Lightbulb, color: "text-amber-400", bg: "bg-amber-500/10" },
   Other: { icon: HardDrive, color: "text-muted-foreground", bg: "bg-secondary" },
 };
 
-const EMPTY = { name: "", model: "", category: "Network", ip: "", condition: "Good", location: "", serial: "", notes: "" };
+const EMPTY = {
+  name: "",
+  make: "",
+  model: "",
+  category: "Network",
+  ip: "",
+  mac: "",
+  condition: "Good",
+  area: "",
+  room: "",
+  location: "",
+  serial: "",
+  notes: "",
+};
+
+function buildLocationFromForm(form) {
+  const override = form.location?.trim();
+  if (override) return override;
+  const area = form.area?.trim() || "";
+  const room = form.room?.trim() || "";
+  if (area && room) return `${area} · Room ${room}`;
+  return area;
+}
 
 function isInventoryItem(e) {
   return e.waveguardClassification === "inventory" || e.inventoryOnly === true;
@@ -54,7 +88,11 @@ const CONDITION_COLORS = {
 export default function InventoryPage() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("All");
+  const [filters, setFilters] = useState(() => ({ ...EMPTY_INVENTORY_FILTERS }));
+
+  const applyFilterPatch = useCallback((patch) => {
+    setFilters((prev) => ({ ...EMPTY_INVENTORY_FILTERS, ...prev, ...patch }));
+  }, []);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [viewMode, setViewMode] = useState("grid");
@@ -62,6 +100,8 @@ export default function InventoryPage() {
   const [showImport, setShowImport] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const listRef = useRef(null);
   const bulk = useBulkSelection();
 
   const { data: allEquipment = [], isLoading } = useQuery({
@@ -80,30 +120,58 @@ export default function InventoryPage() {
     return () => window.removeEventListener(EQUIPMENT_CHANGED_EVENT, refresh);
   }, [queryClient]);
 
-  const filtered = equipment.filter(e => {
-    const matchCat = category === "All" || e.category === category;
-    const matchSearch = !search || [e.name, e.model, e.ip, e.location, e.serial].some(v =>
-      v?.toLowerCase().includes(search.toLowerCase())
-    );
-    return matchCat && matchSearch;
-  });
+  const filterOptions = useMemo(
+    () => buildInventoryFilterOptions(equipment),
+    [equipment]
+  );
 
-  const openNew = () => { setForm(EMPTY); setEditing("new"); };
-  const openEdit = (e) => { setForm({ ...e }); setEditing(e.id); };
-  const cancel = () => { setEditing(null); };
+  const filtered = useMemo(
+    () => applyInventoryFilters(equipment, filters, search),
+    [equipment, filters, search]
+  );
+
+  const filterSignature = useMemo(
+    () => JSON.stringify({ filters, search }),
+    [filters, search]
+  );
+
+  useEffect(() => {
+    listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [filterSignature]);
+
+  const openNew = () => {
+    setForm({ ...EMPTY });
+    setEditing("new");
+  };
+  const openEdit = (e) => {
+    setForm({
+      ...e,
+      area: getEquipmentArea(e),
+      room: getEquipmentRoom(e),
+    });
+    setEditing(e.id);
+  };
+  const cancel = () => {
+    setEditing(null);
+    setForm({ ...EMPTY });
+  };
 
   const save = async () => {
     if (!form.name || !form.model) return;
+    setSaving(true);
     try {
+      const { area, room, ...rest } = form;
       const payload = {
-        ...form,
+        ...rest,
+        room: room?.trim() || "",
+        location: buildLocationFromForm(form),
         waveguardClassification: "inventory",
         inventoryOnly: true,
         monitoringEnabled: false,
       };
       if (editing === "new") {
         await upsertEquipment({ ...payload, id: `eq-manual-${Date.now()}` });
-        toast.success("Equipment added to inventory");
+        toast.success("Equipment added");
       } else {
         await upsertEquipment({ ...payload, id: editing });
         toast.success("Equipment updated");
@@ -113,6 +181,8 @@ export default function InventoryPage() {
       cancel();
     } catch (e) {
       toast.error(e.message || "Save failed");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -121,7 +191,7 @@ export default function InventoryPage() {
       await deleteEquipment(id);
       queryClient.invalidateQueries({ queryKey: ["equipment"] });
       queryClient.invalidateQueries({ queryKey: ["deviceGroups"] });
-      toast.success("Removed from inventory");
+      toast.success("Equipment removed");
     } catch (e) {
       toast.error(e.message || "Delete failed");
     }
@@ -154,7 +224,12 @@ export default function InventoryPage() {
   };
 
   const INVENTORY_BULK_FIELDS = [
-    { key: "category", label: "Category", type: "select", options: CATEGORIES.filter((c) => c !== "All") },
+    {
+      key: "category",
+      label: "Category",
+      type: "select",
+      options: [...new Set([...CATEGORIES, ...filterOptions.categories])],
+    },
     { key: "condition", label: "Condition", type: "select", options: CONDITIONS },
     { key: "location", label: "Location", type: "text", placeholder: "e.g. Main Deck · Room 344" },
     { key: "notes", label: "Notes", type: "text" },
@@ -167,7 +242,7 @@ export default function InventoryPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
             <Package size={22} className="text-cyan-400" />
-            Inventory
+            Equipment
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {isLoading ? "Loading…" : `${equipment.length} items from discovery and manual entry`}
@@ -195,40 +270,49 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5 flex-1 max-w-sm">
-          <Search size={14} className="text-muted-foreground flex-shrink-0" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search equipment…"
-            className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-          />
-          {search && <button onClick={() => setSearch("")}><X size={12} className="text-muted-foreground" /></button>}
-        </div>
-        <div className="flex items-center gap-1 flex-wrap flex-1">
-          <Filter size={13} className="text-muted-foreground mr-1" />
-          {CATEGORIES.map(cat => (
+      {/* Search + filters */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5 flex-1 max-w-lg">
+            <Search size={14} className="text-muted-foreground flex-shrink-0" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, IP, model, location, system…"
+              className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch("")}>
+                <X size={12} className="text-muted-foreground" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1 border border-border rounded-lg p-0.5 self-start">
             <button
-              key={cat}
-              onClick={() => setCategory(cat)}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                category === cat ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"
-              }`}
+              type="button"
+              onClick={() => setViewMode("grid")}
+              className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {cat}
+              <LayoutGrid size={14} />
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`p-1.5 rounded transition-colors ${viewMode === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <List size={14} />
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-1 border border-border rounded-lg p-0.5">
-          <button onClick={() => setViewMode("grid")} className={`p-1.5 rounded transition-colors ${viewMode === "grid" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-            <LayoutGrid size={14} />
-          </button>
-          <button onClick={() => setViewMode("list")} className={`p-1.5 rounded transition-colors ${viewMode === "list" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
-            <List size={14} />
-          </button>
-        </div>
+
+        <InventoryFilters
+          filters={filters}
+          onChange={applyFilterPatch}
+          options={filterOptions}
+          disabled={isLoading}
+          resultCount={filtered.length}
+          totalCount={equipment.length}
+        />
       </div>
 
       <BulkActionBar
@@ -264,70 +348,28 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* Inline form */}
-      <AnimatePresence>
-        {editing && !bulk.count && (
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            className="glass rounded-xl p-4 space-y-3"
-          >
-            <h3 className="text-sm font-semibold text-foreground">{editing === "new" ? "New Equipment" : "Edit Equipment"}</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {[
-                { key: "name", placeholder: "Name (e.g. SW-Bridge)" },
-                { key: "model", placeholder: "Model / Make" },
-                { key: "ip", placeholder: "IP Address" },
-                { key: "location", placeholder: "Location" },
-                { key: "serial", placeholder: "Serial Number" },
-              ].map(f => (
-                <input
-                  key={f.key}
-                  value={form[f.key]}
-                  onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}
-                  placeholder={f.placeholder}
-                  className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-              ))}
-              <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
-                {CATEGORIES.filter(c => c !== "All").map(c => <option key={c}>{c}</option>)}
-              </select>
-              <select value={form.condition} onChange={e => setForm(p => ({ ...p, condition: e.target.value }))}
-                className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary">
-                {CONDITIONS.map(c => <option key={c}>{c}</option>)}
-              </select>
-              <input
-                value={form.notes}
-                onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-                placeholder="Notes"
-                className="bg-secondary border border-border rounded-lg px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary col-span-2"
-              />
-            </div>
-            <div className="flex gap-2">
-              <button onClick={save} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90">
-                <Check size={13} /> Save
-              </button>
-              <button onClick={cancel} className="flex items-center gap-1.5 px-3 py-1.5 bg-secondary text-muted-foreground rounded-lg text-sm hover:text-foreground">
-                <X size={13} /> Cancel
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <EquipmentEditModal
+        open={Boolean(editing) && !bulk.count}
+        onClose={cancel}
+        isNew={editing === "new"}
+        form={form}
+        onChange={(patch) => setForm((p) => ({ ...p, ...patch }))}
+        onSave={save}
+        saving={saving}
+        categoryOptions={filterOptions.categories}
+        areaOptions={filterOptions.areas}
+        roomOptions={filterOptions.rooms}
+      />
 
-      {/* Grid view */}
+      {/* Equipment list — directly under filters; scrolls into view when filters change */}
+      <div ref={listRef} className="scroll-mt-4">
       {viewMode === "grid" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          <AnimatePresence>
-            {filtered.map((eq, i) => (
+        <div key={filterSignature} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filtered.map((eq) => (
               <motion.div
                 key={eq.id}
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                transition={{ delay: i * 0.03 }}
                 className={`glass rounded-xl p-4 flex gap-3 ${bulk.isSelected(eq.id) ? "ring-2 ring-primary/50" : ""}`}
               >
                 <div className="flex flex-col items-start gap-2 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -350,6 +392,9 @@ export default function InventoryPage() {
                   <div className="mt-2 space-y-1">
                     {eq.ip && <p className="text-xs text-muted-foreground font-mono">{eq.ip}</p>}
                     {eq.location && <p className="text-xs text-muted-foreground">{eq.location}</p>}
+                    {eq.systemCategory && (
+                      <p className="text-xs text-cyan-400/80 font-mono uppercase">{eq.systemCategory}</p>
+                    )}
                     {eq.notes && <p className="text-xs text-muted-foreground/70 truncate">{eq.notes}</p>}
                   </div>
                   <div className="flex gap-1 mt-3">
@@ -363,13 +408,11 @@ export default function InventoryPage() {
                 </div>
               </motion.div>
             ))}
-          </AnimatePresence>
         </div>
       )}
 
-      {/* List view */}
       {viewMode === "list" && (
-        <div className="glass rounded-xl overflow-hidden">
+        <div key={filterSignature} className="glass rounded-xl overflow-hidden">
           <div className="grid grid-cols-[auto_auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2 border-b border-border/50 text-[10px] text-muted-foreground uppercase tracking-widest">
             <Checkbox
               checked={bulk.allSelected(filteredIds)}
@@ -383,14 +426,11 @@ export default function InventoryPage() {
             <div>Condition</div>
             <div />
           </div>
-          <AnimatePresence>
-            {filtered.map((eq, i) => (
+            {filtered.map((eq) => (
               <motion.div
                 key={eq.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ delay: i * 0.02 }}
                 className={`grid grid-cols-[auto_auto_1fr_1fr_auto_auto] sm:grid-cols-[auto_auto_1fr_1fr_1fr_auto_auto] items-center gap-3 px-4 py-2.5 border-b border-border/30 last:border-0 hover:bg-white/[0.02] transition-colors ${bulk.isSelected(eq.id) ? "bg-primary/5" : ""}`}
               >
                 <Checkbox
@@ -405,6 +445,9 @@ export default function InventoryPage() {
                 <div className="hidden sm:block min-w-0">
                   {eq.ip && <p className="text-xs font-mono text-muted-foreground">{eq.ip}</p>}
                   {eq.location && <p className="text-xs text-muted-foreground truncate">{eq.location}</p>}
+                  {eq.systemCategory && (
+                    <p className="text-[10px] text-cyan-400/70 font-mono uppercase">{eq.systemCategory}</p>
+                  )}
                 </div>
                 <div className="hidden md:block min-w-0">
                   <p className="text-xs font-mono text-muted-foreground truncate">{eq.serial || "—"}</p>
@@ -422,7 +465,6 @@ export default function InventoryPage() {
                 </div>
               </motion.div>
             ))}
-          </AnimatePresence>
         </div>
       )}
 
@@ -431,7 +473,7 @@ export default function InventoryPage() {
           No equipment found.
         </div>
       )}
-      <p className="text-xs text-muted-foreground">{equipment.length} items · {filtered.length} shown</p>
+      </div>
 
       {showExport && (
         <InventoryExportModal equipment={equipment} onClose={() => setShowExport(false)} />

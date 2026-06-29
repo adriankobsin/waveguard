@@ -25,16 +25,16 @@ export default function RackEquipmentPalette({
   }, [devices, query]);
 
   return (
-    <div className="w-56 flex-shrink-0 border-r border-white/8 bg-[#070b13]/80 flex flex-col h-full">
-      <div className="p-3 border-b border-white/8">
-        <p className="text-xs font-semibold text-white mb-2">Equipment catalog</p>
-        <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5">
-          <Search size={12} className="text-slate-500" />
+    <div className="w-56 flex-shrink-0 border-r border-border bg-card/80 flex flex-col h-full">
+      <div className="p-3 border-b border-border">
+        <p className="text-xs font-semibold text-foreground mb-2">Equipment catalog</p>
+        <div className="flex items-center gap-2 bg-secondary border border-border rounded-lg px-2 py-1.5">
+          <Search size={12} className="text-muted-foreground" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search..."
-            className="bg-transparent text-xs text-white placeholder:text-slate-500 w-full focus:outline-none"
+            className="bg-transparent text-xs text-foreground placeholder:text-muted-foreground w-full focus:outline-none"
           />
         </div>
       </div>
@@ -49,17 +49,17 @@ export default function RackEquipmentPalette({
               onDragStart={() => canEdit && !placed && onDragStart?.(item)}
               className={`flex items-start gap-2 p-2 rounded-lg border text-left transition-all ${
                 placed
-                  ? "border-white/5 bg-white/2 opacity-50 cursor-not-allowed"
+                  ? "border-border bg-muted/50 opacity-50 cursor-not-allowed"
                   : canEdit
-                    ? "border-white/10 bg-white/4 hover:border-cyan-500/30 cursor-grab active:cursor-grabbing"
-                    : "border-white/10 bg-white/4"
+                    ? "border-border bg-muted hover:border-cyan-500/30 cursor-grab active:cursor-grabbing"
+                    : "border-border bg-muted"
               }`}
             >
-              {canEdit && <GripVertical size={12} className="text-slate-600 mt-0.5 flex-shrink-0" />}
+              {canEdit && <GripVertical size={12} className="text-muted-foreground mt-0.5 flex-shrink-0" />}
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-medium text-white truncate">{item.name}</p>
-                <p className="text-[10px] text-slate-500 truncate">{item.model}</p>
-                <div className="flex items-center gap-2 mt-1 text-[9px] text-slate-500">
+                <p className="text-[11px] font-medium text-foreground truncate">{item.name}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{item.model}</p>
+                <div className="flex items-center gap-2 mt-1 text-[9px] text-muted-foreground">
                   <span style={{ color }}>{item.category}</span>
                   <span>{item.ruHeight}U</span>
                   <span>{item.telemetry?.powerW ?? item.defaultWatts}W</span>

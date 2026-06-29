@@ -49,7 +49,7 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2 bg-[#0a0f1c]/90 border-white/10 text-slate-300">
+        <Button variant="outline" size="sm" className="gap-2 bg-secondary/90 border-border text-secondary-foreground">
           <LayoutGrid size={12} />
           Layouts
         </Button>
@@ -60,14 +60,14 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
         </DialogHeader>
         <div className="grid gap-3 max-h-[60vh] overflow-y-auto">
           {layouts.length === 0 ? (
-            <p className="text-sm text-slate-500 text-center py-8">No saved layouts yet</p>
+            <p className="text-sm text-muted-foreground text-center py-8">No saved layouts yet</p>
           ) : (
             layouts.map(layout => (
               <motion.div
                 key={layout.id}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex items-center justify-between p-4 rounded-xl border border-white/10 bg-[#0a0f1c]/50"
+                className="flex items-center justify-between p-4 rounded-xl border border-border bg-secondary/50"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center">
@@ -75,7 +75,7 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-white">{layout.name}</p>
+                      <p className="text-sm font-medium text-foreground">{layout.name}</p>
                       {layout.is_default && (
                         <span className="flex items-center gap-1 text-xs text-amber-400">
                           <Star size={10} className="fill-current" />
@@ -89,7 +89,7 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500">
+                    <p className="text-xs text-muted-foreground">
                       {Object.keys(layout.node_positions || {}).length} custom positions · {layout.custom_connections?.length || 0} connections
                     </p>
                   </div>
@@ -107,7 +107,7 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
                     variant="ghost"
                     size="icon"
                     onClick={() => handleDelete(layout.id)}
-                    className="text-slate-500 hover:text-red-400"
+                    className="text-muted-foreground hover:text-red-400"
                   >
                     <Trash2 size={14} />
                   </Button>
@@ -117,7 +117,7 @@ export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayo
           )}
         </div>
         {canSave && onSaveLayout && (
-          <div className="pt-3 border-t border-white/10 flex justify-end">
+          <div className="pt-3 border-t border-border flex justify-end">
             <Button size="sm" onClick={() => { onSaveLayout(); setOpen(false); }}>
               Save current layout
             </Button>

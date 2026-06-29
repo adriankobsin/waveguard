@@ -27,3 +27,25 @@ export function applyThemeToDocument(theme) {
   root.classList.remove("light", "dark");
   root.classList.add(theme === "light" ? "light" : "dark");
 }
+
+/** Read an HSL CSS variable as a usable color string, e.g. hsl(224 28% 5%). */
+export function getCssVarHsl(name, alpha) {
+  if (typeof document === "undefined") {
+    const fallback = "224 28% 5%";
+    return alpha != null ? `hsla(${fallback} / ${alpha})` : `hsl(${fallback})`;
+  }
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(`--${name}`).trim();
+  if (!raw) return null;
+  return alpha != null ? `hsla(${raw} / ${alpha})` : `hsl(${raw})`;
+}
+
+export function readThemeColors() {
+  return {
+    background: getCssVarHsl("background"),
+    foreground: getCssVarHsl("foreground"),
+    card: getCssVarHsl("card"),
+    muted: getCssVarHsl("muted"),
+    mutedForeground: getCssVarHsl("muted-foreground"),
+    border: getCssVarHsl("border"),
+  };
+}

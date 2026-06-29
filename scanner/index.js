@@ -1,13 +1,15 @@
 import { expandCidr, detectLocalSubnets, getScanInterfaceLabel, isValidCidr, normalizeCidr } from "./subnets.js";
 import { pingHost } from "./ping.js";
-import { probePorts, reverseHostname } from "./ports.js";
+import { probePorts, reverseHostname, COMMON_PORTS } from "./ports.js";
 import { readArpTable } from "./arp.js";
 import { snmpProbe } from "./snmp.js";
+import { pollSwitchPorts, testSwitchInterface, buildPollAllResponse, isSnmpWalkAvailable } from "./snmpPortMap.js";
 import { lookupVendor, guessCategory } from "./enrich.js";
 import { buildTopologyConnections, mapDevicesToTopology } from "./topology.js";
 
 export { detectLocalSubnets, getScanInterfaceLabel, buildTopologyConnections, mapDevicesToTopology };
 export { lookupVendor, guessCategory };
+export { pollSwitchPorts, testSwitchInterface, buildPollAllResponse, isSnmpWalkAvailable };
 
 const DEFAULT_OPTIONS = {
   subnets: ["192.168.10.0/24"],
@@ -50,7 +52,7 @@ async function probeHost(ip, subnet, scanType, opts, arpMap) {
       alive = true;
       responseTimeMs = ping.ms;
     }
-    openPorts = await probePorts(ip, undefined, Math.min(timeoutMs, 800));
+    openPorts = await probePorts(ip, COMMON_PORTS, Math.min(timeoutMs, 800));
     if (!alive && openPorts.length > 0) alive = true;
     if (alive) {
       hostname = await reverseHostname(ip);
@@ -204,10 +206,13 @@ export async function scanTopology(userOptions = {}) {
   };
 }
 
+export const SCANNER_BUILD = "2025-05-fullscan-2";
+
 export function getHealth() {
   return {
     ok: true,
     version: "1.0.0",
+    build: SCANNER_BUILD,
     platform: process.platform,
     scanInterface: getScanInterfaceLabel(),
     localSubnets: detectLocalSubnets(),

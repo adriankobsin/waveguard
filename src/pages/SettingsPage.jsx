@@ -1,14 +1,16 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Settings, Mail, Brain, Database, Bell,
   ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Upload, ImageIcon,
-  Anchor, LayoutDashboard, Puzzle, BookOpen, Users, HardDrive, Wifi, MapPin,
-  Moon, Sun, Save
+  Anchor, LayoutDashboard, Puzzle, Key, BookOpen, Users, HardDrive, Wifi, MapPin,
+  Save, RotateCcw, Activity, FlaskConical,
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
-import { useTheme } from "@/contexts/ThemeContext";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
+import { usePlatformMode } from "@/contexts/PlatformModeContext";
+import { PLATFORM_MODES } from "@/lib/platformMode";
 import { useAuth } from "@/lib/AuthContext";
 import { filterSettingsSections, canAccessSettingsSection } from "@/lib/permissions";
 import {
@@ -21,17 +23,20 @@ import {
 } from "@/pages/settings/SettingsPanels";
 import DecksRoomsPanel from "@/pages/settings/DecksRoomsPanel";
 import DiscoverySettingsPanel from "@/pages/settings/DiscoverySettingsPanel";
+import PlatformResetPanel from "@/pages/settings/PlatformResetPanel";
+import CredentialsVaultPanel from "@/components/credentials/CredentialsVaultPanel";
 import { uploadLogoFile } from "@/lib/uploadLogo";
 import { toast } from "sonner";
 
 // ─── Sections list ─────────────────────────────────────────────────────────────
 const SECTIONS = [
   { key: "general",            label: "General",             icon: Anchor,        desc: "Vessel / property profile" },
+  { key: "platform-mode",      label: "Platform mode",       icon: Activity,      desc: "Switch between Live and Demo operation" },
   { key: "site-locations",     label: "Decks & rooms",       icon: MapPin,        desc: "Decks and rooms for equipment placement" },
   { key: "discovery",          label: "Network discovery",   icon: Wifi,          desc: "Scan subnets, SNMP, and agent URL" },
-  { key: "appearance",         label: "Appearance",          icon: Moon,          desc: "Light/dark mode theme switcher" },
   { key: "dashboard",          label: "Dashboard widgets",   icon: LayoutDashboard, desc: "Add and arrange dashboard widgets" },
   { key: "integrations",       label: "Integrations",        icon: Puzzle,        desc: "Vendor drivers and external services" },
+  { key: "credentials",      label: "Login credentials",   icon: Key,           desc: "Usernames and passwords for devices and platforms" },
   { key: "ai",                 label: "AI & OpenAI",         icon: Brain,         desc: "OpenAI API key, chat model, embeddings" },
   { key: "documentation",      label: "Documentation",       icon: BookOpen,      desc: "Storage path and AI re-indexing" },
   { key: "notifications",      label: "Notifications",       icon: Bell,          desc: "Bell retention, email, WhatsApp" },
@@ -39,6 +44,7 @@ const SECTIONS = [
   { key: "users",              label: "Users & roles",       icon: Users,         desc: "Invite and manage operator accounts" },
   { key: "backup",             label: "Backup & restore",    icon: HardDrive,     desc: "Export and restore platform configuration" },
   { key: "retention",          label: "Data Retention",      icon: Database,      desc: "Auto-purge old records" },
+  { key: "platform-reset",     label: "Factory reset",       icon: RotateCcw,     desc: "Clear all data for a new deployment" },
 ];
 
 // ─── Shared UI ─────────────────────────────────────────────────────────────────
@@ -222,31 +228,101 @@ function GeneralPanel() {
   );
 }
 
-function AppearancePanel() {
-  const { theme, setTheme, saveTheme, saving, saved } = useTheme();
+function PlatformModePanel() {
+  const { mode, setMode, saving } = usePlatformMode();
+  const [pending, setPending] = useState(null);
+
+  const choose = async (next) => {
+    if (next === mode) return;
+    setPending(next);
+    try {
+      await setMode(next);
+      toast.success(next === PLATFORM_MODES.DEMO
+        ? "Demo mode enabled — using sample data"
+        : "Live mode enabled — real equipment and polls");
+    } catch (err) {
+      toast.error(err.message || "Failed to switch mode");
+    } finally {
+      setPending(null);
+    }
+  };
+
+  const cards = [
+    {
+      value: PLATFORM_MODES.LIVE,
+      label: "Live system",
+      desc: "Real equipment, polls, and saved configuration",
+      sub: "Default operating mode for production deployments. Uses your saved Equipment, attempts real SNMP/API polls, and never synthesizes WAN data.",
+      Icon: Activity,
+      tone: "text-emerald-400",
+    },
+    {
+      value: PLATFORM_MODES.DEMO,
+      label: "Demo system",
+      desc: "Showcase mode with sample data and simulated telemetry",
+      sub: "Read-only overlay for demonstrations and training. Replaces telemetry with sample vessel data and forces mock polls. Your saved Equipment is never modified.",
+      Icon: FlaskConical,
+      tone: "text-purple-400",
+    },
+  ];
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">Choose your preferred color scheme. Theme applies across the entire app.</p>
+      <p className="text-xs text-muted-foreground">
+        Toggle between live operation and a safe demo showcase. Switching modes does not modify your saved Equipment or settings.
+      </p>
+
+      {mode === PLATFORM_MODES.DEMO && (
+        <div className="flex items-start gap-2 px-4 py-3 rounded-xl bg-purple-500/10 border border-purple-500/30 text-sm">
+          <AlertTriangle size={14} className="text-purple-400 flex-shrink-0 mt-0.5" />
+          <span className="text-foreground">
+            <span className="font-medium">Demo mode is active.</span>{" "}
+            <span className="text-muted-foreground">
+              Telemetry, polls, and WAN data are simulated. Switch back to Live for real monitoring.
+            </span>
+          </span>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {[
-          { value: "light", label: "Light Mode", desc: "Bright and clean", Icon: Sun },
-          { value: "dark",  label: "Dark Mode",  desc: "Easy on the eyes", Icon: Moon },
-        ].map(({ value, label, desc, Icon }) => (
-          <button key={value} onClick={() => setTheme(value)}
-            className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-all ${theme === value ? "border-primary bg-primary/10" : "border-border bg-secondary hover:border-primary/30"}`}>
-            <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${theme === value ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-              <Icon size={18} />
-            </div>
-            <div className="text-left">
-              <p className="text-sm font-semibold text-foreground">{label}</p>
-              <p className="text-xs text-muted-foreground">{desc}</p>
-            </div>
-            {theme === value && <CheckCircle2 size={16} className="ml-auto text-primary" />}
-          </button>
-        ))}
+        {cards.map(({ value, label, desc, sub, Icon, tone }) => {
+          const active = mode === value;
+          const isPending = pending === value && saving;
+          return (
+            <button
+              key={value}
+              type="button"
+              onClick={() => choose(value)}
+              disabled={saving}
+              className={`flex flex-col gap-2 p-4 rounded-xl border-2 transition-all text-left ${
+                active
+                  ? "border-primary bg-primary/10"
+                  : "border-border bg-secondary hover:border-primary/30"
+              } disabled:opacity-60`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    active ? "bg-primary text-primary-foreground" : `bg-muted ${tone}`
+                  }`}
+                >
+                  <Icon size={18} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+                {isPending ? (
+                  <Loader2 size={16} className="animate-spin text-primary" />
+                ) : active ? (
+                  <CheckCircle2 size={16} className="text-primary" />
+                ) : null}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">{sub}</p>
+            </button>
+          );
+        })}
       </div>
-      <SaveBar saving={saving} saved={saved} onSave={() => saveTheme(theme)} />
     </div>
   );
 }
@@ -426,11 +502,12 @@ function RetentionPanel() {
 // ─── Panel registry ─────────────────────────────────────────────────────────────
 const PANEL_COMPONENTS = {
   general:       GeneralPanel,
+  "platform-mode": PlatformModePanel,
   "site-locations": DecksRoomsPanel,
   discovery:     DiscoverySettingsPanel,
-  appearance:    AppearancePanel,
   dashboard:     DashboardWidgetsPanel,
   integrations:  IntegrationsPanel,
+  credentials:   CredentialsVaultPanel,
   ai:            AIPanel,
   documentation: DocumentationPanel,
   notifications: NotificationsPanel,
@@ -438,20 +515,41 @@ const PANEL_COMPONENTS = {
   users:         UsersPanel,
   backup:        BackupPanel,
   retention:     RetentionPanel,
+  "platform-reset": PlatformResetPanel,
 };
 
 // ─── Page ────────────────────────────────────────────────────────────────────────
+const SECTION_KEYS = new Set(SECTIONS.map((s) => s.key));
+
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, isLoadingAuth, authChecked } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const visibleSections = filterSettingsSections(SECTIONS, user);
   const [activeSection, setActiveSection] = useState(null);
+
+  useEffect(() => {
+    if (!authChecked || isLoadingAuth) return;
+    const requested = searchParams.get("section");
+    if (!requested || !SECTION_KEYS.has(requested)) return;
+    if (!canAccessSettingsSection(user, requested)) {
+      toast.error("You do not have permission to change this setting.");
+      return;
+    }
+    setActiveSection(requested);
+  }, [authChecked, isLoadingAuth, searchParams, user]);
 
   const openSection = (key) => {
     if (!canAccessSettingsSection(user, key)) {
       toast.error("You do not have permission to change this setting.");
       return;
     }
-    setActiveSection(key === activeSection ? null : key);
+    const next = key === activeSection ? null : key;
+    setActiveSection(next);
+    if (next) {
+      setSearchParams({ section: next }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   const ActivePanel = activeSection && canAccessSettingsSection(user, activeSection)
@@ -466,11 +564,22 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">Configure vessel profile, monitoring, integrations, and operator experience — settings are saved to the database.</p>
+        {user?.role === "user" && visibleSections.length < SECTIONS.length && (
+          <p className="text-xs text-amber-400/90 mt-2">
+            Signed in as a standard user — only dashboard layout is editable. Log in as an administrator (e.g. WaveAdmin) for full settings access.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Sidebar */}
-        <div className="space-y-2">
+        <div className="space-y-2 md:max-h-[calc(100vh-10rem)] md:overflow-y-auto md:pr-1 md:sticky md:top-4">
+          {isLoadingAuth && (
+            <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+              <Loader2 size={14} className="animate-spin" />
+              Loading settings…
+            </div>
+          )}
           {visibleSections.map((s, i) => (
             <motion.button
               key={s.key}

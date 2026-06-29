@@ -116,12 +116,12 @@ export default function DeckMapTab({ topologyData }) {
   const pinnedDeviceIds = new Set(pins.map(p => p.deviceId));
 
   return (
-    <div className="flex h-full overflow-hidden bg-[#060912]">
+    <div className="flex h-full overflow-hidden bg-background">
       {/* ── Left panel: device list ─────────────────────────────────────── */}
-      <div className="w-56 flex-shrink-0 border-r border-white/6 bg-[#070b13]/80 flex flex-col">
-        <div className="px-4 py-3 border-b border-white/6">
-          <p className="text-xs font-bold text-white uppercase tracking-widest">Devices</p>
-          <p className="text-[10px] text-slate-500 mt-0.5">
+      <div className="w-56 flex-shrink-0 border-r border-border bg-card/80 flex flex-col">
+        <div className="px-4 py-3 border-b border-border">
+          <p className="text-xs font-bold text-foreground uppercase tracking-widest">Devices</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">
             {floorPlan ? "Click to pin on map" : "Upload a floor plan first"}
           </p>
         </div>
@@ -144,12 +144,12 @@ export default function DeckMapTab({ topologyData }) {
                   isPlacing
                     ? "bg-cyan-500/15 border-l-2 border-cyan-500"
                     : isPinned
-                    ? "bg-white/3 border-l-2 border-emerald-500/40"
-                    : "border-l-2 border-transparent hover:bg-white/4"
+                    ? "bg-muted border-l-2 border-emerald-500/40"
+                    : "border-l-2 border-transparent hover:bg-muted"
                 }`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dotColor}`} />
-                <span className="text-xs text-slate-200 truncate flex-1">{device.name}</span>
+                <span className="text-xs text-foreground truncate flex-1">{device.name}</span>
                 {isPinned && !isPlacing && <span className="text-[9px] text-emerald-400/70 flex-shrink-0">●</span>}
                 {isPlacing && <span className="text-[9px] text-cyan-400 flex-shrink-0 animate-pulse">+</span>}
               </button>
@@ -158,20 +158,20 @@ export default function DeckMapTab({ topologyData }) {
         </div>
 
         {/* Legend */}
-        <div className="px-4 py-3 border-t border-white/6 space-y-1.5">
+        <div className="px-4 py-3 border-t border-border space-y-1.5">
           {[
             { color: "bg-emerald-400", label: "Online" },
             { color: "bg-amber-400",   label: "Warning" },
             { color: "bg-red-400",     label: "Offline" },
           ].map(l => (
-            <div key={l.label} className="flex items-center gap-2 text-[10px] text-slate-500">
+            <div key={l.label} className="flex items-center gap-2 text-[10px] text-muted-foreground">
               <span className={`w-2 h-2 rounded-full ${l.color}`} />
               {l.label}
             </div>
           ))}
           {cablePaths.length > 0 && (
-            <div className="pt-1 border-t border-white/6 mt-1">
-              <p className="text-[10px] text-slate-500">{cablePaths.length} cable path{cablePaths.length !== 1 ? "s" : ""}</p>
+            <div className="pt-1 border-t border-border mt-1">
+              <p className="text-[10px] text-muted-foreground">{cablePaths.length} cable path{cablePaths.length !== 1 ? "s" : ""}</p>
             </div>
           )}
         </div>
@@ -184,8 +184,8 @@ export default function DeckMapTab({ topologyData }) {
         ) : (
           <>
             {/* Toolbar */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/6 bg-[#070b13]/60 flex-shrink-0 flex-wrap">
-              <span className="text-xs text-slate-400 truncate flex-1 min-w-0">{floorPlan.name}</span>
+            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-border bg-card/60 flex-shrink-0 flex-wrap">
+              <span className="text-xs text-muted-foreground truncate flex-1 min-w-0">{floorPlan.name}</span>
 
               {placingDevice && (
                 <span className="flex items-center gap-1.5 text-xs text-cyan-400 animate-pulse">
@@ -207,7 +207,7 @@ export default function DeckMapTab({ topologyData }) {
                 </span>
               )}
 
-              <span className="text-xs text-slate-600">{pins.length} pin{pins.length !== 1 ? "s" : ""}</span>
+              <span className="text-xs text-muted-foreground">{pins.length} pin{pins.length !== 1 ? "s" : ""}</span>
 
               {/* Cable draw toggle */}
               <button
@@ -219,7 +219,7 @@ export default function DeckMapTab({ topologyData }) {
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-all ${
                   cableDrawMode
                     ? "bg-orange-500/15 border-orange-500/30 text-orange-400"
-                    : "border-white/10 text-slate-400 hover:text-white"
+                    : "border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Cable size={11} />
@@ -228,7 +228,7 @@ export default function DeckMapTab({ topologyData }) {
 
               <button
                 onClick={() => { setFloorPlan(null); setPins([]); setCablePaths([]); setDrawerOpen(false); }}
-                className="text-xs text-slate-500 hover:text-red-400 border border-white/10 px-2.5 py-1 rounded-lg transition-colors"
+                className="text-xs text-muted-foreground hover:text-red-400 border border-border px-2.5 py-1 rounded-lg transition-colors"
               >
                 Change plan
               </button>

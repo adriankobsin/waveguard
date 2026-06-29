@@ -21,6 +21,7 @@ import CablesPage from './pages/CablesPage';
 import InventoryPage from './pages/InventoryPage';
 import ReportsPage from './pages/ReportsPage';
 import LightingPage from './pages/LightingPage';
+import ScenesPage from './pages/ScenesPage';
 import NetworkDiscoveryPage from './pages/NetworkDiscoveryPage';
 
 // Layout
@@ -28,6 +29,7 @@ import AppLayout from './components/AppLayout';
 import { BrandingProvider } from './contexts/BrandingContext';
 import { SiteLocationsProvider } from './contexts/SiteLocationsContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { PlatformModeProvider } from './contexts/PlatformModeContext';
 import { AuthProvider } from './lib/AuthContext';
 import { Toaster } from 'sonner';
 
@@ -35,6 +37,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClientInstance}>
       <ThemeProvider>
+      <PlatformModeProvider>
       <AuthProvider>
       <SiteLocationsProvider>
       <BrandingProvider>
@@ -59,9 +62,12 @@ function App() {
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/cables" element={<CablesPage />} />
-            <Route path="/inventory" element={<InventoryPage />} />
+            <Route path="/equipment" element={<InventoryPage />} />
+            <Route path="/inventory" element={<Navigate to="/equipment" replace />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/lighting" element={<LightingPage />} />
+            <Route path="/scenes" element={<ScenesPage />} />
+            <Route path="/cisco-switches" element={<Navigate to="/snmp?tab=cisco" replace />} />
             <Route path="/discovery" element={<NetworkDiscoveryPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
@@ -73,6 +79,7 @@ function App() {
       </BrandingProvider>
       </SiteLocationsProvider>
       </AuthProvider>
+      </PlatformModeProvider>
     </ThemeProvider>
     </QueryClientProvider>
   );

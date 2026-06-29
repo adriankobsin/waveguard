@@ -126,7 +126,7 @@ export default function DeckMapUploader({ onUpload }) {
           onDrop={onDrop}
           onClick={() => !processing && inputRef.current?.click()}
           className={`relative rounded-2xl border-2 border-dashed p-12 cursor-pointer transition-all ${
-            dragging ? "border-cyan-500/60 bg-cyan-500/8" : "border-white/12 hover:border-cyan-500/30 hover:bg-white/2"
+            dragging ? "border-cyan-500/60 bg-cyan-500/8" : "border-border hover:border-cyan-500/30 hover:bg-muted/50"
           } ${processing ? "cursor-wait opacity-70" : ""}`}
         >
           <input ref={inputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={e => processFile(e.target.files[0])} />
@@ -137,13 +137,13 @@ export default function DeckMapUploader({ onUpload }) {
               <Map size={28} className="text-cyan-400" />
             )}
           </div>
-          <p className="text-base font-semibold text-white mb-1">
+          <p className="text-base font-semibold text-foreground mb-1">
             {processing ? "Processing…" : "Upload Floor Plan"}
           </p>
-          <p className="text-sm text-slate-500 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             Drop a PDF, PNG, JPG, or SVG of your vessel or property floor plan
           </p>
-          <div className="flex items-center gap-3 justify-center text-xs text-slate-600">
+          <div className="flex items-center gap-3 justify-center text-xs text-muted-foreground">
             <span className="flex items-center gap-1"><FileText size={11} /> PDF</span>
             <span>·</span>
             <span className="flex items-center gap-1"><Image size={11} /> PNG · JPG · SVG</span>
@@ -155,9 +155,9 @@ export default function DeckMapUploader({ onUpload }) {
         )}
 
         <div className="mt-6 flex items-center gap-4">
-          <div className="flex-1 h-px bg-white/8" />
-          <span className="text-xs text-slate-600">or</span>
-          <div className="flex-1 h-px bg-white/8" />
+          <div className="flex-1 h-px bg-muted" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="flex-1 h-px bg-muted" />
         </div>
         <button
           onClick={loadDemo}

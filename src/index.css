@@ -6,64 +6,61 @@
 
 @layer base {
   :root {
-    --background: 224 28% 5%;
-    --foreground: 210 20% 92%;
-    --card: 224 24% 7%;
-    --card-foreground: 210 20% 92%;
-    --popover: 224 24% 7%;
-    --popover-foreground: 210 20% 92%;
-    --primary: 187 100% 42%;
-    --primary-foreground: 224 28% 5%;
-    --secondary: 224 20% 11%;
-    --secondary-foreground: 210 20% 75%;
-    --muted: 224 20% 11%;
-    --muted-foreground: 215 15% 42%;
-    --accent: 187 80% 16%;
-    --accent-foreground: 187 100% 65%;
+    --background: 222 47% 7%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 186 100% 42%;
+    --primary-foreground: 222 47% 7%;
+    --secondary: 217 33% 14%;
+    --secondary-foreground: 210 40% 80%;
+    --muted: 217 33% 14%;
+    --muted-foreground: 215 20% 50%;
+    --accent: 217 33% 18%;
+    --accent-foreground: 210 40% 98%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 224 18% 13%;
-    --input: 224 20% 11%;
-    --ring: 187 100% 42%;
-    --radius: 1rem;
-
-    --status-online: 145 65% 45%;
-    --status-offline: 0 75% 55%;
-    --status-warning: 38 92% 50%;
-    --status-unknown: 220 15% 45%;
-
-    --chart-1: 192 100% 48%;
-    --chart-2: 145 65% 45%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 270 70% 60%;
-    --chart-5: 0 75% 55%;
+    --border: 217 33% 17%;
+    --input: 217 33% 14%;
+    --ring: 186 100% 42%;
+    --radius: 0.75rem;
+    --status-online: 145 55% 42%;
+    --status-offline: 0 72% 51%;
+    --status-warning: 38 90% 50%;
+    --status-unknown: 220 12% 40%;
+    --chart-1: 186 100% 42%;
+    --chart-2: 270 55% 60%;
+    --chart-3: 38 90% 50%;
+    --chart-4: 145 55% 42%;
+    --chart-5: 0 72% 51%;
   }
 
   .light {
-    --background: 0 0% 100%;
-    --foreground: 224 28% 5%;
-    --card: 0 0% 98%;
-    --card-foreground: 224 28% 5%;
-    --popover: 0 0% 98%;
-    --popover-foreground: 224 28% 5%;
-    --primary: 187 100% 42%;
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 186 100% 36%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 224 20% 96%;
-    --secondary-foreground: 224 28% 15%;
-    --muted: 224 20% 96%;
-    --muted-foreground: 224 15% 35%;
-    --accent: 187 80% 92%;
-    --accent-foreground: 187 100% 30%;
+    --secondary: 210 40% 94%;
+    --secondary-foreground: 222 47% 25%;
+    --muted: 210 40% 94%;
+    --muted-foreground: 215 20% 45%;
+    --accent: 210 40% 90%;
+    --accent-foreground: 222 47% 15%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 224 15% 88%;
-    --input: 224 20% 92%;
-    --ring: 187 100% 42%;
-
-    --status-online: 145 65% 35%;
-    --status-offline: 0 75% 45%;
-    --status-warning: 38 92% 40%;
-    --status-unknown: 220 15% 35%;
+    --border: 214 32% 88%;
+    --input: 214 32% 92%;
+    --ring: 186 100% 36%;
+    --status-online: 145 55% 35%;
+    --status-offline: 0 72% 45%;
+    --status-warning: 38 90% 40%;
+    --status-unknown: 220 12% 38%;
   }
 }
 
@@ -74,44 +71,30 @@
   body {
     @apply bg-background text-foreground font-inter;
   }
-  
-  /* Hide scrollbars globally while maintaining scroll functionality */
+
   * {
     scrollbar-width: thin;
     scrollbar-color: transparent transparent;
   }
-  *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  *::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  *::-webkit-scrollbar-thumb {
-    background: transparent;
-    border-radius: 3px;
-  }
-  *::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground) / 0.3);
-  }
+  *::-webkit-scrollbar { width: 5px; height: 5px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+  *::-webkit-scrollbar-thumb:hover { background: hsl(217 33% 25% / 0.6); }
 }
 
 @layer utilities {
-  .font-mono { font-family: 'JetBrains Mono', monospace; }
+  .font-mono  { font-family: 'JetBrains Mono', monospace; }
   .font-inter { font-family: 'Inter', sans-serif; }
 
   .glow-cyan {
-    box-shadow: 0 0 20px hsl(192 100% 48% / 0.25), 0 0 40px hsl(192 100% 48% / 0.1);
+    box-shadow: 0 0 20px hsl(186 100% 42% / 0.2), 0 0 40px hsl(186 100% 42% / 0.08);
   }
   .glow-red {
-    box-shadow: 0 0 20px hsl(0 75% 55% / 0.3), 0 0 40px hsl(0 75% 55% / 0.1);
-  }
-  .glow-green {
-    box-shadow: 0 0 20px hsl(145 65% 45% / 0.25), 0 0 40px hsl(145 65% 45% / 0.1);
+    box-shadow: 0 0 20px hsl(0 72% 51% / 0.25), 0 0 40px hsl(0 72% 51% / 0.08);
   }
 
   .glass {
-    @apply bg-card/80 backdrop-blur-md border border-border/50;
+    @apply bg-card/75 backdrop-blur-md border border-border/60;
   }
 
   .status-dot-online  { @apply w-2 h-2 rounded-full bg-green-500; }
@@ -123,52 +106,28 @@
     scrollbar-width: none;
     -ms-overflow-style: none;
   }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 }
 
-/* react-grid-layout — dashboard edit mode */
-.dashboard-grid {
-  min-height: 200px;
-}
-
-.dashboard-grid .react-grid-item {
-  transition: box-shadow 0.15s ease;
-}
-
-.dashboard-grid--editing .react-grid-item > div {
-  touch-action: none;
-}
-
+/* ── Dashboard grid ── */
+.dashboard-grid { min-height: 200px; }
+.dashboard-grid .react-grid-item { transition: box-shadow 0.15s ease; }
+.dashboard-grid--editing .react-grid-item > div { touch-action: none; }
 .dashboard-grid--editing .react-grid-item {
-  box-shadow: 0 0 0 1px rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 0 1px hsl(186 100% 42% / 0.2);
 }
-
 .dashboard-grid .react-grid-item.react-grid-placeholder {
-  background: rgba(6, 182, 212, 0.12);
-  border: 1px dashed rgba(6, 182, 212, 0.45);
-  border-radius: 1rem;
+  background: hsl(186 100% 42% / 0.08);
+  border: 1px dashed hsl(186 100% 42% / 0.4);
+  border-radius: 0.75rem;
   opacity: 1;
 }
-
-.dashboard-grid--editing .react-resizable-handle {
-  opacity: 0.35;
-}
-
-.dashboard-grid--editing .react-grid-item:hover .react-resizable-handle {
-  opacity: 1;
-}
-
+.dashboard-grid--editing .react-resizable-handle { opacity: 0.3; }
+.dashboard-grid--editing .react-grid-item:hover .react-resizable-handle { opacity: 1; }
 .dashboard-grid--editing .react-resizable-handle::after {
-  border-color: rgba(255, 255, 255, 0.55);
-  width: 10px;
-  height: 10px;
-  right: 4px;
-  bottom: 4px;
+  border-color: hsl(186 100% 42% / 0.6);
+  width: 10px; height: 10px; right: 4px; bottom: 4px;
 }
-
 .dashboard-grid .react-grid-item.react-draggable-dragging {
-  z-index: 10;
-  opacity: 0.92;
+  z-index: 10; opacity: 0.92;
 }

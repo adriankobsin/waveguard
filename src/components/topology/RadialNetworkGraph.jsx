@@ -1,4 +1,6 @@
 import { useRef, useEffect, useCallback, useMemo, useState } from "react";
+import { useTheme } from "@/contexts/ThemeContext";
+import { readThemeColors } from "@/lib/appearanceSettingsStorage";
 
 const CATEGORY_COLORS = {
   Network: "#06b6d4",
@@ -43,6 +45,7 @@ export default function RadialNetworkGraph({
   connectionMode = false,
   onConnectionCreate,
 }) {
+  const { theme } = useTheme();
   const canvasRef = useRef();
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -106,7 +109,8 @@ export default function RadialNetworkGraph({
     canvas.height = height;
 
     const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#060912";
+    const colors = readThemeColors();
+    ctx.fillStyle = colors.background || "#060912";
     ctx.fillRect(0, 0, width, height);
 
     const centerX = width / 2;
@@ -205,7 +209,7 @@ export default function RadialNetworkGraph({
       // Border
       ctx.beginPath();
       ctx.arc(node.x, node.y, radius, 0, Math.PI * 2);
-      ctx.strokeStyle = isPathNode ? "#f97316" : isSelected ? "#ffffff" : catColor + "99";
+      ctx.strokeStyle = isPathNode ? "#f97316" : isSelected ? (colors.foreground || "#ffffff") : catColor + "99";
       ctx.lineWidth = isPathNode || isSelected ? 2 : 1.5;
       ctx.stroke();
 
@@ -220,7 +224,7 @@ export default function RadialNetworkGraph({
 
       // Label
       ctx.font = `${isSelected || isPathNode ? "600" : "500"} 11px Inter, sans-serif`;
-      ctx.fillStyle = isSelected || isPathNode ? "#ffffff" : "rgba(255,255,255,0.8)";
+      ctx.fillStyle = isSelected || isPathNode ? (colors.foreground || "#ffffff") : (colors.mutedForeground || "rgba(255,255,255,0.8)");
       ctx.textAlign = "center";
       const label = node.name.length > 13 ? node.name.slice(0, 12) + "…" : node.name;
       ctx.fillText(label, node.x, node.y + radius + 14);
@@ -243,7 +247,7 @@ export default function RadialNetworkGraph({
 
     ctx.shadowBlur = 0;
     ctx.restore();
-  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom, pan, connectionMode, connectionStartNode, mousePos]);
+  }, [graphData, nodePositions, selectedNode, pathSource, activePath, dimensions, zoom, pan, connectionMode, connectionStartNode, mousePos, theme]);
 
   const handleCanvasClick = useCallback((e) => {
     if (isDragging || draggedNode) return;
