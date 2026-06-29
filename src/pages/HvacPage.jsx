@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Thermometer, Snowflake, Gauge, Settings, Plus, RefreshCcw,
-  Building2, CheckCircle2, AlertCircle, Loader2, Wrench, Sliders,
-  Zap, LayoutGrid,
+  Thermometer, Gauge, Settings, RefreshCcw,
+  Building2, CheckCircle2, Loader2, Wrench, Sliders,
+  LayoutGrid,
 } from "lucide-react";
 import { toast } from "sonner";
 import HvacZoneCard from "@/components/hvac/HvacZoneCard";
 import {
   loadHvacHouse,
-  saveHvacHouse,
   loadHvacZoneState,
   saveHvacZoneState,
   setHvacZoneLevel,
@@ -20,7 +19,6 @@ import {
   HVAC_ZONE_STATE_CHANGED_EVENT,
   SYSTEM_TYPE_LABELS,
   ZONE_KIND_LABELS,
-  DEFAULT_HVAC_HOUSE,
 } from "@/lib/hvac/hvacSettings";
 
 const PAGE_TABS = [

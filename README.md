@@ -95,6 +95,8 @@ npm run dev:all
 
 Open <http://localhost:5173>. The first run prompts you to choose **Live** or **Demo** mode. Demo mode loads a curated yacht with Lutron zones, scenes and keypads so the platform looks populated without any LAN access.
 
+For direct mock login, use mock admin `WaveAdmin` / `Wave-avi23!` or user `tech@waveguard.test` / `password123`.
+
 Or run in two terminals:
 
 ```bash
