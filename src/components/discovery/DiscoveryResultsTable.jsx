@@ -201,7 +201,11 @@ export default function DiscoveryResultsTable({ devices, onClassify, registering
       <thead className="sticky top-0 z-10 bg-card border-b border-border">
         <tr className="text-[10px] uppercase tracking-widest text-muted-foreground">
           <th className="pl-3 pr-1 py-2.5 w-8">
-            <Checkbox checked={allSelected} onCheckedChange={() => onToggleAll?.()} aria-label="Select all" />
+            <Checkbox
+              checked={allSelected ? true : someSelected ? "indeterminate" : false}
+              onCheckedChange={() => onToggleAll?.()}
+              aria-label="Select all"
+            />
           </th>
           <th className="pl-1 pr-2 py-2.5 w-8" />
           <th className="px-2 py-2.5 w-10" />

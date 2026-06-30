@@ -20,15 +20,6 @@ const COLORS = [
   { value: "pink", class: "bg-pink-500", border: "border-pink-500/30" },
 ];
 
-const ICONS = [
-  { value: "network", label: "Network" },
-  { value: "camera", label: "Camera" },
-  { value: "av", label: "AV" },
-  { value: "server", label: "Server" },
-  { value: "power", label: "Power" },
-  { value: "other", label: "Other" },
-];
-
 export function GroupManager({ devices, onGroupChange }) {
   const [open, setOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState(null);
@@ -339,7 +330,7 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
   );
 }
 
-function EditGroupModal({ group, devices, groups, onSubmit, onClose }) {
+function EditGroupModal({ group, devices, groups: _groups, onSubmit, onClose }) {
   const [formData, setFormData] = useState({
     name: group.name,
     description: group.description || "",

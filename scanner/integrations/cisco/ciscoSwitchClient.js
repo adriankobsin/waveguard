@@ -210,7 +210,7 @@ class CiscoSwitchClient extends EventEmitter {
         if (snmp?.lldp?.length) snapshot.neighbors = mergeLldp(snapshot.neighbors, snmp.lldp);
       } catch (snmpErr) {
         // SNMP failure is non-fatal — log and continue.
-        // eslint-disable-next-line no-console
+         
         console.warn(`[ciscoSwitchClient] SNMP enrich failed for ${this.host}:`, snmpErr?.message || snmpErr);
       }
     }

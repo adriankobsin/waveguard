@@ -90,7 +90,7 @@ export default function LutronConnectionModal({
       }
     }
     return () => stopTimers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [open, connection]);
 
   useEffect(() => () => stopTimers(), []);

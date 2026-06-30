@@ -160,7 +160,7 @@ export default function InventoryPage() {
     if (!form.name || !form.model) return;
     setSaving(true);
     try {
-      const { area, room, ...rest } = form;
+      const { area: _area, room, ...rest } = form;
       const payload = {
         ...rest,
         room: room?.trim() || "",

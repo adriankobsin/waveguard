@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  Plus, Trash2, Lightbulb, Keyboard, Layers, GripVertical, Loader2, CheckCircle2,
+  Plus, Trash2, Lightbulb, Keyboard, Layers, Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { getAdapter } from "@/lib/integrations/lightingRegistry";
 
 const DEFAULT_CHANNEL_COUNT = 8;
 const MAX_ADDRESSES = 64;
@@ -18,7 +17,7 @@ const CHANNEL_ROLE_OPTIONS = [
   { value: "unused", label: "Unused", icon: "—" },
 ];
 
-export default function YachticaDevicePanel({ conn, onSave }) {
+export default function YachticaDevicePanel({ conn: _conn, onSave }) {
   const [devices, setDevices] = useState([]);
   const [loading, setLoading] = useState(true);
 

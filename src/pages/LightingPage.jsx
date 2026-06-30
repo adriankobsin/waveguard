@@ -498,12 +498,6 @@ export default function LightingPage() {
     setZoneState({});
   }, []);
 
-  const onCountForHouse = useMemo(
-    () => Object.values(zoneState).filter((s) => s?.on).length,
-    [zoneState]
-  );
-  const totalZones = house?.zones?.length || 0;
-
   // Per-tab KPI counts so the strip on the Shades tab reports
   // open/closed/moving instead of "loads on".
   const lightsKpis = useMemo(() => {

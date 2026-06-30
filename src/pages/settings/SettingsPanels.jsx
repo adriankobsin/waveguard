@@ -389,7 +389,7 @@ export function DocumentationPanel() {
 }
 
 export function AIPanel() {
-  const { value: cfg, setValue: setCfg, save, saving, saved } = useSettings("ai", {
+  const { value: cfg, setValue: setCfg, save, saving } = useSettings("ai", {
     connected: false,
     keyHint: "",
     model: "gpt-4o-mini",

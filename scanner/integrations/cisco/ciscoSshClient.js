@@ -45,7 +45,7 @@ async function loadSshClient() {
 }
 
 function log(msg, ...rest) {
-  // eslint-disable-next-line no-console
+   
   console.log(`[ciscoSsh] ${msg}`, ...rest);
 }
 

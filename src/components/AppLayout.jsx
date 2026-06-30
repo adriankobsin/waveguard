@@ -32,7 +32,6 @@ const NAV = [
 
 function AppLayoutContent() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const location = useLocation();
   const { branding } = useBranding();
   const { theme, setTheme, saveTheme } = useTheme();
   const { isDemo } = usePlatformMode();
@@ -120,7 +119,7 @@ function AppLayoutContent() {
                 }`
               }
             >
-              {({ isActive }) => (
+              {() => (
                 <>
                   <item.icon size={13} />
                   <span>{item.label}</span>

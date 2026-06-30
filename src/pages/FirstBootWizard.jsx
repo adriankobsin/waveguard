@@ -97,7 +97,7 @@ function Step2Vessel({ vesselInfo, onChange }) {
   );
 }
 
-function Step3Discovery({ scanning, results, onScan, importAll, setImportAll }) {
+function Step3Discovery({ scanning, results, onScan: _onScan, importAll, setImportAll }) {
   return (
     <div className="space-y-6">
       <div className="text-center space-y-2">
@@ -158,7 +158,7 @@ function Step3Discovery({ scanning, results, onScan, importAll, setImportAll }) 
 
       {scanning && (
         <div className="space-y-2">
-          {["Passive ARP table scan…", "mDNS service browse…", "ICMP ping sweep…", "Port scan (top 20)…", "MAC OUI lookup…"].map((phase, i) => (
+          {["Passive ARP table scan…", "mDNS service browse…", "ICMP ping sweep…", "Port scan (top 20)…", "MAC OUI lookup…"].map((phase) => (
             <div key={phase} className="flex items-center gap-3 text-xs text-muted-foreground">
               <Loader2 size={12} className="animate-spin text-cyan-400 flex-shrink-0" />
               {phase}

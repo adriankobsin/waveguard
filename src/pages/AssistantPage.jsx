@@ -90,7 +90,7 @@ export default function AssistantPage() {
         prompt: `You are Wave Guard, an expert assistant for luxury yacht and high-end residential AV/IT systems — networking, AV, control, lighting, CCTV, and power. Answer concisely and practically. If relevant, mention specific troubleshooting steps.\n\nUser: ${content}`,
       });
       setMessages(prev => [...prev, { role: "assistant", content: typeof res === "string" ? res : (res?.data ?? "I couldn't generate a response right now.") }]);
-    } catch (e) {
+    } catch {
       setMessages(prev => [...prev, {
         role: "assistant",
         content: "I'm unable to respond right now. Please check your OpenAI API key in **Settings → AI**.",

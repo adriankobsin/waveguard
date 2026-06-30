@@ -89,10 +89,6 @@ export default function DeckMapTab({ topologyData }) {
     setSelectedCable(null);
   };
 
-  const handleRemoveCable = (cableId) => {
-    setCablePaths(prev => prev.filter(c => c.id !== cableId));
-  };
-
   const runDiagnostic = async (cable) => {
     const fromDev = devices.find(d => d.id === cable.fromDeviceId);
     const toDev   = devices.find(d => d.id === cable.toDeviceId);

@@ -42,13 +42,6 @@ function statusBadgeClass(status) {
   return "bg-amber-500/15 text-amber-300 border border-amber-500/30";
 }
 
-function calendarPillClass(status) {
-  if (status === "completed") return "bg-emerald-500/30 text-emerald-100";
-  if (status === "in_progress") return "bg-sky-500/30 text-sky-100";
-  if (status === "not_completed") return "bg-red-500/30 text-red-100";
-  return "bg-amber-500/30 text-amber-100";
-}
-
 const EMPTY_FORM = {
   title: "", description: "", equipment: "", interval_days: 90,
   next_due_at: todayKey(), planned_due_at: "", assigned_to: "", status: "pending"
@@ -318,7 +311,7 @@ export default function MaintenancePage() {
     return { year: next.getFullYear(), month: next.getMonth() };
   });
 
-  const openCreate = (date = selectedDate) => {
+  const openCreate = (_date = selectedDate) => {
     setEditingTask(null);
     setFormOpen(true);
   };
@@ -342,8 +335,6 @@ export default function MaintenancePage() {
     await base44.entities.MaintenanceTask.update(id, { status: "not_completed" });
     load();
   };
-
-  const displayedTasks = view === "search" ? searchResults : (view === "calendar" ? selectedDayTasks : tasks);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 space-y-5 animate-fade-in">

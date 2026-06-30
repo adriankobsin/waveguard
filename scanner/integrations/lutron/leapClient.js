@@ -151,15 +151,15 @@ lJ+cvdbUdsU=
 
 const LOG_PREFIX = "[leap]";
 function log(...args) {
-  // eslint-disable-next-line no-console
+   
   console.log(LOG_PREFIX, ...args);
 }
 function logWarn(...args) {
-  // eslint-disable-next-line no-console
+   
   console.warn(LOG_PREFIX, ...args);
 }
 function logError(...args) {
-  // eslint-disable-next-line no-console
+   
   console.error(LOG_PREFIX, ...args);
 }
 

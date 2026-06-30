@@ -35,6 +35,14 @@ import {
 import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
 import { lookupIpGeolocation } from "../scanner/integrations/geo/ipGeolocation.js";
 import { fetchOpenMeteoForecast } from "../scanner/integrations/weather/openMeteo.js";
+import { createCaptureStore } from "../scanner/integrations/wireshark/captureStore.js";
+import {
+  getWiresharkStatus,
+  capturePackets,
+  analyzeCapture,
+  captureStats,
+  writeTempUpload,
+} from "../scanner/integrations/wireshark/tsharkClient.js";
 import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
 import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
 import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
@@ -94,6 +102,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USE_MOCK_SCAN = process.env.WAVEGUARD_USE_MOCK_SCAN === "true";
 const uploadsDir = path.join(__dirname, "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
+const capturesDir = path.join(__dirname, ".captures");
+const captureStore = createCaptureStore(capturesDir);
 
 const app = express();
 const PORT = 3002;
@@ -714,6 +724,100 @@ app.post("/api/apps/:appId/functions/weatherForecast", async (req, res) => {
       fetchedAt: new Date().toISOString(),
     });
   }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkStatus", async (_req, res) => {
+  try {
+    captureStore.purgeOld();
+    const result = await getWiresharkStatus();
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkStatus]", err);
+    res.status(500).json({ success: false, error: err?.message || "Wireshark status failed" });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkCapture", async (req, res) => {
+  try {
+    captureStore.purgeOld();
+    const {
+      interface: iface,
+      durationSec,
+      bpfFilter,
+      hostIp,
+      maxPackets,
+    } = req.body || {};
+    const captureId = captureStore.newCaptureId();
+    const filePath = captureStore.capturePath(captureId);
+    const result = await capturePackets({
+      interface: iface,
+      durationSec,
+      bpfFilter,
+      hostIp,
+      maxPackets,
+      capturePath: filePath,
+    });
+    if (result.success && result.source === "live") {
+      result.captureId = captureId;
+    } else if (result.success && result.source === "mock") {
+      result.captureId = captureId;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkCapture]", err);
+    res.status(500).json({ success: false, error: err?.message || "Capture failed" });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkAnalyze", async (req, res) => {
+  try {
+    captureStore.purgeOld();
+    const { captureId, uploadBase64, displayFilter, maxPackets } = req.body || {};
+    let filePath = null;
+    let resolvedId = captureId;
+
+    if (uploadBase64) {
+      const uploaded = writeTempUpload(uploadBase64, captureStore);
+      filePath = uploaded.filePath;
+      resolvedId = uploaded.captureId;
+    } else if (captureId && captureStore.exists(captureId)) {
+      filePath = captureStore.capturePath(captureId);
+    }
+
+    const result = await analyzeCapture({ filePath, displayFilter, maxPackets });
+    if (result.success && resolvedId) {
+      result.captureId = resolvedId;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkAnalyze]", err);
+    res.status(500).json({ success: false, error: err?.message || "Analysis failed" });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkStats", async (req, res) => {
+  try {
+    const { captureId } = req.body || {};
+    if (!captureId || !captureStore.exists(captureId)) {
+      const stats = await captureStats({});
+      return res.json(stats);
+    }
+    const filePath = captureStore.capturePath(captureId);
+    const result = await captureStats({ filePath });
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkStats]", err);
+    res.status(500).json({ success: false, error: err?.message || "Stats failed" });
+  }
+});
+
+app.get("/api/apps/:appId/wireshark/captures/:captureId/download", (req, res) => {
+  const { captureId } = req.params;
+  if (!captureId || !captureStore.exists(captureId)) {
+    return res.status(404).json({ success: false, error: "Capture not found" });
+  }
+  const filePath = captureStore.capturePath(captureId);
+  res.download(filePath, `waveguard-capture-${captureId}.pcapng`);
 });
 
 app.post("/api/apps/:appId/functions/discoverSubnets", (_req, res) => {
