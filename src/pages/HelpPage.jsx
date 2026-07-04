@@ -378,7 +378,7 @@ Recommended server hardware for maritime deployment:
    sudo apt update && sudo apt upgrade -y
 
 6. Set the hostname:
-   sudo hostnamectl set-hostname guardian-ai`
+   sudo hostnamectl set-hostname waveguard`
   },
   {
     label: "Step 3 — Install Node.js & Dependencies",
@@ -399,22 +399,22 @@ sudo apt install -y git`
   {
     label: "Step 4 — Deploy the Application",
     body: `# Create application directory:
-sudo mkdir -p /opt/guardian-ai
-sudo chown $USER:$USER /opt/guardian-ai
+sudo mkdir -p /opt/waveguard
+sudo chown $USER:$USER /opt/waveguard
 
 # Copy your built app files to the server (from your dev machine):
-scp -r ./dist/* user@<server-ip>:/opt/guardian-ai/
+scp -r ./dist/* user@<server-ip>:/opt/waveguard/
 
 # Or clone from your GitHub repo:
-git clone https://github.com/<your-org>/guardian-ai.git /opt/guardian-ai
-cd /opt/guardian-ai
+git clone https://github.com/<your-org>/waveguard.git /opt/waveguard
+cd /opt/waveguard
 npm install
 npm run build`
   },
   {
     label: "Step 5 — Configure Environment Variables",
     body: `# Create the .env file:
-nano /opt/guardian-ai/.env
+nano /opt/waveguard/.env
 
 # Add your configuration:
 NODE_ENV=production
@@ -456,7 +456,7 @@ KNX_GATEWAY_HOST=192.168.1.203
   {
     label: "Step 6 — Test the Application",
     body: `# Start the app manually first to verify it works:
-cd /opt/guardian-ai
+cd /opt/waveguard
 serve -s dist -l 8080
 
 # From another machine on the same network, open a browser:
@@ -471,7 +471,7 @@ serve -s dist -l 8080
   {
     label: "Step 7 — Create a systemd Service (Auto-start)",
     body: `# Create service file:
-sudo nano /etc/systemd/system/guardian-ai.service
+sudo nano /etc/systemd/system/waveguard.service
 
 # Paste the following:
 [Unit]
@@ -483,13 +483,13 @@ Wants=network-online.target
 Type=simple
 User=guardian
 Group=guardian
-WorkingDirectory=/opt/guardian-ai
+WorkingDirectory=/opt/waveguard
 ExecStart=/usr/bin/serve -s dist -l 8080
 Restart=always
 RestartSec=5
 StandardOutput=syslog
 StandardError=syslog
-SyslogIdentifier=guardian-ai
+SyslogIdentifier=waveguard
 Environment=NODE_ENV=production
 
 [Install]
@@ -497,15 +497,15 @@ WantedBy=multi-user.target
 
 # Create a dedicated user for security:
 sudo useradd -r -s /bin/false guardian
-sudo chown -R guardian:guardian /opt/guardian-ai
+sudo chown -R guardian:guardian /opt/waveguard
 
 # Enable and start:
 sudo systemctl daemon-reload
-sudo systemctl enable guardian-ai
-sudo systemctl start guardian-ai
+sudo systemctl enable waveguard
+sudo systemctl start waveguard
 
 # Check status:
-sudo systemctl status guardian-ai`
+sudo systemctl status waveguard`
   },
   {
     label: "Step 8 — Set Up Nginx Reverse Proxy (HTTPS)",
@@ -519,7 +519,7 @@ sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \\
   -subj "/CN=guardian.local/O=Wave Guard"
 
 # Create Nginx config:
-sudo nano /etc/nginx/sites-available/guardian-ai
+sudo nano /etc/nginx/sites-available/waveguard
 
 # Paste:
 server {
@@ -546,7 +546,7 @@ server {
 }
 
 # Enable and reload:
-sudo ln -s /etc/nginx/sites-available/guardian-ai /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/waveguard /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl enable --now nginx`
   },
@@ -572,22 +572,22 @@ Option C — Pi-hole or local DNS server:
     body: `If you prefer Docker:
 
 # Build the image:
-docker build -t guardian-ai:latest .
+docker build -t waveguard:latest .
 
 # Run with auto-restart and env file:
 docker run -d \\
-  --name guardian-ai \\
+  --name waveguard \\
   --restart unless-stopped \\
   -p 8080:8080 \\
-  --env-file /opt/guardian-ai/.env \\
-  guardian-ai:latest
+  --env-file /opt/waveguard/.env \\
+  waveguard:latest
 
 # View logs:
-docker logs -f guardian-ai
+docker logs -f waveguard
 
 # Update to new version:
-docker pull guardian-ai:latest
-docker stop guardian-ai && docker rm guardian-ai
+docker pull waveguard:latest
+docker stop waveguard && docker rm waveguard
 docker run -d ... (repeat run command above)
 
 # Docker Compose (recommended for production):
@@ -605,16 +605,16 @@ docker run -d ... (repeat run command above)
 
 Monitor ongoing health:
 # View app logs:
-sudo journalctl -u guardian-ai -f
+sudo journalctl -u waveguard -f
 
 # Check system resources:
 htop
 
 # Check disk space:
-df -h /opt/guardian-ai
+df -h /opt/waveguard
 
 # Set up log rotation:
-sudo nano /etc/logrotate.d/guardian-ai`
+sudo nano /etc/logrotate.d/waveguard`
   }
 ];
 
@@ -943,7 +943,7 @@ asyncio.run(bridge.connect())
 # Follow the pairing instructions — press the physical button on the bridge
 # Certificates are saved automatically
 
-3. Copy the generated .crt, .key, and cacert.crt files to /opt/guardian-ai/certs/
+3. Copy the generated .crt, .key, and cacert.crt files to /opt/waveguard/certs/
 4. Update .env: LUTRON_CERT=./certs/lutron.crt, LUTRON_KEY=./certs/lutron.key`
       },
       {
