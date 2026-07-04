@@ -70,11 +70,16 @@ async function probeHost(ip, subnet, scanType, opts, arpMap) {
       }
     }
   } else if (scanType === "arp") {
-    const ping = await pingHost(ip, timeoutMs);
-    alive = ping.alive;
-    responseTimeMs = ping.ms;
-    if (!mac && arpMap) mac = arpMap.get(ip) || "";
-    vendor = lookupVendor(mac);
+    if (mac) {
+      alive = true;
+      const ping = await pingHost(ip, Math.min(timeoutMs, 500));
+      responseTimeMs = ping.ms;
+    } else {
+      const ping = await pingHost(ip, timeoutMs);
+      alive = ping.alive;
+      responseTimeMs = ping.ms;
+    }
+    vendor = lookupVendor(mac || (arpMap?.get(ip) || ""));
     if (alive) hostname = await reverseHostname(ip);
   } else {
     const ping = await pingHost(ip, timeoutMs);
@@ -148,17 +153,24 @@ export async function scan(userOptions = {}) {
 
   let arpMap = new Map();
   if (opts.scanType === "arp") {
-    for (const subnet of scanSubnets) {
-      const ips = expandCidr(subnet, 254);
-      await runPool(ips, opts.maxConcurrent, (ip) => pingHost(ip, Math.min(opts.timeoutMs, 500)));
-    }
     arpMap = await readArpTable();
   }
 
   const tasks = [];
-  for (const subnet of scanSubnets) {
-    for (const ip of expandCidr(subnet, 512)) {
-      tasks.push({ ip, subnet });
+  if (opts.scanType === "arp" && arpMap.size > 0) {
+    for (const subnet of scanSubnets) {
+      const subnetPrefix = subnet.split("/")[0].split(".").slice(0, 3).join(".");
+      for (const [ip, mac] of arpMap) {
+        if (ip.startsWith(subnetPrefix)) {
+          tasks.push({ ip, subnet });
+        }
+      }
+    }
+  } else {
+    for (const subnet of scanSubnets) {
+      for (const ip of expandCidr(subnet, 512)) {
+        tasks.push({ ip, subnet });
+      }
     }
   }
 
