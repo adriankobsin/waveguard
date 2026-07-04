@@ -4944,7 +4944,7 @@
         443
       ],
       "discoveryId": "disc-192.168.110.0-23-192-168-110-1",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-25T16:10:31.209Z",
       "updated_date": "2026-06-25T16:10:48.591Z",
       "ruHeight": 1,
@@ -4980,7 +4980,7 @@
         80
       ],
       "discoveryId": "disc-192.168.110.0-23-192-168-110-54",
-      "status": "online",
+      "status": "offline",
       "created_date": "2026-06-25T16:10:33.842Z",
       "updated_date": "2026-06-25T16:10:47.545Z",
       "ruHeight": 1,
@@ -9226,12 +9226,12 @@
               "cellular": true,
               "vpn": true
             },
-            "lastPollAt": "2026-06-25T16:29:48.183Z",
+            "lastPollAt": "2026-07-04T09:37:43.252Z",
             "lastPollError": "No mock data available — live SNMP only",
             "lastPoll": {
               "sysUptime": 864000,
               "sysName": "Unknown",
-              "polledAt": "2026-06-25T16:29:48.183Z",
+              "polledAt": "2026-07-04T09:37:43.252Z",
               "source": "peplink-mock",
               "ports": [
                 {
@@ -9402,242 +9402,242 @@
               ],
               "trafficHistory": [
                 {
-                  "time": "16:42",
+                  "time": "09:50",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:43",
+                  "time": "09:51",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:44",
+                  "time": "09:52",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:45",
+                  "time": "09:53",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:46",
+                  "time": "09:54",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:47",
+                  "time": "09:55",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:48",
+                  "time": "09:56",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:49",
+                  "time": "09:57",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:50",
+                  "time": "09:58",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:51",
+                  "time": "09:59",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:52",
+                  "time": "10:00",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:53",
+                  "time": "10:01",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:54",
+                  "time": "10:02",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:55",
+                  "time": "10:03",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:56",
+                  "time": "10:04",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:57",
+                  "time": "10:05",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:58",
+                  "time": "10:06",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "16:59",
+                  "time": "10:07",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:00",
+                  "time": "10:08",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:01",
+                  "time": "10:09",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:02",
+                  "time": "10:10",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:03",
+                  "time": "10:11",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:04",
+                  "time": "10:12",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:05",
+                  "time": "10:13",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:06",
+                  "time": "10:14",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:07",
+                  "time": "10:15",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:08",
+                  "time": "10:16",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:09",
+                  "time": "10:17",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:10",
+                  "time": "10:18",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:11",
+                  "time": "10:19",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:12",
+                  "time": "10:20",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:13",
+                  "time": "10:21",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:14",
+                  "time": "10:22",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:15",
+                  "time": "10:23",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:16",
+                  "time": "10:24",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:17",
+                  "time": "10:25",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:18",
+                  "time": "10:26",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:19",
+                  "time": "10:27",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:20",
+                  "time": "10:28",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:21",
+                  "time": "10:29",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:22",
+                  "time": "10:30",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:23",
+                  "time": "10:31",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:24",
+                  "time": "10:32",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:25",
+                  "time": "10:33",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:26",
+                  "time": "10:34",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:27",
+                  "time": "10:35",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:28",
+                  "time": "10:36",
                   "inMbps": 49,
                   "outMbps": 18.3
                 },
                 {
-                  "time": "17:29",
+                  "time": "10:37",
                   "inMbps": 49,
                   "outMbps": 18.3
                 }
