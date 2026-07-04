@@ -32,6 +32,7 @@ import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
 import { SNMP_SWITCHES_CHANGED_EVENT } from "@/lib/snmp/snmpSwitchProfiles";
 import { WAN_MANAGEMENT_CHANGED_EVENT } from "@/lib/wan/wanManagementSettings";
 import { PLATFORM_MODE_CHANGED_EVENT } from "@/lib/platformMode";
+import { connectServerEvents, disconnectServerEvents } from "@/lib/serverEvents";
 
 // How often we re-probe the Lutron processor to refresh the
 // `lighting-processor-offline` diagnosis. 60s is the same cadence the
@@ -39,6 +40,10 @@ import { PLATFORM_MODE_CHANGED_EVENT } from "@/lib/platformMode";
 // trade-off between freshness and processor load.
 const LIGHTING_PROBE_INTERVAL_MS = 60_000;
 const CISCO_PROBE_INTERVAL_MS = 60_000;
+
+// Fallback background refresh so all connected browsers stay roughly in
+// sync even when the SSE bridge is unavailable (e.g. network partitions).
+const BACKGROUND_REFRESH_MS = 30_000;
 
 const SystemDataContext = createContext(null);
 
@@ -104,6 +109,25 @@ export function SystemDataProvider({ children }) {
     window.addEventListener("waveguard-diagnoses-ack-changed", onAck);
     return () => window.removeEventListener("waveguard-diagnoses-ack-changed", onAck);
   }, []);
+
+  // ── Cross-device sync: SSE + background poll ──────────────────────────
+  useEffect(() => {
+    connectServerEvents();
+    return () => disconnectServerEvents();
+  }, []);
+
+  useEffect(() => {
+    const onServerDataChanged = () => load({ silent: true });
+    window.addEventListener("waveguard-server-data-changed", onServerDataChanged);
+    return () => window.removeEventListener("waveguard-server-data-changed", onServerDataChanged);
+  }, [load]);
+
+  // Fallback background refresh so devices that miss SSE events eventually
+  // catch up. Runs silently in the background.
+  useEffect(() => {
+    const id = setInterval(() => load({ silent: true }), BACKGROUND_REFRESH_MS);
+    return () => clearInterval(id);
+  }, [load]);
 
   // ── Lighting diagnosis pipeline ─────────────────────────────────────
   // We listen for connection + event-log changes and re-probe the

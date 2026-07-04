@@ -1,7 +1,7 @@
 import { useState } from "react";
 import {
   HelpCircle, Server, Cpu, Lightbulb, Music, Network, Zap,
-  ChevronDown, ChevronRight, BookOpen, Globe, Shield,
+  ChevronDown, ChevronRight, BookOpen, Globe, Shield, Thermometer,
   Radio, CheckCircle2, AlertTriangle, Info, FileDown, Loader2
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -23,6 +23,7 @@ const USAGE_SECTIONS = [
 • Preventative maintenance scheduling & tracking
 • Physical cable register management
 • Multi-protocol lighting control (Lutron, DALI, DMX, KNX)
+• Marine HVAC control (Frigomar, Dometic, Condaria via Modbus, BACnet, CANBus)
 • AI-assisted fault diagnostics and natural language control
 • Automated alerting and rule-based actions
 • PDF/CSV report generation
@@ -53,6 +54,8 @@ To change a user's role: go to Settings → Users → edit the user record.`
 • Active alarms count
 • Recent SNMP events
 • Maintenance tasks due this week
+• WAN Connection — live public IP, ISP, bandwidth, speed test
+• WAN Latency — live gateway ping (5ms typical on Starlink)
 • Bandwidth utilisation charts`
       },
       {
@@ -125,10 +128,25 @@ Click any alarm to navigate to the affected device's detail page.`
       {
         label: "Step 6 — Saving Layouts",
         body: `1. Arrange nodes as desired by dragging them
-2. Click Save Layout — enter a name
-3. Optionally set it as the Default layout (loaded on next visit)
-4. Use the Layout Selector dropdown to switch between saved layouts
-5. Layouts store node X/Y positions and custom connections`
+ 2. Click Save Layout — enter a name
+ 3. Optionally set it as the Default layout (loaded on next visit)
+ 4. Use the Layout Selector dropdown to switch between saved layouts
+ 5. Layouts store node X/Y positions and custom connections`
+      },
+      {
+        label: "Step 7 — Scan History & Revisiting Past Scans",
+        body: `The Discovery page (separate from Topology) maintains a browsable history of every network scan:
+
+1. Go to Discovery → run a subnet scan
+2. After the scan completes, it's automatically saved to the scan history sidebar
+3. Click the History icon (clock, top-left) to open the sidebar
+4. Past scans show: date/time, device count, scan type, subnet
+5. Click any past scan to reload its results — classify devices and add them to topology
+6. Use the search field to filter scans by date or subnet
+7. Click the X on a scan entry to delete it from history
+8. Click New to reset the page for a fresh scan
+
+History persists across server restarts (stored in waveguard-data.json). The last 50 scans are retained automatically.`
       }
     ]
   },
@@ -207,6 +225,97 @@ When a task is completed, the next occurrence should be created manually or via 
       {
         label: "Step 4 — SNMP Port Fault Detection",
         body: `Expand the SNMP Port Map panel at the bottom of the Cables page. This cross-references cable endpoints with live SNMP port status. If a port is reported DOWN by the switch, the corresponding cable row is highlighted red with a fault indicator.`
+      }
+    ]
+  },
+  {
+    id: "hvac",
+    icon: Thermometer,
+    title: "HVAC Control",
+    steps: [
+      {
+        label: "Step 1 — Overview",
+        body: `The HVAC page provides centralised control of all marine HVAC zones from a single interface. It supports multiple manufacturers (Frigomar, Dometic, Condaria) and protocols (Modbus RTU/TCP, BACnet/IP, BACnet MSTP, CANBus) through a unified abstraction layer — the frontend never needs to know what hardware is behind each zone.
+
+Each zone/cabin shows:
+• Current temperature and target setpoint
+• Humidity percentage
+• Operating mode: Off, Cool, Heat, Auto, Dry, Fan Only
+• Fan speed: Auto, Low, Medium, High
+• Power state (on/off)
+• Online/offline status with alarm indicators
+• Valve position and compressor state (where available)`
+      },
+      {
+        label: "Step 2 — Controlling a Zone",
+        body: `From any zone card on the HVAC page:
+
+1. Power toggle — click the power button (top-right of the card) to turn the zone on or off
+2. Setpoint — drag the slider (16–30°C range) to adjust target temperature
+3. Mode — click any mode icon in the button group: Power (Off), Snowflake (Cool), Flame (Heat), Wind (Auto), Droplet (Dry), Fan (Fan Only)
+4. Fan speed — click A (Auto), L (Low), M (Medium), H (High) in the fan selector
+
+Each write is sent directly to the HVAC hardware. If the zone is offline, writes are rejected with a clear error message to prevent unsafe operation. Writes can be forced in admin config.`
+      },
+      {
+        label: "Step 3 — Understanding Zone Status",
+        body: `Each zone card displays:
+
+• Green dot — zone is online and communicating
+• Red dot — zone is offline; controls are disabled
+• Current temperature — colour-coded: blue (<18°C), cyan (18–22°C), orange (22–26°C), red (>26°C)
+• Humidity — shown next to temperature when available
+• Alarm badge — red pill with alarm code (e.g. "E-02") when the HVAC unit reports a fault
+• Manufacturer — shown top-right for identification
+• Valve % — indicates chilled/hot water valve position (Modbus zones)
+• Compressor — shows Running/Idle status (where available)
+
+Expand the "Details" section at the bottom of any card to see protocol, valve, compressor, and alarm information.`
+      },
+      {
+        label: "Step 4 — Diagnostics & Engineer Mode",
+        body: `For troubleshooting, each zone has a diagnostics view:
+
+1. Expand the zone card's "Details" section
+2. Click "View raw diagnostics →"
+3. A modal opens showing:
+   • Protocol and manufacturer
+   • Connection state (connected/disconnected/error)
+   • Retry count
+   • Last communication timestamp
+   • Last successful read timestamp
+   • Last error message (if any)
+   • Raw protocol data dump (register values, BACnet objects, CAN frames)
+
+This view is intended for engineers and system integrators.`
+      },
+      {
+        label: "Step 5 — System Status Bar",
+        body: `The system status bar at the top of the HVAC page shows:
+
+• Overall system health: Healthy (all online), Degraded (some offline/alarms), or Offline (none reachable)
+• Online zone count
+• Offline zone count
+• Alarm count
+• Total zone count
+• Last poll timestamp
+
+Alarm count also appears as a red badge in the page header for quick awareness.`
+      },
+      {
+        label: "Step 6 — Adding a New HVAC Zone",
+        body: `HVAC zones are defined in the HVAC configuration file (src/hvac/config/hvacConfig.example.json). Each zone requires:
+
+1. id — unique zone identifier (e.g. "owner_cabin")
+2. name — human-readable name (e.g. "Owner Cabin")
+3. deck — deck/floor location (e.g. "Main Deck")
+4. room — room name
+5. manufacturer — frigomar, dometic, condaria, webasto, heinen_hopman, or generic
+6. protocol — modbus_rtu, modbus_tcp, bacnet_ip, bacnet_mstp, or canbus
+7. connection — protocol-specific connection parameters (serial port, IP, baud rate, slave ID, device instance, etc.)
+8. registerMap / bacnetMap / canMap — hardware-specific register/object/message IDs, scaling factors, and enum mappings
+
+When using the mock server, 8 pre-configured zones are available automatically with simulated temperature drift and random failures.`
       }
     ]
   },
@@ -577,6 +686,114 @@ show restconf state
     ]
   },
   {
+    id: "peplink",
+    icon: Globe,
+    title: "Peplink Router",
+    color: "cyan",
+    steps: [
+      {
+        label: "Step 1 — Add the Peplink to Equipment",
+        body: `The Peplink router must be registered in WaveGuard's equipment database before it can be monitored.
+
+1. Go to Discovery → enter the Peplink's LAN subnet → Run Scan
+2. Find the Peplink in results (vendor shows as "Peplink" based on MAC OUI) → Classify as "Monitored" → Register
+3. Or add it manually: Topology → +Add Equipment → enter IP address (e.g. 192.168.1.134), name, make "Peplink"
+
+The equipment record must have the correct LAN IP address where the Peplink web admin UI is reachable.`
+      },
+      {
+        label: "Step 2 — Configure Integration Vendor on the Profile",
+        body: `Once the Peplink equipment exists:
+
+1. Go to Core Network → Fleet tab
+2. Find the Peplink equipment in the list
+3. Click the Edit (pencil) icon
+4. Under Integration Vendor, select Peplink
+5. Optionally set Poll Method to peplink_hybrid
+6. Click Save
+
+This creates an SNMP switch profile linked to the Peplink equipment with integrationVendor set to peplink.`
+      },
+      {
+        label: "Step 3 — Add Browser-Login Credentials",
+        body: `The Peplink REST API requires browser-login authentication:
+
+1. Go to Settings → Credentials Vault → +Add Credential
+2. Type: Browser Login
+3. Username: admin (default Peplink web admin user)
+4. Password: your Peplink admin password
+5. Click Save
+6. Return to Core Network → Fleet → Edit the Peplink profile
+7. Under Credentials, select the credential you just created
+8. Click Save
+
+The credential vault stores the username/password securely and links it to the profile.`
+      },
+      {
+        label: "Step 4 — Test the Connection",
+        body: `1. Go to Core Network → Fleet → find the Peplink profile
+2. Click the Test Connection button (lightning icon)
+3. The backend will:
+   a. Probe port 443 (HTTPS) on the Peplink IP
+   b. POST /api/login with the vault credentials
+   c. Extract session cookie from the response
+   d. GET /api/status.wan.connection for live WAN data
+   e. GET /api/info.firmware for firmware version
+   f. GET /api/status.system.info for serial, MACs, model
+4. If successful, the chip turns green with "Peplink B One 5G" (or your model)
+
+If it fails:
+• Verify the Peplink IP is correct and reachable on the LAN
+• Verify username/password in Credentials Vault
+• Check that NODE_TLS_REJECT_UNAUTHORIZED=0 is set in the server env (Peplink uses a self-signed HTTPS cert)
+• The server logs show detailed error messages`
+      },
+      {
+        label: "Step 5 — Background Polling & Dashboard",
+        body: `Once configured, the Peplink is polled automatically:
+
+• Every 30 seconds (configurable per-profile via pollIntervalSec)
+• The poll enriches the SNMP port data with live REST API data
+• WAN links appear in Core Network → WAN Management tab
+• The Dashboard widgets populate:
+  • WAN Connection — shows router name, public IP, ISP, bandwidth KPI cards, speed test button
+  • WAN Latency — shows live gateway ping latency (cascades from speed test → live poll → discovery ping)
+
+Dashboard WAN port selection: The widget intelligently picks the first UP WAN port from the poll data. If you have multiple WAN links (e.g. WAN1 down, WAN2 up with Starlink), it automatically selects the active one. The public IP shown is fetched from api.ipify.org to handle CGNAT/LTE scenarios where the Peplink reports a private IP.`
+      },
+      {
+        label: "Step 6 — Speed Test & Data Display",
+        body: `The WAN Management page includes a Speed Test button in the header and per-link KPI cards:
+
+1. Click Speed Test (top-right of WAN Management page or in the Dashboard widget)
+2. The test runs against the primary online WAN link
+3. Results show: Download Mbps, Upload Mbps, Latency (ms)
+4. KPI cards toggle between live aggregate speeds and the latest test result
+5. The latest test includes a "Tested X ago" timestamp
+
+Note: Peplink firmware 8.5.x does not expose /api/cmd.speedtest. Speed tests use a simulated measurement internally. Future firmware versions may support live speed tests.`
+      },
+      {
+        label: "Step 7 — WAN Management Settings",
+        body: `Fine-tune how WAN links appear:
+
+1. Go to Core Network → WAN Management tab
+2. Each router's WAN links are listed with their live status
+3. Click a link to edit override settings:
+   • Label — friendly name (e.g. "Starlink Maritime")
+   • ISP — override the detected ISP name
+   • Priority — Primary / Backup / Cellular / Spare
+   • Public IP Override — manually set if auto-detection is wrong
+   • Gateway / DNS Override — useful for failover testing
+   • Contract bandwidth — for comparison against live throughput
+4. Assigned Router Equipment IDs control which equipment is treated as a WAN router
+5. Manual WAN links can be added for non-polled routers
+
+WAN link ordering: Primary links appear first, then Backup, Cellular, Spare. Within each priority, links are sorted alphabetically by router name.`
+      }
+    ]
+  },
+  {
     id: "qsc",
     icon: Music,
     title: "QSC Q-SYS",
@@ -879,6 +1096,216 @@ curl -X POST http://localhost:9090/dmx \\
    • CH 1 = "House Dimmer Main" (type: dimmer)
    • CH 7-9 = "LED Bar 1 RGB" (type: RGB)
 6. Fixtures appear in Lighting page as controllable zones`
+      }
+    ]
+  },
+  {
+    id: "hvac",
+    icon: Thermometer,
+    title: "Marine HVAC",
+    color: "cyan",
+    steps: [
+      {
+        label: "Step 1 — Architecture Overview",
+        body: `Wave Guard's HVAC abstraction layer supports direct communication with marine HVAC equipment over industrial protocols — no proprietary gateway required. The supported protocols are:
+
+• Modbus RTU (RS485) — most common on marine HVAC; uses serial-to-USB or serial-to-Ethernet adapters
+• Modbus TCP — for HVAC units with Ethernet ports
+• BACnet/IP — common on larger crew systems (Heinen & Hopman, Condaria)
+• BACnet MSTP — RS485-based BACnet for legacy equipment
+• CANBus — J1939/CANOpen for integrated marine plants
+• Crestron Gateway — HVAC units connected to a Crestron processor (4-Series/VC-4) via RS485/Modbus RTU; Crestron exposes zone data via REST API with Modbus TCP fallback
+
+Each protocol has a dedicated adapter implementing the common HVACProtocolAdapter interface. Manufacturer-specific adapters (Frigomar, Dometic, Condaria) extend the protocol adapters with predefined register maps and supported modes. The CrestronGatewayAdapter can serve any HVAC manufacturer behind the Crestron processor.`
+      },
+      {
+        label: "Step 2 — Modbus RTU Connection (Frigomar, Dometic, Condaria)",
+        body: `For Modbus RTU over RS485:
+
+1. Connect the HVAC unit's RS485 terminals to a USB-to-RS485 converter (e.g. FTDI USB-RS485-WE-1800-BT)
+2. Plug the converter into the Wave Guard server
+3. Identify the serial port: ls /dev/ttyUSB*  (typically /dev/ttyUSB0)
+4. Configure in hvacConfig.json:
+
+{
+  "protocol": "modbus_rtu",
+  "connection": {
+    "type": "modbus_rtu",
+    "serialPort": "/dev/ttyUSB0",
+    "baudRate": 9600,
+    "parity": "none",
+    "stopBits": 1,
+    "slaveId": 1
+  },
+  "registerMap": {
+    "currentTemperature": { "address": 1001, "type": "holding", "scale": 0.1, "readOnly": true },
+    "targetTemperature": { "address": 1002, "type": "holding", "scale": 0.1, "readOnly": false },
+    ...
+  }
+}
+
+Common baud rates: 9600 (Frigomar), 19200 (Dometic), 9600 (Condaria). Check the manufacturer's installation manual.`
+      },
+      {
+        label: "Step 3 — Modbus TCP Connection",
+        body: `For HVAC units with Ethernet (e.g. Dometic with TCP gateway):
+
+{
+  "protocol": "modbus_tcp",
+  "connection": {
+    "type": "modbus_tcp",
+    "host": "192.168.1.50",
+    "port": 502,
+    "slaveId": 10
+  }
+}
+
+Default Modbus TCP port is 502. Some gateways use alternative ports — configure accordingly.`
+      },
+      {
+        label: "Step 4 — BACnet/IP Connection",
+        body: `For BACnet/IP compatible HVAC units (Condaria, Heinen & Hopman):
+
+1. Ensure the BACnet device is on the same IP subnet as the Wave Guard server
+2. Note the BACnet Device Instance (set in the unit's commissioning tool)
+3. Configure:
+
+{
+  "protocol": "bacnet_ip",
+  "connection": {
+    "type": "bacnet_ip",
+    "host": "192.168.1.60",
+    "port": 47808,
+    "deviceInstance": 1001
+  },
+  "bacnetMap": {
+    "currentTemperature": { "objectType": "analogInput", "instance": 1, "property": "presentValue" },
+    "targetTemperature": { "objectType": "analogValue", "instance": 1, "property": "presentValue" },
+    "powerState": { "objectType": "binaryValue", "instance": 1, "property": "presentValue" },
+    "mode": { "objectType": "multiStateValue", "instance": 1, "property": "presentValue", "mapping": { 1: "off", 2: "cool", 3: "heat", 4: "auto" } },
+    "fanSpeed": { "objectType": "multiStateValue", "instance": 2, "property": "presentValue", "mapping": { 1: "auto", 2: "low", 3: "medium", 4: "high" } }
+  }
+}
+
+Standard BACnet/IP port is 47808 (0xBAC0).`
+      },
+      {
+        label: "Step 5 — BACnet MSTP Connection",
+        body: `For BACnet MSTP over RS485:
+
+{
+  "protocol": "bacnet_mstp",
+  "connection": {
+    "type": "bacnet_mstp",
+    "serialPort": "/dev/ttyS0",
+    "baudRate": 38400,
+    "deviceInstance": 2001,
+    "macAddress": 5
+  }
+}
+
+The MAC address must be unique on the MSTP segment (0–127). Baud rate is typically 38400 or 76800. The Wave Guard server acts as a BACnet MSTP master node.`
+      },
+      {
+        label: "Step 6 — CANBus Connection",
+        body: `For CANBus-based HVAC plants (Heinen & Hopman integrated systems):
+
+1. Connect a CANBus interface to the Wave Guard server (e.g. USBtin, CANtact, or SLCAN-compatible adapter)
+2. Configure the CAN interface (typically can0):
+   sudo ip link set can0 type can bitrate 250000
+   sudo ip link set can0 up
+3. Configure:
+
+{
+  "protocol": "canbus",
+  "connection": {
+    "type": "canbus",
+    "interface": "can0",
+    "baudRate": 250000
+  },
+  "canMap": {
+    "currentTemperature": { "id": 512, "offset": 0, "length": 2, "scale": 0.1 },
+    "targetTemperature": { "id": 512, "offset": 2, "length": 2, "scale": 0.1 },
+    "powerState": { "id": 513, "offset": 0, "length": 1 },
+    "mode": { "id": 513, "offset": 1, "length": 1, "mapping": { 0: "off", 1: "cool", 2: "heat", 3: "auto" } }
+  }
+}
+
+CAN message IDs, offsets, and lengths must be obtained from the HVAC plant's CAN database (.dbc file) or manufacturer documentation.`
+      },
+      {
+        label: "Step 7 — Crestron Gateway Connection",
+        body: `For marine HVAC plants connected via a Crestron processor (4-Series/VC-4):
+
+The Crestron acts as a Modbus RTU master to the HVAC units and exposes their data to Wave Guard via its REST API (primary) or Modbus TCP (fallback).
+
+1. Ensure the Crestron processor has REST API enabled (Settings → Security → API Settings)
+2. Create a dedicated API user in Crestron Toolbox
+3. In the SIMPL program, assign each HVAC zone a block of analog/digital joins
+4. Configure in hvacConfig.json:
+
+{
+  "protocol": "crestron_gateway",
+  "connection": {
+    "type": "crestron_gateway",
+    "host": "192.168.1.100",
+    "port": 443,
+    "username": "apiadmin",
+    "password": "apiadmin",
+    "programSlot": 1
+  },
+  "crestronZoneIndex": 0,
+  "registerMap": {
+    "currentTemperature": { "address": 101, "type": "holding", "scale": 0.1, "readOnly": true },
+    "targetTemperature": { "address": 102, "type": "holding", "scale": 0.1, "readOnly": false },
+    "powerState": { "address": 103, "type": "coil", "readOnly": false },
+    "mode": { "address": 104, "type": "holding", "mapping": { "0": "off", "1": "cool", "2": "heat", "3": "auto" } },
+    "fanSpeed": { "address": 105, "type": "holding", "mapping": { "0": "auto", "1": "low", "2": "medium", "3": "high" } },
+    "alarmCode": { "address": 110, "type": "holding", "readOnly": true }
+  }
+}
+
+Each zone uses a separate crestronZoneIndex (0, 1, 2...) — one Crestron processor can serve many HVAC units. The adapter tries the REST API first; if unreachable it falls back to Modbus TCP.`
+      },
+      {
+        label: "Step 8 — Testing with Mock Mode",
+        body: `For development and testing without real HVAC hardware, the mock server provides 10 simulated zones:
+
+• Owner Cabin (Frigomar, Modbus RTU) — 22.5°C, cooling
+• VIP Cabin (Dometic, Modbus TCP) — 23°C, auto
+• Guest Cabin Port (Condaria, BACnet/IP) — 21°C, heating
+• Guest Cabin Starboard (Frigomar, Modbus RTU) — offline, alarm E-02
+• Main Saloon (Condaria, BACnet/IP) — 24°C, cooling
+• Bridge (Dometic, Modbus TCP) — 25°C, cooling
+• Crew Mess (Frigomar, Modbus RTU) — 20°C, heating
+• Galley (Generic, Modbus RTU) — 26°C, cooling
+• Owner Cabin (Crestron Gateway) — 22.5°C, cooling — via Crestron CP4 REST API
+• VIP Cabin (Crestron Gateway) — 23°C, auto — via Crestron CP4 REST API
+
+The mock simulates:
+• Random temperature drift (±0.2°C every 3s)
+• 2% random read failures
+• 5% random write failures
+• 10% delayed responses (200–500ms latency)
+• Guest Cabin Starboard starts offline with alarm code E-02
+• Crestron gateway runs on port 3002 with a simulated CP4 REST API at /cws/api/
+
+Access at /hvac from the sidebar. No configuration needed when mock server is running.`
+      },
+      {
+        label: "Step 9 — Safety and Validation",
+        body: `The HVAC abstraction layer enforces these safety limits:
+
+• Setpoint range: 16°C minimum, 30°C maximum (configurable per zone)
+• Mode validation: unsupported modes are rejected per manufacturer
+  • Frigomar: off, cool, heat, auto, fan_only (no dry mode)
+  • Dometic: off, cool, heat, auto, dry, fan_only (full range)
+  • Condaria: off, cool, heat, auto (no dry or fan_only)
+• Offline write guard: writes to offline zones are rejected with an error message unless forceWrite is enabled in config
+• Client-side validation: the frontend validates setpoints (16–30°C), modes, and fan speeds before sending
+• All read/write operations are logged with timestamps
+
+To disable the offline write guard for engineering purposes, set "forceWrite": true in the HVAC config.`
       }
     ]
   },

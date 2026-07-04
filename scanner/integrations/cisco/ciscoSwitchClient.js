@@ -142,7 +142,6 @@ class CiscoSwitchClient extends EventEmitter {
       return await this._ssh.getSystem();
     } catch (err) {
       this._lastSshError = err;
-      if (this.allowMock) return getCiscoMockEngine({ host: this.host }).getSystem();
       throw err;
     }
   }
@@ -152,7 +151,6 @@ class CiscoSwitchClient extends EventEmitter {
       return await this._ssh.getInterfaces();
     } catch (err) {
       this._lastSshError = err;
-      if (this.allowMock) return getCiscoMockEngine({ host: this.host }).getInterfaces();
       throw err;
     }
   }
@@ -162,7 +160,6 @@ class CiscoSwitchClient extends EventEmitter {
       return await this._ssh.getMacTable();
     } catch (err) {
       this._lastSshError = err;
-      if (this.allowMock) return getCiscoMockEngine({ host: this.host }).getMacTable();
       throw err;
     }
   }
@@ -172,7 +169,6 @@ class CiscoSwitchClient extends EventEmitter {
       return await this._ssh.getNeighbors();
     } catch (err) {
       this._lastSshError = err;
-      if (this.allowMock) return getCiscoMockEngine({ host: this.host }).getNeighbors();
       throw err;
     }
   }
@@ -192,11 +188,7 @@ class CiscoSwitchClient extends EventEmitter {
       this._lastSshError = null;
     } catch (err) {
       this._lastSshError = err;
-      if (this.allowMock) {
-        snapshot = getCiscoMockEngine({ host: this.host }).pollAll();
-      } else {
-        throw err;
-      }
+      throw err;
     }
 
     if (snmpCommunity && this.snmpEnabled) {

@@ -1,6 +1,7 @@
 import { isMockServer } from "@/api/base44Client";
+import { getMockAppApiBase } from "@/api/mockApiHelpers";
 
-const mockBase = isMockServer ? "http://localhost:3002/api/apps/mock-app" : "";
+const mockBase = isMockServer ? getMockAppApiBase() : "";
 
 function authHeaders() {
   const token = typeof window !== "undefined" ? localStorage.getItem("base44_access_token") : null;

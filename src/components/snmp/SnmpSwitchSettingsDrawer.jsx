@@ -102,7 +102,8 @@ export default function SnmpSwitchSettingsDrawer({
           `Peplink OK — ${res.portCount} interface(s) via ${res.source}${res.online === false ? " (offline)" : ""}`
         );
       } else {
-        toast.error(res.error || "Peplink test failed");
+        const hint = res.hint ? `\n${res.hint}` : "";
+        toast.error(`${res.error || "Peplink test failed"}${hint}`, { duration: 8000 });
       }
     } catch (err) {
       toast.error(err.message || "Peplink test failed");

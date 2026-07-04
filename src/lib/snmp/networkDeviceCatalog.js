@@ -3,6 +3,11 @@
  */
 
 import {
+  matchRouterDevice,
+  routerCatalogToChassisSpec,
+  ROUTER_DEVICES,
+} from "../integrations/routers/routerDeviceCatalog.js";
+import {
   matchPeplinkDevice,
   peplinkCatalogToChassisSpec,
 } from "../integrations/peplink/peplinkDeviceCatalog.js";
@@ -50,7 +55,7 @@ export function resolveEquipmentModelString(equipment) {
   return model || name || make;
 }
 
-/** Parse Peplink / router model strings (model or full equipment). */
+/** Parse router model strings (model or full equipment) into a chassis spec. */
 export function parseNetworkDeviceModel(modelOrEquipment) {
   const equipment =
     modelOrEquipment && typeof modelOrEquipment === "object" ? modelOrEquipment : null;
@@ -59,27 +64,34 @@ export function parseNetworkDeviceModel(modelOrEquipment) {
     : String(modelOrEquipment || "").trim();
   if (!raw) return null;
 
+  // Try router catalog first (Peplink, Cisco ISR/ASR, FortiGate, etc.)
+  const routerEntry = equipment ? matchRouterDevice(equipment) : matchRouterDevice({ model: raw, name: raw });
+  if (routerEntry) {
+    return routerCatalogToChassisSpec(routerEntry, raw);
+  }
+
+  // Fall back to Peplink-only catalog
   const pepEntry = equipment ? matchPeplinkDevice(equipment) : matchPeplinkDevice({ model: raw, name: raw });
   if (pepEntry) {
     return peplinkCatalogToChassisSpec(pepEntry, raw);
   }
 
   const key = normalizeModelKey(raw);
-  const blob = key;
-  if (/PEPLINK|BALANCE\s*2500|BPL2500/i.test(blob)) {
+  if (/PEPLINK|BALANCE\s*2500|BPL2500/i.test(key)) {
     const e = matchPeplinkDevice({ name: "Balance 2500 EC", model: raw });
     if (e) return peplinkCatalogToChassisSpec(e, raw);
   }
-  if (/MAX\s*BR1|BR1PRO/i.test(blob)) {
+  if (/MAX\s*BR1|BR1PRO/i.test(key)) {
     const e = matchPeplinkDevice({ name: "MAX BR1 Pro", model: raw });
     if (e) return peplinkCatalogToChassisSpec(e, raw);
   }
-  if (/MAX\s*BR2|BR2PRO/i.test(blob)) {
+  if (/MAX\s*BR2|BR2PRO/i.test(key)) {
     const e = matchPeplinkDevice({ name: "MAX BR2 Pro", model: raw });
     if (e) return peplinkCatalogToChassisSpec(e, raw);
   }
 
-  if (/\b(router|firewall|fortigate|asa|ftd|udm|dream\s*machine)\b/i.test(blob)) {
+  // Generic router layout
+  if (/\b(router|firewall|fortigate|asa|ftd|udm|dream\s*machine)\b/i.test(key)) {
     return buildNetworkSpec(raw, {
       series: "Network appliance",
       vendor: "Unknown",

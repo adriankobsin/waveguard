@@ -7,6 +7,7 @@ export const DEVICE_CATEGORIES = [
   "Server",
   "Power",
   "Control",
+  "Router",
   "Lighting",
   "Comms",
   "Security",

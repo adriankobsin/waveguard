@@ -9,7 +9,7 @@ export function getScannerBaseUrl(agentUrl) {
   const fromEnv = import.meta.env.VITE_SCANNER_URL || import.meta.env.VITE_API_URL;
   if (fromEnv) return String(fromEnv).replace(/\/$/, "");
   if (isMockServer && import.meta.env.DEV) return "";
-  if (isMockServer) return "http://localhost:3002";
+  if (isMockServer) return typeof window !== "undefined" ? window.location.origin : "http://localhost:3002";
   return "";
 }
 
@@ -87,4 +87,26 @@ export async function networkScan(payload, agentUrl) {
     return unwrapInvokeResponse(res);
   }
   return postScannerFunction("networkScan", payload, agentUrl);
+}
+
+/** Save a scan result to history (server-side). */
+export async function saveScanHistory(scanResult) {
+  return postScannerFunction("saveScanHistory", scanResult);
+}
+
+/** Load all saved scan history entries from the server. */
+export async function loadScanHistory() {
+  const data = await postScannerFunction("scanHistory");
+  return data?.scanHistory || [];
+}
+
+/** Delete a scan history entry by id. */
+export async function deleteScanHistory(id) {
+  const base = getScannerBaseUrl();
+  const res = await fetch(`${base}/api/apps/${APP_ID}/functions/scanHistory/${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) throw new Error("Failed to delete scan history");
+  return res.json();
 }

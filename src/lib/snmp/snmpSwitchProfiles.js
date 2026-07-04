@@ -10,9 +10,15 @@ import {
   resolveEquipmentModelString,
 } from "./networkDeviceCatalog.js";
 import {
-  matchPeplinkDevice,
-  getPeplinkDefaultLogin,
-} from "../integrations/peplink/peplinkDeviceCatalog.js";
+  matchRouterDevice,
+  getRouterDefaultLogin,
+  ROUTER_DEVICES,
+} from "../integrations/routers/routerDeviceCatalog.js";
+import {
+  detectRouterVendor,
+  getRouterAdapter,
+  getDefaultRouterConfig,
+} from "../integrations/routers/index.js";
 import { normalizeBrowserLogin } from "../credentials/credentialsVault.js";
 import { getVendorInfo } from "../integrations/vendorRegistry.js";
 
@@ -142,9 +148,15 @@ export function normalizeCapabilities(raw, vendor) {
 
 export function detectIntegrationVendor(eq) {
   if (!eq) return "snmp";
+  const routerVendor = detectRouterVendor(eq);
+  if (routerVendor !== "snmp") return routerVendor;
   const blob = `${eq.make || ""} ${eq.vendor || ""} ${eq.model || ""} ${eq.name || ""}`.toLowerCase();
   if (/peplink|balance\s*2500|max\s*br/i.test(blob)) return "peplink";
   if (/fortinet|fortigate/i.test(blob)) return "fortinet";
+  if (/mikrotik|routeros/i.test(blob)) return "mikrotik";
+  if (/juniper|junos|srx/i.test(blob)) return "juniper";
+  if (/huawei|ar\s*\d/i.test(blob)) return "huawei";
+  if (/draytek|vigor/i.test(blob)) return "draytek";
   if (/kerio/i.test(blob)) return "kerio";
   if (/unifi|ubiquiti|udm|dream\s*machine/i.test(blob)) return "unifi";
   if (/cisco|meraki|catalyst|cbs\d|sg\d/i.test(blob)) return "cisco";
@@ -153,6 +165,7 @@ export function detectIntegrationVendor(eq) {
 
 export function detectDeviceRole(eq) {
   if (!eq) return "switch";
+  if (eq.category === "Router") return "wan_router";
   const blob = `${eq.name || ""} ${eq.model || ""} ${eq.make || ""}`.toLowerCase();
   if (/peplink|balance\s*2500|max\s*br/i.test(blob)) return "wan_router";
   if (/fortigate|firewall|asa|ftd|kerio/i.test(blob)) return "firewall";
@@ -198,20 +211,33 @@ export function buildDefaultProfileFields(eq, options = {}) {
   const deviceRole = options.forceWanRouter ? "wan_router" : detectDeviceRole(eq);
   const pollMethod = defaultPollMethod(integrationVendor);
   const vendorInfo = getVendorInfo(integrationVendor);
-  const pep = matchPeplinkDevice(eq);
-  const pepLogin = pep ? getPeplinkDefaultLogin(pep) : null;
+  const routerEntry = matchRouterDevice(eq);
+  const routerLogin = routerEntry ? getRouterDefaultLogin(routerEntry) : null;
+  const routerDefaultConfig = getDefaultRouterConfig(integrationVendor);
   const ip = getEquipmentIp(eq);
+
+  const routerConfig = {};
+  if (integrationVendor === "peplink") {
+    routerConfig.peplink = { ...DEFAULT_PEPLINK_CONFIG, ...routerDefaultConfig };
+    routerConfig.cisco = { ...DEFAULT_CISCO_CONFIG };
+  } else if (integrationVendor === "cisco") {
+    routerConfig.cisco = { ...DEFAULT_CISCO_CONFIG, ...routerDefaultConfig };
+    routerConfig.peplink = { ...DEFAULT_PEPLINK_CONFIG };
+  } else {
+    routerConfig.peplink = { ...DEFAULT_PEPLINK_CONFIG };
+    routerConfig.cisco = { ...DEFAULT_CISCO_CONFIG };
+  }
+
   return {
     deviceRole,
     integrationVendor,
     pollMethod,
-    peplink: { ...DEFAULT_PEPLINK_CONFIG },
-    cisco: { ...DEFAULT_CISCO_CONFIG },
-    browserLogin: pepLogin
+    ...routerConfig,
+    browserLogin: routerLogin
       ? {
           loginUrl: ip ? `https://${ip}/` : "",
-          username: pepLogin.username,
-          password: pepLogin.password,
+          username: routerLogin.username,
+          password: routerLogin.password,
           credentialId: "",
         }
       : { loginUrl: ip ? `https://${ip}/` : "", username: "", password: "", credentialId: "" },
@@ -229,6 +255,7 @@ export function normalizeSnmpSwitchProfile(raw) {
   const pollMethod = POLL_METHODS.includes(raw.pollMethod)
     ? raw.pollMethod
     : defaultPollMethod(integrationVendor);
+  const isRouterDevice = deviceRole === "wan_router" || deviceRole === "router" || deviceRole === "firewall";
 
   return {
     id: raw.id || profileIdForEquipment(raw.equipmentId),
@@ -246,6 +273,7 @@ export function normalizeSnmpSwitchProfile(raw) {
     deviceRole,
     integrationVendor,
     pollMethod,
+    isRouter: isRouterDevice,
     peplink: normalizePeplinkConfig(raw.peplink),
     cisco: normalizeCiscoConfig(raw.cisco),
     browserLogin: normalizeBrowserLogin(raw.browserLogin),

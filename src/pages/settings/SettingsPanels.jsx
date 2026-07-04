@@ -7,8 +7,10 @@ import { Link } from "react-router-dom";
 import { useSettings } from "@/hooks/useSettings";
 import { useAuth } from "@/lib/AuthContext";
 import { isAdmin } from "@/lib/permissions";
-import { WIDGET_TYPES } from "@/components/dashboard/widgets/DashboardWidgets";
 import { testLightingProcessor } from "@/api/lightingApi";
+import { getIntegrationTypes, getIntegrationConfigs, createIntegrationConfig, deleteIntegrationConfig, testIntegrationConfig, getIntegrationLogs } from "@/api/integrationApi";
+import { getCategoryLabel, CATEGORY_ORDER } from "@/lib/integrations/integrationRegistry";
+import { WIDGET_TYPES } from "@/components/dashboard/widgets/DashboardWidgets";
 import {
   testIntegration,
   testOpenAiKey,
@@ -188,6 +190,55 @@ export function IntegrationsPanel() {
   const { value: cfg, setValue: setCfg, save, saving, saved } = useSettings("integrations", defaultIntegrations());
   const [testing, setTesting] = useState(null);
   const [testResult, setTestResult] = useState(null);
+  const [dbTypes, setDbTypes] = useState(null);
+  const [dbConfigs, setDbConfigs] = useState([]);
+  const [dbShow, setDbShow] = useState(false);
+  const [dbLoading, setDbLoading] = useState(false);
+  const [detailCfg, setDetailCfg] = useState(null);
+  const [detailLogs, setDetailLogs] = useState([]);
+
+  const loadDbData = async () => {
+    if (dbTypes) return;
+    setDbLoading(true);
+    try {
+      const [types, configs] = await Promise.all([getIntegrationTypes(), getIntegrationConfigs()]);
+      setDbTypes(types);
+      setDbConfigs(configs);
+    } catch { /* DB not available */ }
+    setDbLoading(false);
+  };
+
+  const openDetail = async (cfg) => {
+    setDetailCfg(cfg);
+    try {
+      setDetailLogs(await getIntegrationLogs(cfg.id, 20));
+    } catch { setDetailLogs([]); }
+  };
+
+  const addConfig = async (typeId) => {
+    const label = prompt("Label for this integration:");
+    if (!label) return;
+    const host = prompt("Host / IP address:");
+    if (!host) return;
+    const cfg = await createIntegrationConfig({ type_id: typeId, label, host, port: 80 });
+    setDbConfigs((prev) => [...prev, cfg]);
+  };
+
+  const removeConfig = async (id) => {
+    if (!confirm("Remove this integration config?")) return;
+    await deleteIntegrationConfig(id);
+    setDbConfigs((prev) => prev.filter((c) => c.id !== id));
+    if (detailCfg?.id === id) setDetailCfg(null);
+  };
+
+  const testConfig = async (id) => {
+    try {
+      const res = await testIntegrationConfig(id);
+      setDbConfigs((prev) => prev.map((c) => (c.id === id ? { ...c, health_status: res.status } : c)));
+    } catch {
+      setDbConfigs((prev) => prev.map((c) => (c.id === id ? { ...c, health_status: "offline" } : c)));
+    }
+  };
 
   const updateIntegration = (key, patch) => {
     setCfg((c) => ({ ...c, [key]: { ...(c[key] || {}), ...patch } }));
@@ -288,6 +339,113 @@ export function IntegrationsPanel() {
         );
       })}
       <SaveBar saving={saving} saved={saved} onSave={() => save(cfg)} />
+
+      <div className="border-t border-border pt-4">
+        <button
+          onClick={() => { setDbShow(!dbShow); if (!dbShow) loadDbData(); }}
+          className="flex items-center gap-2 text-sm font-semibold text-foreground mb-2"
+        >
+          <span className={`transition-transform ${dbShow ? "rotate-90" : ""}`}>▶</span>
+          API Integration Database ({dbConfigs.length} configs)
+        </button>
+
+        {dbShow && (
+          <div className="space-y-3">
+            {dbLoading && <p className="text-xs text-muted-foreground">Loading…</p>}
+
+            {!dbLoading && dbTypes && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {dbTypes
+                  .reduce((acc, t) => {
+                    const cat = acc.find((c) => c.category === t.category);
+                    if (cat) cat.types.push(t);
+                    else acc.push({ category: t.category, label: getCategoryLabel(t.category), types: [t] });
+                    return acc;
+                  }, [])
+                  .sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category))
+                  .map((cat) => (
+                    <div key={cat.category} className="w-full">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">{cat.label}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {cat.types.map((t) => (
+                          <div key={t.id} className="relative group">
+                            <button
+                              onClick={() => addConfig(t.id)}
+                              className="px-2.5 py-1 rounded-md border border-border text-xs text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                              title={`${t.label} — ${t.description || ""}`}
+                            >
+                              {t.label}
+                            </button>
+                            {t.phase === 2 && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500" title="Phase 2 (coming soon)" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+
+            {dbConfigs.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground">Configured instances:</p>
+                {dbConfigs.map((c) => (
+                  <div key={c.id} className="flex items-center justify-between px-3 py-2 rounded-lg border border-border bg-secondary/30">
+                    <button onClick={() => openDetail(c)} className="text-left flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`w-2 h-2 rounded-full ${c.health_status === "online" ? "bg-green-500" : c.health_status === "offline" ? "bg-red-500" : "bg-gray-400"}`} />
+                        <span className="text-xs font-medium">{c.label}</span>
+                        <span className="text-[10px] text-muted-foreground">({c.type_id})</span>
+                        {c.host && <span className="text-[10px] font-mono text-muted-foreground">{c.host}</span>}
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => testConfig(c.id)} className="p-1 rounded text-xs text-muted-foreground hover:text-foreground" title="Test connection">⟳</button>
+                      <button onClick={() => removeConfig(c.id)} className="p-1 rounded text-xs text-red-400 hover:text-red-300" title="Delete">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {detailCfg && (
+              <div className="rounded-lg border border-border bg-background p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold">{detailCfg.label}</p>
+                  <button onClick={() => setDetailCfg(null)} className="text-xs text-muted-foreground">✕</button>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
+                  <span className="text-muted-foreground">Type</span><span>{detailCfg.type_id}</span>
+                  {detailCfg.host && <><span className="text-muted-foreground">Host</span><span className="font-mono">{detailCfg.host}</span></>}
+                  {detailCfg.port && <><span className="text-muted-foreground">Port</span><span>{detailCfg.port}</span></>}
+                  {detailCfg.api_key && <><span className="text-muted-foreground">API Key</span><span className="font-mono">••••{detailCfg.api_key.slice(-4)}</span></>}
+                  <span className="text-muted-foreground">Status</span>
+                  <span className={detailCfg.health_status === "online" ? "text-green-400" : detailCfg.health_status === "offline" ? "text-red-400" : "text-muted-foreground"}>
+                    {detailCfg.health_status}
+                  </span>
+                  {detailCfg.last_polled_at && <><span className="text-muted-foreground">Last polled</span><span>{detailCfg.last_polled_at}</span></>}
+                </div>
+                {detailLogs.length > 0 && (
+                  <div className="border-t border-border pt-2 mt-1">
+                    <p className="text-[10px] font-medium text-muted-foreground mb-1">Activity log</p>
+                    <div className="max-h-24 overflow-y-auto space-y-0.5">
+                      {detailLogs.map((l) => (
+                        <p key={l.id} className="text-[10px] font-mono text-muted-foreground">
+                          <span className={l.level === "error" ? "text-red-400" : l.level === "warn" ? "text-amber-400" : "text-green-400"}>
+                            [{l.level}]
+                          </span>{" "}
+                          {l.message}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

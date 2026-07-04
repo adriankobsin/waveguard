@@ -4,7 +4,7 @@
  */
 
 const PEPLINK_USE_MOCK =
-  typeof import.meta !== "undefined" && import.meta.env?.VITE_PEPLINK_USE_MOCK !== "false";
+  typeof import.meta !== "undefined" && import.meta.env?.VITE_PEPLINK_USE_MOCK === "true";
 
 function normName(s) {
   return String(s || "")
@@ -175,6 +175,7 @@ export function mergePeplinkIntoPoll(snmpPoll, peplinkPoll) {
     return {
       ...snmpPoll,
       peplinkMeta: peplinkPoll?.peplinkMeta,
+      deviceInfo: peplinkPoll?.deviceInfo,
       source: snmpPoll?.source || "snmp",
     };
   }
@@ -184,6 +185,7 @@ export function mergePeplinkIntoPoll(snmpPoll, peplinkPoll) {
       ...snmpPoll,
       ...peplinkPoll,
       ports: pepPorts,
+      deviceInfo: peplinkPoll?.deviceInfo,
       source: peplinkPoll?.source || "peplink",
     };
   }
@@ -211,6 +213,7 @@ export function mergePeplinkIntoPoll(snmpPoll, peplinkPoll) {
     ...snmpPoll,
     ports: merged.sort((a, b) => a.index - b.index),
     peplinkMeta: peplinkPoll?.peplinkMeta,
+    deviceInfo: peplinkPoll?.deviceInfo,
     source: "peplink_hybrid",
   };
 }
