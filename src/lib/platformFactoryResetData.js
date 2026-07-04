@@ -19,7 +19,24 @@ export const FACTORY_GENERAL = {
 };
 
 function factoryIntegrations() {
-  const keys = ["snmp", "crestron", "qsys", "dahua", "mqtt", "lutron", "dali", "dmx", "knx", "cisco"];
+  const keys = [
+    "snmp",
+    "crestron",
+    "qsys",
+    "dahua",
+    "mqtt",
+    "lutron",
+    "dali",
+    "dmx",
+    "knx",
+    "cisco",
+    "modbus",
+    "coolmaster",
+    "rs485",
+    "unifi",
+    "dante",
+    "symetrix",
+  ];
   const cfg = {};
   keys.forEach((key) => {
     cfg[key] = {

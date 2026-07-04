@@ -1,6 +1,7 @@
 #env
 .env
 .env.*
+.env~
 
 # Logs
 /logs
@@ -32,6 +33,7 @@ dist-ssr
 
 # Local uploads and archives
 mock-server/uploads/
+mock-server/.captures/
 *.zip
 
 # Paired Lutron LEAP certificates (host-specific, contains private key)

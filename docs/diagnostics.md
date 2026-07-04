@@ -112,7 +112,33 @@ Mock engines for each system type:
 - **Port scan** — open TCP ports on discovered devices
 - **SNMP walk** — full SNMP MIB walk (when enabled)
 
-## System Health
+### Packet Capture (Wireshark / tshark)
+
+The **Diagnoses** page includes a **Packet Analysis** panel powered by [Wireshark tshark](https://www.wireshark.org/docs/man-pages/tshark.html) on the on-prem scanner host.
+
+| Feature | API function | tshark usage |
+|---|---|---|
+| Status & interfaces | `wiresharkStatus` | `tshark -v`, `tshark -D` |
+| Live capture | `wiresharkCapture` | `tshark -i <iface> -a duration:N -f "<bpf>" -w file` |
+| Analyze / filter | `wiresharkAnalyze` | `tshark -r file -Y "<display filter>" -T json` |
+| Statistics | `wiresharkStats` | `tshark -r file -qz io,phs,0`, `-qz conv,tcp,0`, `-qz endpoints,ip` |
+
+**Prerequisites (scanner host):**
+
+1. Install [Wireshark](https://www.wireshark.org/download.html) and **Npcap** (Windows) or libpcap (Linux).
+2. Optional: set `WIRESHARK_TSHARK_PATH` if tshark is not in the default location (`C:\Program Files\Wireshark\tshark.exe` on Windows).
+3. Live capture may require elevated permissions or Npcap “WinPcap compatible mode”.
+
+**UI entry points:**
+
+- **Diagnoses → Packet Analysis** — manual capture, upload `.pcap`/`.pcapng`, display filters, download captures
+- **Diagnosis cards** — `capture_traffic` suggested action triggers a 15s BPF capture for the equipment IP
+- **Topology node panel** — **Capture Traffic** sends the same capture request
+
+**Mock mode:** When tshark is not installed, the scanner returns sample packet data so the UI can be tested without Wireshark.
+
+**Security:** Captures are stored under `mock-server/.captures/` for up to 24 hours. Packet data may contain sensitive traffic — restrict scanner API access to trusted operators.
+
 
 The scanner health endpoint (`GET /api/scanner/health`) reports:
 

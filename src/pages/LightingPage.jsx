@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
-  KeyRound,
   Settings,
   Table2,
 } from "lucide-react";
@@ -26,7 +25,7 @@ import LightingEventLogPanel from "../components/lighting/LightingEventLogPanel"
 import LutronAreaLoads from "../components/lighting/LutronAreaLoads";
 import ScenesPanel from "../components/lighting/ScenesPanel";
 import LutronImportModal from "../components/lighting/LutronImportModal";
-import LutronConnectionModal from "../components/lighting/LutronConnectionModal";
+import LightingSystemsModal from "../components/lighting/LightingSystemsModal";
 import LoadScheduleTable from "../components/lighting/LoadScheduleTable";
 import LightingZoneEditModal from "../components/lighting/LightingZoneEditModal";
 import { toast } from "@/components/ui/use-toast";
@@ -36,7 +35,7 @@ import {
   clearLightingHouse,
   loadZoneState,
   loadLutronConnection,
-  saveLutronConnection,
+  loadLightingSystemsConfig,
   setZoneLevel,
   activateScene,
   pollZones,
@@ -49,9 +48,13 @@ import {
   buildLightingHierarchy,
   isShadeZone,
   DEFAULT_LUTRON_CONNECTION,
+  DEFAULT_LIGHTING_SYSTEMS_CONFIG,
   LIGHTING_HOUSE_CHANGED_EVENT,
   LIGHTING_ZONE_STATE_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
+  LIGHTING_SYSTEMS_CHANGED_EVENT,
+  resolveZoneSystemType,
+  SYSTEM_TYPE_LABELS,
   reorderFloorOrder,
 } from "@/lib/lighting/lightingSettings";
 
@@ -90,6 +93,7 @@ export default function LightingPage() {
   const [houseLoading, setHouseLoading] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [connectionOpen, setConnectionOpen] = useState(false);
+  const [systemsConfig, setSystemsConfig] = useState(DEFAULT_LIGHTING_SYSTEMS_CONFIG);
   const [zoneState, setZoneState] = useState({});
   const [pendingZones, setPendingZones] = useState({});
   // Mirror of `pendingZones` for use inside long-lived callbacks (SSE
@@ -114,8 +118,18 @@ export default function LightingPage() {
   const [selectedZoneHref, setSelectedZoneHref] = useState(null);
   const [viewMode, setViewMode] = useState("map");
 
-  const hasHouse = !!house && (house.zones?.length || 0) > 0;
-  const hierarchy = useMemo(() => buildLightingHierarchy(house), [house]);
+  const enabledSystems = systemsConfig?.enabled || ["lutron"];
+
+  const filteredHouse = useMemo(() => {
+    if (!house) return null;
+    const zones = (house.zones || []).filter((z) =>
+      enabledSystems.includes(resolveZoneSystemType(z))
+    );
+    return { ...house, zones };
+  }, [house, enabledSystems]);
+
+  const hasHouse = !!filteredHouse && (filteredHouse.zones?.length || 0) > 0;
+  const hierarchy = useMemo(() => buildLightingHierarchy(filteredHouse), [filteredHouse]);
   // Pre-split the hierarchy so the Lights tab and Shades tab can each
   // render `LutronAreaLoads` against a clean, kind-specific dataset
   // without having to push a `kindFilter` prop deep into the rendering.
@@ -162,14 +176,16 @@ export default function LightingPage() {
   const refreshHouse = useCallback(async () => {
     setHouseLoading(true);
     try {
-      const [h, s, c] = await Promise.all([
+      const [h, s, c, sys] = await Promise.all([
         loadLightingHouse(),
         loadZoneState(),
         loadLutronConnection(),
+        loadLightingSystemsConfig(),
       ]);
       setHouse(h);
       setZoneState(s || {});
       setLutronConn(c || DEFAULT_LUTRON_CONNECTION);
+      setSystemsConfig(sys || DEFAULT_LIGHTING_SYSTEMS_CONFIG);
     } finally {
       setHouseLoading(false);
     }
@@ -190,13 +206,18 @@ export default function LightingPage() {
     const onConnChanged = (e) => {
       if (e?.detail) setLutronConn(e.detail);
     };
+    const onSystemsChanged = (e) => {
+      if (e?.detail) setSystemsConfig(e.detail);
+    };
     window.addEventListener(LIGHTING_HOUSE_CHANGED_EVENT, onHouseChanged);
     window.addEventListener(LIGHTING_ZONE_STATE_CHANGED_EVENT, onZoneChanged);
     window.addEventListener(LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT, onConnChanged);
+    window.addEventListener(LIGHTING_SYSTEMS_CHANGED_EVENT, onSystemsChanged);
     return () => {
       window.removeEventListener(LIGHTING_HOUSE_CHANGED_EVENT, onHouseChanged);
       window.removeEventListener(LIGHTING_ZONE_STATE_CHANGED_EVENT, onZoneChanged);
       window.removeEventListener(LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT, onConnChanged);
+      window.removeEventListener(LIGHTING_SYSTEMS_CHANGED_EVENT, onSystemsChanged);
     };
   }, [refreshHouse]);
 
@@ -238,6 +259,7 @@ export default function LightingPage() {
           zoneHref: zone.href,
           level,
           zoneKind: effectiveZoneKind(zone),
+          systemType: resolveZoneSystemType(zone),
         });
       } catch (err) {
         reportLightingError(`Could not set ${zone.name || "zone"}`, err);
@@ -263,6 +285,7 @@ export default function LightingPage() {
         await stopShade({
           zoneHref: zone.href,
           zoneKind: effectiveZoneKind(zone),
+          systemType: resolveZoneSystemType(zone),
         });
       } catch (err) {
         reportLightingError(`Could not stop ${zone.name || "shade"}`, err);
@@ -427,10 +450,10 @@ export default function LightingPage() {
   }, [lutronConn?.enabled, lutronConn?.host]);
 
   const handlePollAll = useCallback(async () => {
-    if (!house?.zones?.length) return;
+    if (!filteredHouse?.zones?.length) return;
     setPollingAll(true);
     try {
-      const hrefs = house.zones.map((z) => z.href);
+      const hrefs = filteredHouse.zones.map((z) => z.href);
       const remote = await pollZones({ hrefs });
       const merged = { ...zoneState };
       for (const r of remote || []) {
@@ -444,7 +467,7 @@ export default function LightingPage() {
     } finally {
       setPollingAll(false);
     }
-  }, [house?.zones, zoneState]);
+  }, [filteredHouse?.zones, zoneState]);
 
   const handleImport = useCallback(async (parsed) => {
     await saveLightingHouse(parsed);
@@ -475,40 +498,28 @@ export default function LightingPage() {
     setZoneState({});
   }, []);
 
-  const handleSaveConnection = useCallback(async (next) => {
-    const saved = await saveLutronConnection(next);
-    setLutronConn(saved);
-    setConnectionTesting(true);
-    try {
-      const r = await testLutronProcessor();
-      setConnection(r);
-    } finally {
-      setConnectionTesting(false);
-    }
-    return saved;
-  }, []);
-
-  const onCountForHouse = useMemo(
-    () => Object.values(zoneState).filter((s) => s?.on).length,
-    [zoneState]
-  );
-  const totalZones = house?.zones?.length || 0;
-
   // Per-tab KPI counts so the strip on the Shades tab reports
   // open/closed/moving instead of "loads on".
   const lightsKpis = useMemo(() => {
-    const zones = (house?.zones || []).filter((z) => !isShadeZone(z));
+    const zones = (filteredHouse?.zones || []).filter((z) => !isShadeZone(z));
     const on = zones.filter((z) => zoneState[z.href]?.on).length;
     return { total: zones.length, on };
-  }, [house?.zones, zoneState]);
+  }, [filteredHouse?.zones, zoneState]);
   const shadesKpis = useMemo(() => {
-    const zones = (house?.zones || []).filter((z) => isShadeZone(z));
+    const zones = (filteredHouse?.zones || []).filter((z) => isShadeZone(z));
     const open = zones.filter((z) => {
       const s = zoneState[z.href];
       return s ? (s.level ?? (s.on ? 100 : 0)) > 0 : false;
     }).length;
     return { total: zones.length, open, closed: zones.length - open };
-  }, [house?.zones, zoneState]);
+  }, [filteredHouse?.zones, zoneState]);
+
+  const systemsSubtitle = useMemo(
+    () =>
+      enabledSystems.map((t) => SYSTEM_TYPE_LABELS[t] || t).join(" · ") ||
+      "Configure lighting and shade systems",
+    [enabledSystems]
+  );
 
   // KPIs for the Deck Control top strip (active-floor scope).
   const deckKpis = useMemo(() => {
@@ -529,7 +540,7 @@ export default function LightingPage() {
           <div className="min-w-0">
             <h1 className="text-sm font-bold text-foreground leading-none">Lighting Control</h1>
             <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              Lutron HomeWorks QSX · Athena · RadioRA 3 — area-based load monitoring &amp; control
+              {systemsSubtitle} — lights, shades &amp; area control
             </p>
           </div>
         </div>
@@ -562,18 +573,18 @@ export default function LightingPage() {
           )}
           <button
             onClick={() => setConnectionOpen(true)}
-            title="Lutron processor credentials"
+            title="Select lighting and shade systems"
             className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-              lutronConn?.enabled && lutronConn?.host
+              enabledSystems.length > 0
                 ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/15"
                 : "bg-secondary border-border text-muted-foreground hover:text-foreground hover:bg-muted"
             }`}
           >
-            <KeyRound size={12} />
+            <Settings size={12} />
             <span className="hidden sm:inline">
-              {lutronConn?.host ? "Processor" : "Set credentials"}
+              Systems ({enabledSystems.length})
             </span>
-            <span className="sm:hidden">Creds</span>
+            <span className="sm:hidden">Systems</span>
           </button>
           <button
             onClick={() => setImportOpen(true)}
@@ -674,27 +685,24 @@ export default function LightingPage() {
                   </span>
                 </span>
               )}
-              {!connection && lutronConn?.host && (
+              {!connection && enabledSystems.length > 0 && (
                 <button
                   onClick={() => setConnectionOpen(true)}
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-border bg-muted/40 text-[11px] font-semibold text-muted-foreground hover:text-foreground hover:bg-muted"
-                  title="Edit processor credentials"
+                  title="Edit lighting systems"
                 >
-                  <KeyRound size={11} />
-                  {lutronConn.protocol === "leap" ? "LEAP" : "Telnet"} · {lutronConn.host}:{lutronConn.port}
-                  <span className="opacity-70">
-                    · {lutronConn.enabled ? "live" : "mock"}
-                  </span>
+                  <Settings size={11} />
+                  {enabledSystems.map((t) => SYSTEM_TYPE_LABELS[t] || t).join(" · ")}
                 </button>
               )}
-              {!lutronConn?.host && (
+              {enabledSystems.length === 0 && (
                 <button
                   onClick={() => setConnectionOpen(true)}
                   className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-[11px] font-semibold text-amber-400 hover:bg-amber-500/20"
-                  title="Add Lutron integration credentials"
+                  title="Select lighting and shade systems"
                 >
-                  <KeyRound size={11} />
-                  No processor credentials
+                  <Settings size={11} />
+                  No systems selected
                 </button>
               )}
             </div>
@@ -769,9 +777,10 @@ export default function LightingPage() {
                   }
                 />
                 <LightingSystemStatus
-                  house={house}
+                  house={filteredHouse}
                   hierarchy={hierarchy}
                   zoneState={zoneState}
+                  systemsConfig={systemsConfig}
                   connection={connection}
                   lutronConn={lutronConn}
                 />
@@ -924,11 +933,15 @@ export default function LightingPage() {
         onImport={handleImport}
       />
 
-      <LutronConnectionModal
+      <LightingSystemsModal
         open={connectionOpen}
-        connection={lutronConn}
+        config={systemsConfig}
         onClose={() => setConnectionOpen(false)}
-        onSave={handleSaveConnection}
+        onSaved={(saved) => {
+          setSystemsConfig(saved);
+          const lutron = saved.connections?.lutron;
+          if (lutron) setLutronConn(lutron);
+        }}
       />
 
       <AnimatePresence>

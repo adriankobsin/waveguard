@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Settings, Mail, Brain, Database, Bell,
@@ -518,17 +519,37 @@ const PANEL_COMPONENTS = {
 };
 
 // ─── Page ────────────────────────────────────────────────────────────────────────
+const SECTION_KEYS = new Set(SECTIONS.map((s) => s.key));
+
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, isLoadingAuth, authChecked } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const visibleSections = filterSettingsSections(SECTIONS, user);
   const [activeSection, setActiveSection] = useState(null);
+
+  useEffect(() => {
+    if (!authChecked || isLoadingAuth) return;
+    const requested = searchParams.get("section");
+    if (!requested || !SECTION_KEYS.has(requested)) return;
+    if (!canAccessSettingsSection(user, requested)) {
+      toast.error("You do not have permission to change this setting.");
+      return;
+    }
+    setActiveSection(requested);
+  }, [authChecked, isLoadingAuth, searchParams, user]);
 
   const openSection = (key) => {
     if (!canAccessSettingsSection(user, key)) {
       toast.error("You do not have permission to change this setting.");
       return;
     }
-    setActiveSection(key === activeSection ? null : key);
+    const next = key === activeSection ? null : key;
+    setActiveSection(next);
+    if (next) {
+      setSearchParams({ section: next }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
   };
 
   const ActivePanel = activeSection && canAccessSettingsSection(user, activeSection)
@@ -543,11 +564,22 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">Configure vessel profile, monitoring, integrations, and operator experience — settings are saved to the database.</p>
+        {user?.role === "user" && visibleSections.length < SECTIONS.length && (
+          <p className="text-xs text-amber-400/90 mt-2">
+            Signed in as a standard user — only dashboard layout is editable. Log in as an administrator (e.g. WaveAdmin) for full settings access.
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Sidebar */}
-        <div className="space-y-2">
+        <div className="space-y-2 md:max-h-[calc(100vh-10rem)] md:overflow-y-auto md:pr-1 md:sticky md:top-4">
+          {isLoadingAuth && (
+            <div className="flex items-center gap-2 px-4 py-3 text-xs text-muted-foreground">
+              <Loader2 size={14} className="animate-spin" />
+              Loading settings…
+            </div>
+          )}
           {visibleSections.map((s, i) => (
             <motion.button
               key={s.key}

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Activity, RefreshCw, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import DiagnosisCard from "../components/DiagnosisCard";
+import WiresharkToolsPanel from "../components/diagnostics/WiresharkToolsPanel";
 import { useSystemData } from "@/contexts/SystemDataContext";
 import { getDiagnosisCounts } from "@/lib/systemData/generateDiagnoses";
 
@@ -101,6 +102,8 @@ export default function DiagnosesPage() {
           </button>
         ))}
       </div>
+
+      <WiresharkToolsPanel />
 
       {loading && !diagnoses.length ? (
         <div className="flex items-center justify-center py-20 gap-2 text-muted-foreground text-sm">

@@ -14,6 +14,7 @@ export const LIGHTING_HOUSE_SETTINGS_KEY = "lighting-house";
 export const LIGHTING_ZONE_STATE_SETTINGS_KEY = "lighting-zone-state";
 export const LIGHTING_LUTRON_CONNECTION_KEY = "lighting-lutron-connection";
 export const LIGHTING_CONNECTION_KEY = "lighting-connection";
+export const LIGHTING_SYSTEMS_CONFIG_KEY = "lighting-systems-config";
 export const LIGHTING_CUSTOM_SCENES_KEY = "lighting-custom-scenes";
 export const LIGHTING_EVENT_LOG_KEY = "lighting-event-log";
 
@@ -23,6 +24,8 @@ export const LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT =
   "waveguard-lighting-lutron-connection-changed";
 export const LIGHTING_CONNECTION_CHANGED_EVENT =
   "waveguard-lighting-connection-changed";
+export const LIGHTING_SYSTEMS_CHANGED_EVENT =
+  "waveguard-lighting-systems-changed";
 export const LIGHTING_CUSTOM_SCENES_CHANGED_EVENT =
   "waveguard-lighting-custom-scenes-changed";
 export const LIGHTING_EVENT_LOG_CHANGED_EVENT =
@@ -33,6 +36,7 @@ const ZONE_STATE_LOCAL_KEY = "waveguard:lighting:zone-state";
 const ACTIVE_SCENE_LOCAL_KEY = "waveguard:lighting:active-scene";
 const LUTRON_CONNECTION_LOCAL_KEY = "waveguard:lighting:lutron-connection";
 const LIGHTING_CONNECTION_LOCAL_KEY = "waveguard:lighting:connection";
+const LIGHTING_SYSTEMS_LOCAL_KEY = "waveguard:lighting:systems-config";
 const CUSTOM_SCENES_LOCAL_KEY = "waveguard:lighting:custom-scenes";
 const EVENT_LOG_LOCAL_KEY = "waveguard:lighting:event-log";
 
@@ -81,15 +85,48 @@ const DEFAULT_ZONE_STATE = {};
 export const LUTRON_PROTOCOLS = ["leap", "telnet"];
 export const KNX_PROTOCOLS = ["knx-ip", "knx-tunnelling"];
 export const DALI_PROTOCOLS = ["dali-usb", "dali-ip"];
+export const CRESTRON_PROTOCOLS = ["cip", "rest"];
+export const PHAROS_PROTOCOLS = ["art-net", "sacn"];
 export const DMX_PROTOCOLS = ["art-net", "sacn", "enttec-usb"];
 
-export const LIGHTING_SYSTEM_TYPES = ["lutron", "knx", "dali", "dmx"];
+export const LIGHTING_SYSTEM_TYPES = [
+  "lutron",
+  "knx",
+  "dali",
+  "dmx",
+  "pharos",
+  "crestron",
+  "yachtica",
+];
+
+export const SYSTEM_TYPE_LABELS = {
+  lutron: "Lutron",
+  knx: "KNX",
+  dali: "DALI",
+  dmx: "DMX512",
+  pharos: "Pharos",
+  crestron: "Crestron",
+  yachtica: "Yachtica",
+};
+
+export const SYSTEM_TYPE_DESCRIPTIONS = {
+  lutron: "HomeWorks QSX, Athena, or RadioRA 3 via LEAP or Telnet.",
+  knx: "KNX IP gateway or router (EIB / group addresses).",
+  dali: "DALI-2 USB gateway or IP bridge (IEC 62386).",
+  dmx: "DMX512 via Art-Net, sACN, or ENTTEC USB.",
+  pharos: "Pharos architectural lighting controller (Art-Net / sACN).",
+  crestron: "Crestron processor lighting and shade control (CIP / REST).",
+  yachtica: "Yachtica lighting TCP gateway (port 5000). 64 addresses × 8 channels — dimmers, relays, scenes, keypads.",
+};
 
 export const SYSTEM_TYPE_PROTOCOLS = {
   lutron: LUTRON_PROTOCOLS,
   knx: KNX_PROTOCOLS,
   dali: DALI_PROTOCOLS,
   dmx: DMX_PROTOCOLS,
+  pharos: PHAROS_PROTOCOLS,
+  crestron: CRESTRON_PROTOCOLS,
+  yachtica: ["yachtica-tcp"],
 };
 
 export const SYSTEM_TYPE_DEFAULT_PORTS = {
@@ -97,6 +134,9 @@ export const SYSTEM_TYPE_DEFAULT_PORTS = {
   knx: { "knx-ip": 3671, "knx-tunnelling": 3671 },
   dali: { "dali-usb": 0, "dali-ip": 5582 },
   dmx: { "art-net": 6454, "sacn": 5568, "enttec-usb": 0 },
+  pharos: { "art-net": 6454, "sacn": 5568 },
+  crestron: { cip: 41794, rest: 443 },
+  yachtica: { "yachtica-tcp": 5000 },
 };
 
 export const SYSTEM_TYPE_DEFAULT_CREDENTIALS = {
@@ -104,6 +144,9 @@ export const SYSTEM_TYPE_DEFAULT_CREDENTIALS = {
   knx: { username: "", password: "" },
   dali: { username: "", password: "" },
   dmx: { username: "", password: "" },
+  pharos: { username: "", password: "" },
+  crestron: { username: "", password: "" },
+  yachtica: { username: "", password: "" },
 };
 
 export const DEFAULT_LIGHTING_CONNECTION = {
@@ -115,6 +158,32 @@ export const DEFAULT_LIGHTING_CONNECTION = {
   username: "lutron",
   password: "integration",
   tlsVerify: true,
+  updatedAt: null,
+};
+
+export function defaultConnectionForSystemType(systemType = "lutron") {
+  const type = LIGHTING_SYSTEM_TYPES.includes(systemType) ? systemType : "lutron";
+  const protocols = SYSTEM_TYPE_PROTOCOLS[type] || LUTRON_PROTOCOLS;
+  const protocol = protocols[0];
+  const defaults = SYSTEM_TYPE_DEFAULT_CREDENTIALS[type] || SYSTEM_TYPE_DEFAULT_CREDENTIALS.lutron;
+  return normalizeLightingConnection({
+    systemType: type,
+    enabled: false,
+    host: "",
+    port: defaultPortForProtocol(protocol, type),
+    protocol,
+    username: defaults.username,
+    password: defaults.password,
+    tlsVerify: true,
+    updatedAt: null,
+  });
+}
+
+export const DEFAULT_LIGHTING_SYSTEMS_CONFIG = {
+  enabled: ["lutron"],
+  connections: Object.fromEntries(
+    LIGHTING_SYSTEM_TYPES.map((type) => [type, defaultConnectionForSystemType(type)])
+  ),
   updatedAt: null,
 };
 
@@ -159,6 +228,48 @@ export function normalizeLightingConnection(value) {
   };
 }
 
+export function normalizeLightingSystemsConfig(value) {
+  const base = { ...DEFAULT_LIGHTING_SYSTEMS_CONFIG };
+  if (!value || typeof value !== "object") return base;
+
+  const enabled = Array.isArray(value.enabled)
+    ? value.enabled.filter((t) => LIGHTING_SYSTEM_TYPES.includes(t))
+    : base.enabled;
+
+  const connections = { ...base.connections };
+  const rawConnections =
+    value.connections && typeof value.connections === "object" ? value.connections : {};
+  for (const type of LIGHTING_SYSTEM_TYPES) {
+    connections[type] = normalizeLightingConnection({
+      ...defaultConnectionForSystemType(type),
+      ...(rawConnections[type] || {}),
+      systemType: type,
+    });
+  }
+
+  return {
+    enabled: enabled.length ? enabled : ["lutron"],
+    connections,
+    updatedAt: value.updatedAt || null,
+  };
+}
+
+/** Resolve which integration drives a zone (imported Lutron zones default to lutron). */
+export function resolveZoneSystemType(zone) {
+  const type = zone?.systemType;
+  return LIGHTING_SYSTEM_TYPES.includes(type) ? type : "lutron";
+}
+
+export function isSystemTypeEnabled(config, systemType) {
+  const normalized = normalizeLightingSystemsConfig(config);
+  return normalized.enabled.includes(systemType);
+}
+
+export function connectionForSystemType(config, systemType) {
+  const normalized = normalizeLightingSystemsConfig(config);
+  return normalized.connections[systemType] || defaultConnectionForSystemType(systemType);
+}
+
 function safeLocalStorage() {
   try {
     if (typeof window === "undefined") return null;
@@ -188,9 +299,9 @@ function reclassifyZoneKind(zone) {
   // zone is already classified as a specific light/shade/blind we trust
   // that — it was either the original parser or the live LEAP probe.
   if (!zone.kind || zone.kind === "load") {
-    return { ...zone, kind: detected };
+    return { ...zone, kind: detected, systemType: resolveZoneSystemType(zone) };
   }
-  return zone;
+  return { ...zone, systemType: resolveZoneSystemType(zone) };
 }
 
 export function normalizeLightingHouse(value) {
@@ -459,6 +570,79 @@ export function clearLightingConnectionLocal() {
   } catch (_e) {
     /* */
   }
+}
+
+export function loadLightingSystemsConfigLocal() {
+  const ls = safeLocalStorage();
+  if (!ls) return null;
+  try {
+    const raw = ls.getItem(LIGHTING_SYSTEMS_LOCAL_KEY);
+    if (!raw) return null;
+    return normalizeLightingSystemsConfig(JSON.parse(raw));
+  } catch (_e) {
+    return null;
+  }
+}
+
+export function saveLightingSystemsConfigLocal(config) {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    ls.setItem(
+      LIGHTING_SYSTEMS_LOCAL_KEY,
+      JSON.stringify(normalizeLightingSystemsConfig(config))
+    );
+  } catch (_e) {
+    /* quota */
+  }
+}
+
+export function clearLightingSystemsConfigLocal() {
+  const ls = safeLocalStorage();
+  if (!ls) return;
+  try {
+    ls.removeItem(LIGHTING_SYSTEMS_LOCAL_KEY);
+  } catch (_e) {
+    /* */
+  }
+}
+
+/** Build a systems config from legacy single-connection storage. */
+export function migrateLegacyLightingConnections() {
+  const existing = loadLightingSystemsConfigLocal();
+  if (existing?.enabled?.length) return existing;
+
+  const enabled = new Set(["lutron"]);
+  const connections = Object.fromEntries(
+    LIGHTING_SYSTEM_TYPES.map((type) => [type, defaultConnectionForSystemType(type)])
+  );
+
+  const lutron = loadLutronConnectionLocal();
+  if (lutron) {
+    connections.lutron = normalizeLightingConnection({
+      ...connections.lutron,
+      ...lutron,
+      systemType: "lutron",
+      enabled: !!lutron.enabled,
+    });
+    if (lutron.enabled && lutron.host) enabled.add("lutron");
+  }
+
+  const generic = loadLightingConnectionLocal();
+  if (generic?.systemType && LIGHTING_SYSTEM_TYPES.includes(generic.systemType)) {
+    connections[generic.systemType] = normalizeLightingConnection({
+      ...connections[generic.systemType],
+      ...generic,
+      systemType: generic.systemType,
+    });
+    if (generic.enabled && generic.host) enabled.add(generic.systemType);
+  }
+
+  return normalizeLightingSystemsConfig({
+    enabled: [...enabled],
+    connections,
+    updatedAt: null,
+  });
 }
 
 /** Strip the password from a connection record for safe logging / display. */

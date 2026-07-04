@@ -6,6 +6,8 @@ import {
   Power, RotateCcw, Activity, Calendar, Wrench,
   ChevronRight, Shield, Info, Radio
 } from "lucide-react";
+import { requestWiresharkCapture } from "@/components/diagnostics/WiresharkToolsPanel";
+import { toast } from "sonner";
 
 const STATUS_CONFIG = {
   online:  { label: "Online",  color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/30", dot: "bg-emerald-400", icon: CheckCircle2 },
@@ -40,8 +42,6 @@ const MAINTENANCE_HISTORY = {
   "UPS-Main":       [{ date: "2026-05-10", type: "Battery Test", by: "A. Torres", note: "Capacity at 42%" }, { date: "2025-11-20", type: "Battery Replace", by: "Service Co.", note: "Full replacement" }],
   "Router-WAN":     [{ date: "2026-04-01", type: "Firmware Update", by: "J. Martin", note: "RouterOS 7.14" }],
 };
-
-const TYPE_ICON = { date: Calendar, type: Wrench, by: Shield };
 
 function getManufacturer(model = "") {
   for (const [key, val] of Object.entries(MANUFACTURER_DB)) {
@@ -86,6 +86,23 @@ export default function NodeSidePanel({ node, cables, onClose }) {
   });
 
   const runAction = (actionName, durationMs = 2000) => {
+    if (actionName === "Capture Traffic") {
+      setActionLoading(actionName);
+      const ip = node.ip || node.management_ip;
+      if (ip) {
+        requestWiresharkCapture({ hostIp: ip, durationSec: 15 });
+        toast.success(`Packet capture started for ${node.name} — see Diagnoses page`);
+      } else {
+        toast.error("No IP address on this device for capture filter");
+      }
+      setActionLoading(null);
+      setActionLog((prev) => [{
+        action: actionName,
+        time: new Date().toLocaleTimeString(),
+        result: ip ? "Started" : "No IP",
+      }, ...prev.slice(0, 4)]);
+      return;
+    }
     setActionLoading(actionName);
     setTimeout(() => {
       setActionLoading(null);

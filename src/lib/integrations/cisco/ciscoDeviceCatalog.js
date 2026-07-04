@@ -66,6 +66,25 @@ function buildC1300Spec({ model, copperPorts, uplinkPorts, poe, poeBudgetW, labe
   };
 }
 
+/** Complete C9200L / IOS-XE SKU table (SSH-only friendly). */
+export const C9200L_CATALOG = [
+  buildC1300Spec({
+    model: "C9200L-48P-4X",
+    copperPorts: 48,
+    uplinkPorts: 4,
+    poe: true,
+    poeBudgetW: 740,
+    label: "Catalyst 9200L · 48 ports PoE+ + 4×10G uplinks",
+  }),
+  buildC1300Spec({
+    model: "C9200L-24P-4X",
+    copperPorts: 24,
+    uplinkPorts: 4,
+    poe: true,
+    poeBudgetW: 370,
+  }),
+];
+
 /** Complete C1300 SKU table. */
 export const C1300_CATALOG = [
   buildC1300Spec({ model: "C1300-8P-2G", copperPorts: 8, uplinkPorts: 2, poe: true, poeBudgetW: 67 }),
@@ -97,7 +116,10 @@ export const C1300_CATALOG = [
 ];
 
 /** Index by exact model number (uppercased). */
-const BY_MODEL = new Map(C1300_CATALOG.map((s) => [s.model.toUpperCase(), s]));
+const BY_MODEL = new Map([
+  ...C1300_CATALOG.map((s) => [s.model.toUpperCase(), s]),
+  ...C9200L_CATALOG.map((s) => [s.model.toUpperCase(), { ...s, series: "Catalyst 9200L" }]),
+]);
 
 /** Resolve a chassis spec from a model string. Returns null if unknown. */
 export function matchCiscoDevice(modelOrEquipment) {
@@ -108,6 +130,22 @@ export function matchCiscoDevice(modelOrEquipment) {
   const key = String(raw).toUpperCase().replace(/\s+/g, "");
   if (!key) return null;
   if (BY_MODEL.has(key)) return BY_MODEL.get(key);
+  // Catalyst 9200L / 9300 IOS-XE
+  const c9200 = key.match(/^C9200L?-(\d+)([PT])?(?:-(\d+)([XGU]))?/);
+  if (c9200) {
+    const copper = Number(c9200[1]) || 0;
+    const uplink = Number(c9200[3]) || 4;
+    return {
+      ...buildC1300Spec({
+        model: raw,
+        copperPorts: copper,
+        uplinkPorts: uplink,
+        poe: c9200[2] === "P",
+        poeBudgetW: c9200[2] === "P" ? copper * 15 : 0,
+      }),
+      series: "Catalyst 9200L",
+    };
+  }
   // Family regex fallback — covers SKUs we haven't catalogued individually.
   const m = key.match(/^C1300-(\d+)(FP|P|T|FX|X)?(?:-(\d+)([GX]))?/);
   if (!m) return null;

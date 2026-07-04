@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { requestWiresharkCapture } from "@/components/diagnostics/WiresharkToolsPanel";
 import { toast } from "sonner";
 
 const SEVERITY_CONFIG = {
@@ -20,10 +21,11 @@ const ACTION_LABELS = {
   check_cable: "Check Cable",
   check_config: "Review Config",
   power_cycle: "Power Cycle",
+  capture_traffic: "Capture Traffic",
   none: null,
 };
 
-export default function DiagnosisCard({ diagnosis, onDismiss, onAcknowledge, onApprove, expanded: defaultExpanded = false }) {
+export default function DiagnosisCard({ diagnosis, onDismiss, onAcknowledge, onApprove: _onApprove, expanded: defaultExpanded = false }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [executing, setExecuting] = useState(false);
   const [executed, setExecuted] = useState(false);
@@ -41,7 +43,14 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onAcknowledge, onA
     setConfirmOpen(false);
     setExecuting(true);
     try {
-      if (diagnosis.equipmentIp) {
+      if (diagnosis.suggestedAction === "capture_traffic" && diagnosis.equipmentIp) {
+        requestWiresharkCapture({
+          hostIp: diagnosis.equipmentIp,
+          durationSec: 15,
+        });
+        toast.success(`Starting packet capture for ${diagnosis.equipmentName}`);
+        setExecuted(true);
+      } else if (diagnosis.equipmentIp && diagnosis.suggestedAction !== "capture_traffic") {
         const res = await base44.functions.invoke("networkScan", {
           target: diagnosis.equipmentIp,
         });
@@ -50,6 +59,7 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onAcknowledge, onA
         } else {
           toast.error("Scan did not return results");
         }
+        setExecuted(true);
       } else {
         await base44.entities.ActionLog.create({
           action: "diagnosis_action",
@@ -57,8 +67,8 @@ export default function DiagnosisCard({ diagnosis, onDismiss, onAcknowledge, onA
           status: "success",
         });
         toast.success("Action logged");
+        setExecuted(true);
       }
-      setExecuted(true);
     } catch (err) {
       console.error(err);
       toast.error("Action failed");

@@ -27,13 +27,19 @@ class CiscoSwitchClient extends EventEmitter {
     this.sshPort = Number(connection.sshPort) || 22;
     this.snmpPort = Number(connection.snmpPort) || 161;
     this.username = connection.sshUsername || connection.username || "cisco";
-    this.allowMock = connection.allowMock !== false;
+    // Live deployments must not silently substitute demo data when SSH fails.
+    this.allowMock =
+      connection.allowMock === true ||
+      process.env.WAVEGUARD_CISCO_ALLOW_MOCK === "1";
+    this.snmpEnabled = connection.snmpEnabled !== false;
+    this.platform = connection.platform || "auto";
     this._ssh = new CiscoSshClient({
       host: this.host,
       port: this.sshPort,
       username: this.username,
       password: connection.sshPassword || connection.password || "",
       enablePassword: connection.enablePassword || "",
+      platform: this.platform,
       timeoutMs: connection.timeoutMs || 15_000,
     });
     this._lastSshError = null;
@@ -69,7 +75,8 @@ class CiscoSwitchClient extends EventEmitter {
    */
   async testConnection() {
     const ports = await probeCiscoPorts(this.host);
-    const recommendation = recommendationFromPorts(ports);
+    const sshOnly = this.snmpEnabled === false;
+    const recommendation = recommendationFromPorts(ports, { sshOnly });
     const sshPort = ports.find((p) => p.role === "ssh");
     const snmpPort = ports.find((p) => p.role === "snmp");
     if (!sshPort?.open) {
@@ -106,14 +113,17 @@ class CiscoSwitchClient extends EventEmitter {
         success: true,
         host: this.host,
         ports,
-        snmpReachable: !!snmpPort?.open,
+        snmpReachable: sshOnly ? false : !!snmpPort?.open,
+        sshOnly,
         recommendation,
         system,
         ping: probe,
         message:
           system?.model || system?.hostname
-            ? `Connected to ${system.hostname || system.model} (${system.model || "switch"}).`
-            : "SSH authenticated successfully.",
+            ? `Connected to ${system.hostname || system.model} (${system.model || "switch"})${sshOnly ? " — SSH only" : ""}.`
+            : sshOnly
+              ? "SSH authenticated successfully (SSH-only mode)."
+              : "SSH authenticated successfully.",
       };
     } catch (err) {
       return {
@@ -181,7 +191,7 @@ class CiscoSwitchClient extends EventEmitter {
       throw err;
     }
 
-    if (snmpCommunity) {
+    if (snmpCommunity && this.snmpEnabled) {
       try {
         const snmp = await pollCiscoSnmp(this.host, {
           community: snmpCommunity,
@@ -192,7 +202,7 @@ class CiscoSwitchClient extends EventEmitter {
         if (snmp?.lldp?.length) snapshot.neighbors = mergeLldp(snapshot.neighbors, snmp.lldp);
       } catch (snmpErr) {
         // SNMP failure is non-fatal — log and continue.
-        // eslint-disable-next-line no-console
+         
         console.warn(`[ciscoSwitchClient] SNMP enrich failed for ${this.host}:`, snmpErr?.message || snmpErr);
       }
     }

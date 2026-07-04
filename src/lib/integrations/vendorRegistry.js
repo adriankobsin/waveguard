@@ -15,6 +15,7 @@ export const VENDOR_IDS = [
   "snmp", "cisco", "peplink", "fortinet",
   "mikrotik", "juniper", "huawei", "draytek",
   "kerio", "unifi",
+  "modbus", "coolmaster", "rs485", "yachtica",
 ];
 
 export const VENDOR_REGISTRY = {
@@ -107,12 +108,43 @@ export const VENDOR_REGISTRY = {
   unifi: {
     id: "unifi",
     label: "UniFi (Ubiquiti)",
-    phase: 2,
+    phase: 1,
     isRouterVendor: false,
-    pollMethods: [],
+    pollMethods: ["unifi_api"],
     capabilities: { snmp: false, rest: true, ssh: false, cellular: false, vpn: false },
     docsUrl: "https://help.ui.com/",
-    comingSoon: true,
+  },
+  modbus: {
+    id: "modbus",
+    label: "Modbus TCP (HVAC)",
+    phase: 1,
+    pollMethods: ["modbus_tcp"],
+    capabilities: { modbus: true, hvac: true },
+    docsUrl: null,
+  },
+  coolmaster: {
+    id: "coolmaster",
+    label: "Coolmaster Net (HVAC)",
+    phase: 1,
+    pollMethods: ["coolmaster_tcp"],
+    capabilities: { hvac: true, mitsubishi: true },
+    docsUrl: null,
+  },
+  rs485: {
+    id: "rs485",
+    label: "RS485 Serial Bridge (HVAC)",
+    phase: 1,
+    pollMethods: ["rs485_tcp"],
+    capabilities: { hvac: true, serial: true },
+    docsUrl: null,
+  },
+  yachtica: {
+    id: "yachtica",
+    label: "Yachtica Lighting (TCP)",
+    phase: 1,
+    pollMethods: ["yachtica_tcp"],
+    capabilities: { lighting: true, dimmer: true, relay: true, keypad: true, scene: true },
+    docsUrl: null,
   },
 };
 

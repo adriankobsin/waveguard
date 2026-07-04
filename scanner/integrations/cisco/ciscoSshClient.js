@@ -45,7 +45,7 @@ async function loadSshClient() {
 }
 
 function log(msg, ...rest) {
-  // eslint-disable-next-line no-console
+   
   console.log(`[ciscoSsh] ${msg}`, ...rest);
 }
 
@@ -64,6 +64,8 @@ export class CiscoSshClient extends EventEmitter {
     this.username = connection.username || "cisco";
     this.password = connection.password || "";
     this.enablePassword = connection.enablePassword || "";
+    this.platformPref = connection.platform || "auto";
+    this._platform = null; // resolved: ios-xe | smb
     this.timeoutMs = connection.timeoutMs || DEFAULT_COMMAND_TIMEOUT_MS;
     this._client = null;
     this._connected = false;
@@ -135,11 +137,7 @@ export class CiscoSshClient extends EventEmitter {
           this._readUntilPrompt(stream, 4000)
             .then(async (banner) => {
               this._prompt = detectPrompt(banner);
-              try {
-                await this._sendRaw("terminal datadump\n", 2000);
-              } catch {
-                /* CBS350 quirk — some firmwares reject the command silently */
-              }
+              await this._prepareSession();
               this.emit("ready");
               settle(null);
             })
@@ -197,6 +195,58 @@ export class CiscoSshClient extends EventEmitter {
         settle(err);
       }
     });
+  }
+
+  /** Disable paging and enter privileged mode when required (IOS-XE). */
+  async _prepareSession() {
+    if (this._prompt?.endsWith(">")) {
+      try {
+        const out = await this._sendRaw("enable\n", 4000);
+        if (this.enablePassword) {
+          await this._sendRaw(`${this.enablePassword}\n`, 4000);
+        } else {
+          await this._sendRaw("\n", 1000);
+        }
+        const m = (out || "").match(/([A-Za-z0-9._-]+#)\s*$/);
+        if (m) this._prompt = m[1];
+      } catch {
+        /* user may already be privilege 15 */
+      }
+    }
+    const plat = this._platform || this.platformPref;
+    if (plat === "ios-xe" || plat === "auto") {
+      try {
+        await this._sendRaw("terminal length 0\n", 2000);
+        await this._sendRaw("terminal width 0\n", 2000);
+      } catch {
+        /* */
+      }
+    }
+    if (plat === "smb") {
+      try {
+        await this._sendRaw("terminal datadump\n", 2000);
+      } catch {
+        /* CBS350 quirk */
+      }
+    }
+  }
+
+  _resolvePlatform(versionText = "") {
+    if (this.platformPref === "ios-xe" || this.platformPref === "smb") {
+      this._platform = this.platformPref;
+      return this._platform;
+    }
+    const v = String(versionText);
+    if (/IOS-XE|C9200|C9300|C9500|Catalyst 9/i.test(v)) {
+      this._platform = "ios-xe";
+    } else {
+      this._platform = "smb";
+    }
+    return this._platform;
+  }
+
+  _isIosXe() {
+    return (this._platform || this.platformPref) === "ios-xe";
   }
 
   /** Run a single command. Serialized — each command waits for the previous one. */
@@ -290,28 +340,45 @@ export class CiscoSshClient extends EventEmitter {
 
   async getSystem() {
     if (!this._connected) await this.connect();
-    const [version, system, hostname] = await Promise.all([
-      this.runCommand("show version").catch(() => ""),
-      this.runCommand("show system").catch(() => ""),
-      this.runCommand("show running-config | include hostname").catch(() => ""),
-    ]);
-    return parseSystem({ version, system, hostname, host: this.host });
+    const version = await this.runCommand("show version").catch(() => "");
+    const plat = this._resolvePlatform(version);
+    const hostnameCmd =
+      plat === "ios-xe"
+        ? this.runCommand("show running-config | include ^hostname").catch(() => "")
+        : this.runCommand("show running-config | include hostname").catch(() => "");
+    const systemCmd =
+      plat === "ios-xe"
+        ? Promise.resolve("")
+        : this.runCommand("show system").catch(() => "");
+    const [system, hostname] = await Promise.all([systemCmd, hostnameCmd]);
+    return parseSystem({ version, system, hostname, host: this.host, platform: plat });
   }
 
   async getInterfaces() {
     if (!this._connected) await this.connect();
+    if (!this._platform || this.platformPref === "auto") {
+      const version = await this.runCommand("show version").catch(() => "");
+      this._resolvePlatform(version);
+    }
     const [status, description, power] = await Promise.all([
       this.runCommand("show interfaces status").catch(() => ""),
       this.runCommand("show interfaces description").catch(() => ""),
       this.runCommand("show power inline").catch(() => ""),
     ]);
-    return parseInterfaces({ status, description, power });
+    return parseInterfaces({ status, description, power, platform: this._platform });
   }
 
   async getMacTable() {
     if (!this._connected) await this.connect();
-    const raw = await this.runCommand("show mac address-table dynamic").catch(() => "");
-    return parseMacTable(raw);
+    if (!this._platform || this.platformPref === "auto") {
+      const version = await this.runCommand("show version").catch(() => "");
+      this._resolvePlatform(version);
+    }
+    const cmd = this._isIosXe()
+      ? "show mac address-table"
+      : "show mac address-table dynamic";
+    const raw = await this.runCommand(cmd).catch(() => "");
+    return parseMacTable(raw, { platform: this._platform });
   }
 
   async getNeighbors() {
@@ -399,7 +466,7 @@ function stripEcho(buf, sentLine, prompt) {
 
 // ── Parsers (canonical SMB-OS / IOS-XE output shapes) ───────────────────
 
-function parseSystem({ version, system, hostname, host }) {
+function parseSystem({ version, system, hostname, host, platform = "smb" }) {
   const out = {
     host,
     model: null,
@@ -432,12 +499,25 @@ function parseSystem({ version, system, hostname, host }) {
   if (m2) out.serial = m2[1];
   const m3 = version.match(/(?:PID|Model\s*Number|Model)\s*:?\s*([A-Z0-9-]+)/i);
   if (m3) out.model = m3[1];
+  const m3b = version.match(/\bcisco\s+(C\d[\w-]+)\s+\(/i);
+  if (!out.model && m3b) out.model = m3b[1];
   const m4 = version.match(/System\s+Description:?\s*(.+)$/im);
   if (m4) out.description = m4[1].trim();
   const m5 = version.match(/System\s+Up\s*Time:?\s*(.+)$/im);
   if (m5) {
     out.uptime = m5[1].trim();
     out.uptimeSec = parseUptimeToSeconds(out.uptime);
+  }
+  if (platform === "ios-xe") {
+    const iosUptime = version.match(/uptime is\s+(.+)$/im);
+    if (iosUptime) {
+      out.uptime = iosUptime[1].trim();
+      out.uptimeSec = parseUptimeToSeconds(out.uptime);
+    }
+    const iosVer = version.match(/Version\s+([0-9A-Za-z().]+)/);
+    if (iosVer) out.firmware = iosVer[1];
+    const iosSn = version.match(/System\s+Serial\s+Number\s*:?\s*(\S+)/i);
+    if (iosSn) out.serial = iosSn[1];
   }
 
   // `show system` typically contains:
@@ -479,10 +559,13 @@ function parseSystem({ version, system, hostname, host }) {
 
   // Fallback model from description when PID line is missing.
   if (!out.model && out.description) {
-    const dm = out.description.match(/(C1300-\d+(?:[A-Z]+)?-?\d*[GX]?|CBS\d+-\d+[PT]?|SG\d+-\d+|Catalyst\s+1300)/i);
+    const dm = out.description.match(
+      /(C9200L?-\d+(?:[A-Z]+)?-?\d*[XGU]?|C9300L?-\d+(?:[A-Z]+)?-?\d*[XGU]?|C1300-\d+(?:[A-Z]+)?-?\d*[GX]?|CBS\d+-\d+[PT]?|SG\d+-\d+|Catalyst\s+1300)/i
+    );
     if (dm) out.model = dm[1].replace(/\s+/g, "");
   }
 
+  out.platform = platform;
   return out;
 }
 
@@ -514,21 +597,42 @@ function normaliseMac(mac) {
     .slice(0, 17);
 }
 
-function parseInterfaces({ status, description, power }) {
+function parseInterfaces({ status, description, power, platform = "smb" }) {
   const out = [];
 
-  // `show interfaces status` shape on SMB-OS:
-  //                                              Flow Link          Back   Mdix
-  // Port     Type         Duplex  Speed Neg      ctrl State       Pressure Mode
-  // -------- ------------ ------  ----- -------- ---- ----------- -------- -------
-  // gi1/0/1  1G-Copper    Full    1000  Enabled  Off  Up          Disabled Off
-  // gi1/0/2  1G-Copper    --      --    --       --   Down        --       --
-  //
-  // We split on lines starting with "gi" or "te" / "Te" / "Gi" (the SMB OS
-  // lowercases the prefix, IOS-XE uppercases — handle both).
   const lines = status.split(/\r?\n/);
   let index = 0;
   for (const line of lines) {
+    if (platform === "ios-xe") {
+      const ix = line.match(
+        /^\s*(Gi|Te|Fa|Po|Hu|Tw)(\d+\/\d+\/\d+)\s+(\S*)\s+(connected|notconnect|disabled|err-disabled|suspended)\S*\s+(\d+)\s+(\S+)\s+(\S+)\s*(.*)$/i
+      );
+      if (ix) {
+        index += 1;
+        const name = `${ix[1]}${ix[2]}`;
+        const linkState = ix[4].toLowerCase();
+        const speedMbps = parseIosXeSpeed(ix[7]);
+        const isUplink = /^(Te|Hu|Tw)/i.test(ix[1]);
+        out.push({
+          index,
+          name,
+          ifAlias: ix[3] || "",
+          status: linkState === "connected" ? "up" : "down",
+          speed: speedMbps,
+          speedMbps,
+          duplex: ix[6] === "auto" ? null : ix[6],
+          type: ix[8]?.trim() || "",
+          mtu: 1500,
+          vlan: Number(ix[5]) || null,
+          poeWatts: null,
+          poeStatus: null,
+          isUplink,
+          portRole: isUplink ? "uplink" : "lan",
+        });
+        continue;
+      }
+    }
+
     const m = line.match(/^\s*((?:gi|te|fa|po|xg|tw)\d+\/\d+\/\d+|(?:Gi|Te|Fa|Po|Xg|Tw)\d+\/\d+\/\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/);
     if (!m) continue;
     index += 1;
@@ -590,14 +694,27 @@ function parseInterfaces({ status, description, power }) {
   return out;
 }
 
-function parseMacTable(raw) {
+function parseIosXeSpeed(token) {
+  const t = String(token || "").toLowerCase();
+  if (t.includes("1000") || t === "a-1000") return 1000;
+  if (t.includes("100")) return 100;
+  if (t.includes("10000") || t.includes("10g")) return 10000;
+  if (t === "auto" || t === "--") return 0;
+  const n = Number(t.replace(/[^\d]/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseMacTable(raw, { platform = "smb" } = {}) {
   // SMB OS shape:
   //   Vlan      Mac Address      Port            Type
   //   ----  --------------------  ----------  ---------
   //   1     74:86:0b:aa:bb:cc   gi1/0/3     dynamic
   const out = [];
   for (const line of raw.split(/\r?\n/)) {
-    const m = line.match(/^\s*(\d+)\s+([0-9a-fA-F:.-]{12,})\s+(\S+)\s+(\S+)/);
+    let m = line.match(/^\s*(\d+)\s+([0-9a-fA-F:.-]{12,})\s+(\S+)\s+(\S+)/);
+    if (!m && platform === "ios-xe") {
+      m = line.match(/^\s*(\d+)\s+([0-9a-fA-F.]{12,})\s+(\S+)\s+(\S+)/);
+    }
     if (!m) continue;
     const mac = normaliseMac(m[2]);
     if (!mac) continue;

@@ -133,8 +133,6 @@ export default function ReportsPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {REPORT_TYPES.map((report, i) => {
           const isGeneratingThis = generating?.key === report.key;
-          const pdfKey = `${report.key}_PDF`;
-          const csvKey = `${report.key}_CSV`;
 
           return (
             <motion.div

@@ -9,7 +9,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { buildWanLinks, WAN_PRIORITIES } from "@/lib/wan/wanManagementSettings";
+import { buildWanLinks } from "@/lib/wan/wanManagementSettings";
 import { formatRelativeTime } from "@/lib/systemData/formatRelativeTime";
 import { formatSpeedMbps } from "@/lib/snmp/snmpAnalytics";
 import { runWanSpeedTest } from "@/api/wanApi";
@@ -23,12 +23,6 @@ import WanLinkEditDrawer from "./WanLinkEditDrawer";
 import WanRouterDetailPanel from "./WanRouterDetailPanel";
 import { saveWanSpeedTestResult, loadWanSpeedTestsWithServer } from "@/lib/wan/wanWidgetStorage";
 
-const STATUS_DOT = {
-  online: "bg-emerald-500",
-  offline: "bg-red-500",
-  warning: "bg-amber-500",
-};
-
 function KpiCard({ label, value, sub, accent }) {
   return (
     <div className="rounded-xl border border-border bg-card/50 p-4">
@@ -37,10 +31,6 @@ function KpiCard({ label, value, sub, accent }) {
       {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
-}
-
-function priorityStyle(priority) {
-  return WAN_PRIORITIES.find((p) => p.id === priority)?.color || WAN_PRIORITIES[1].color;
 }
 
 export default function SnmpWanManagementPanel({

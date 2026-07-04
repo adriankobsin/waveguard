@@ -25,7 +25,7 @@ const CABLE_COLORS = {
 
 export default function DeckMapCanvas({
   floorPlan, pins, devices, mockStatus, placingDevice, onCanvasClick, onPinClick,
-  cablePaths = [], cableDrawMode = false, cableDrawStart = null, onCableClick,
+  cablePaths = [], cableDrawMode: _cableDrawMode = false, cableDrawStart = null, onCableClick,
 }) {
   const containerRef = useRef();
   const [hoveredPin, setHoveredPin] = useState(null);

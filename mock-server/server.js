@@ -32,11 +32,27 @@ import {
   CREDENTIALS_VAULT_KEY,
   normalizeCredentialsVault,
 } from "../src/lib/credentials/credentialsVault.js";
-import { mergePeplinkIntoPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
+import { mergePeplinkIntoPoll, buildMockPeplinkPoll } from "../src/lib/integrations/peplink/peplinkAdapter.js";
 import { peplinkRouterAdapter } from "../scanner/integrations/routers/peplinkRouter.js";
 import { ciscoRouterAdapter } from "../scanner/integrations/routers/ciscoRouterAdapter.js";
 import { genericRouterAdapter } from "../scanner/integrations/routers/genericRouterAdapter.js";
 import { getRouterAdapter, detectRouterVendor } from "../scanner/integrations/routers/index.js";
+import { lookupIpGeolocation } from "../scanner/integrations/geo/ipGeolocation.js";
+import { fetchOpenMeteoForecast } from "../scanner/integrations/weather/openMeteo.js";
+import { createCaptureStore } from "../scanner/integrations/wireshark/captureStore.js";
+import {
+  getWiresharkStatus,
+  capturePackets,
+  analyzeCapture,
+  captureStats,
+  writeTempUpload,
+} from "../scanner/integrations/wireshark/tsharkClient.js";
+import { runWanSpeedTest } from "../scanner/integrations/wanSpeedTest.js";
+import { buildMockLutronEngine } from "../src/lib/integrations/lutron/lutronAdapter.js";
+import { buildMockKnxEngine } from "../src/lib/integrations/knx/knxAdapter.js";
+import { buildMockCrestronEngine } from "../src/lib/integrations/crestron/crestronAdapter.js";
+import { buildMockDaliEngine } from "../src/lib/integrations/dali/daliAdapter.js";
+import { buildMockDmxEngine } from "../src/lib/integrations/dmx/dmxAdapter.js";
 import {
   getLutronClient,
   closeLutronClient,
@@ -60,6 +76,14 @@ import {
 import { getKnxClient, closeKnxClient, probeKnxPorts, recommendationFromPorts as knxRecommendation } from "../scanner/integrations/knx/knxClient.js";
 import { getDaliClient, closeDaliClient, probeDaliPorts, recommendationFromPorts as daliRecommendation } from "../scanner/integrations/dali/daliClient.js";
 import { getDmxClient, closeDmxClient, probeDmxPorts, recommendationFromPorts as dmxRecommendation } from "../scanner/integrations/dmx/dmxClient.js";
+import { getModbusClient, closeModbusClient, probeModbusPorts, recommendationFromPorts as modbusRecommendation } from "../scanner/integrations/modbus/modbusClient.js";
+import { getCoolmasterClient, closeCoolmasterClient, probeCoolmasterPorts, recommendationFromPorts as coolmasterRecommendation } from "../scanner/integrations/coolmaster/coolmasterClient.js";
+import { getRs485Client, closeRs485Client, probeRs485Ports, recommendationFromPorts as rs485Recommendation } from "../scanner/integrations/rs485/rs485Client.js";
+import { getYachticaClient, closeYachticaClient, probeYachticaPorts, recommendationFromPorts as yachticaRecommendation } from "../scanner/integrations/yachtica/yachticaClient.js";
+import { buildMockModbusEngine } from "../src/lib/integrations/modbus/modbusAdapter.js";
+import { buildMockCoolmasterEngine } from "../src/lib/integrations/coolmaster/coolmasterAdapter.js";
+import { buildMockRs485Engine } from "../src/lib/integrations/rs485/rs485Adapter.js";
+import { buildMockYachticaEngine } from "../src/lib/integrations/yachtica/yachticaAdapter.js";
 import {
   getCiscoSwitchClient,
   closeCiscoSwitchClient,
@@ -67,7 +91,7 @@ import {
   recommendationFromPorts as ciscoRecommendation,
 } from "../scanner/integrations/cisco/ciscoSwitchClient.js";
 import { mergeCiscoIntoPoll } from "../src/lib/integrations/cisco/ciscoAdapter.js";
-import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
+import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, LIGHTING_SYSTEMS_CONFIG_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
 import {
   NETWORK_CISCO_SWITCHES_KEY,
   normalizeCiscoSwitches,
@@ -85,6 +109,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USE_MOCK_SCAN = process.env.WAVEGUARD_USE_MOCK_SCAN === "true";
 const uploadsDir = path.join(__dirname, "uploads");
 fs.mkdirSync(uploadsDir, { recursive: true });
+const capturesDir = path.join(__dirname, ".captures");
+const captureStore = createCaptureStore(capturesDir);
 
 const app = express();
 const PORT = 3002;
@@ -572,9 +598,7 @@ app.post("/api/apps/:appId/auth/change-password", (req, res) => {
 });
 
 app.get("/api/apps/:appId/entities/User/me", (req, res) => {
-  const token = req.headers["authorization"]?.replace("Bearer ", "");
-  const userId = db.sessions[token];
-  const user = userId ? db.users.find((u) => u.id === userId) : db.users[0];
+  const user = getRequestUser(req);
   res.json(sanitizeUser(user || db.users[0]));
 });
 
@@ -643,6 +667,132 @@ function mergeScanOptions(body = {}) {
 
 app.get("/api/apps/:appId/scanner/health", (_req, res) => {
   res.json(getHealth());
+});
+
+app.post("/api/apps/:appId/functions/geoLocation", async (req, res) => {
+  try {
+    const ip = typeof req.body?.ip === "string" ? req.body.ip.trim() : "";
+    const result = await lookupIpGeolocation(ip || undefined);
+    res.json(result);
+  } catch (err) {
+    console.error("[geoLocation]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Geolocation lookup failed",
+      source: "ipapi.co",
+      lookedUpAt: new Date().toISOString(),
+    });
+  }
+});
+
+app.post("/api/apps/:appId/functions/weatherForecast", async (req, res) => {
+  try {
+    const { latitude, longitude } = req.body || {};
+    const result = await fetchOpenMeteoForecast(latitude, longitude);
+    res.json(result);
+  } catch (err) {
+    console.error("[weatherForecast]", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Weather lookup failed",
+      source: "open-meteo.com",
+      fetchedAt: new Date().toISOString(),
+    });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkStatus", async (_req, res) => {
+  try {
+    captureStore.purgeOld();
+    const result = await getWiresharkStatus();
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkStatus]", err);
+    res.status(500).json({ success: false, error: err?.message || "Wireshark status failed" });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkCapture", async (req, res) => {
+  try {
+    captureStore.purgeOld();
+    const {
+      interface: iface,
+      durationSec,
+      bpfFilter,
+      hostIp,
+      maxPackets,
+    } = req.body || {};
+    const captureId = captureStore.newCaptureId();
+    const filePath = captureStore.capturePath(captureId);
+    const result = await capturePackets({
+      interface: iface,
+      durationSec,
+      bpfFilter,
+      hostIp,
+      maxPackets,
+      capturePath: filePath,
+    });
+    if (result.success && result.source === "live") {
+      result.captureId = captureId;
+    } else if (result.success && result.source === "mock") {
+      result.captureId = captureId;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkCapture]", err);
+    res.status(500).json({ success: false, error: err?.message || "Capture failed" });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkAnalyze", async (req, res) => {
+  try {
+    captureStore.purgeOld();
+    const { captureId, uploadBase64, displayFilter, maxPackets } = req.body || {};
+    let filePath = null;
+    let resolvedId = captureId;
+
+    if (uploadBase64) {
+      const uploaded = writeTempUpload(uploadBase64, captureStore);
+      filePath = uploaded.filePath;
+      resolvedId = uploaded.captureId;
+    } else if (captureId && captureStore.exists(captureId)) {
+      filePath = captureStore.capturePath(captureId);
+    }
+
+    const result = await analyzeCapture({ filePath, displayFilter, maxPackets });
+    if (result.success && resolvedId) {
+      result.captureId = resolvedId;
+    }
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkAnalyze]", err);
+    res.status(500).json({ success: false, error: err?.message || "Analysis failed" });
+  }
+});
+
+app.post("/api/apps/:appId/functions/wiresharkStats", async (req, res) => {
+  try {
+    const { captureId } = req.body || {};
+    if (!captureId || !captureStore.exists(captureId)) {
+      const stats = await captureStats({});
+      return res.json(stats);
+    }
+    const filePath = captureStore.capturePath(captureId);
+    const result = await captureStats({ filePath });
+    res.json(result);
+  } catch (err) {
+    console.error("[wiresharkStats]", err);
+    res.status(500).json({ success: false, error: err?.message || "Stats failed" });
+  }
+});
+
+app.get("/api/apps/:appId/wireshark/captures/:captureId/download", (req, res) => {
+  const { captureId } = req.params;
+  if (!captureId || !captureStore.exists(captureId)) {
+    return res.status(404).json({ success: false, error: "Capture not found" });
+  }
+  const filePath = captureStore.capturePath(captureId);
+  res.download(filePath, `waveguard-capture-${captureId}.pcapng`);
 });
 
 app.post("/api/apps/:appId/functions/discoverSubnets", (_req, res) => {
@@ -1257,16 +1407,24 @@ app.post("/api/apps/:appId/speedTests", (req, res) => {
 });
 
 // ── Lighting engines (mock + live) ──────────────────────────────────────
-let lutronEngine = null;
-let knxEngine = null;
-let daliEngine = null;
-let dmxEngine = null;
+const lutronEngine = buildMockLutronEngine();
+const knxEngine = buildMockKnxEngine();
+const daliEngine = buildMockDaliEngine();
+const dmxEngine = buildMockDmxEngine();
+const crestronEngine = buildMockCrestronEngine();
+const yachticaEngine = buildMockYachticaEngine();
 
 function engineForSystemType(systemType) {
   switch (systemType) {
     case "knx": return knxEngine;
     case "dali": return daliEngine;
-    case "dmx": return dmxEngine;
+    case "dmx":
+    case "pharos":
+      return dmxEngine;
+    case "crestron":
+      return crestronEngine;
+    case "yachtica":
+      return yachticaEngine;
     default: return lutronEngine;
   }
 }
@@ -1283,6 +1441,29 @@ function getStoredLutronConnection() {
     }
   }
   return raw && typeof raw === "object" ? raw : null;
+}
+
+/** Pull per-system connection from the multi-system config, with legacy fallback. */
+function getStoredSystemConnection(systemType) {
+  const row = db.systemSettings.find((s) => s.key === LIGHTING_SYSTEMS_CONFIG_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  if (raw?.connections?.[systemType]) {
+    const conn = raw.connections[systemType];
+    if (conn?.host) return conn;
+  }
+  if (systemType === "lutron") {
+    return getStoredLutronConnection();
+  }
+  const generic = getStoredLightingConnection(systemType);
+  if (generic) return generic;
+  return null;
 }
 
 /** Pull the stored generic lighting connection by systemType. */
@@ -1320,15 +1501,13 @@ function resolveLiveConnection(reqBody = {}) {
         password: reqBody.password,
       }
     : null;
-  const stored =
-    systemType === "lutron"
-      ? getStoredLutronConnection()
-      : getStoredLightingConnection(systemType);
+  const stored = getStoredSystemConnection(systemType);
   const conn = override || stored;
   if (!conn?.enabled || !conn.host) return null;
   const protocol = conn.protocol === "leap" ? "leap" : conn.protocol || "telnet";
+  const USERNAME_OPTIONAL = new Set(["knx", "dali", "dmx", "pharos", "crestron"]);
   // LEAP uses TLS certificate authentication — username/password not required
-  if (protocol !== "leap" && !conn.username) return null;
+  if (protocol !== "leap" && !conn.username && !USERNAME_OPTIONAL.has(systemType)) return null;
   return {
     enabled: true,
     host: conn.host,
@@ -1436,6 +1615,8 @@ function resolveCiscoConnection(reqBody = {}) {
       sshUsername: reqBody.sshUsername || reqBody.username || "cisco",
       sshPassword: reqBody.sshPassword || reqBody.password,
       enablePassword: reqBody.enablePassword,
+      platform: reqBody.platform,
+      snmpEnabled: reqBody.snmpEnabled,
       snmpPort: reqBody.snmpPort,
       snmpVersion: reqBody.snmpVersion,
       snmpCommunity: reqBody.snmpCommunity,
@@ -1525,6 +1706,8 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
         liveClient = getDaliClient(live);
       } else if (systemType === "dmx") {
         liveClient = getDmxClient(live);
+      } else if (systemType === "yachtica") {
+        liveClient = getYachticaClient(live);
       }
     }
     // For testProcessor we let the dedicated branch handle connectivity so it
@@ -1945,9 +2128,11 @@ app.post("/api/apps/:appId/functions/lutronCommand", async (req, res) => {
           availablePorts = await probeDaliPorts(targetHost);
         } else if (systemType === "dmx") {
           availablePorts = await probeDmxPorts(targetHost);
+        } else if (systemType === "yachtica") {
+          availablePorts = await probeYachticaPorts(targetHost);
         }
         const openPorts = availablePorts.filter((p) => p.open).map((p) => p.port);
-        const recFn = systemType === "knx" ? knxRecommendation : systemType === "dali" ? daliRecommendation : dmxRecommendation;
+        const recFn = systemType === "knx" ? knxRecommendation : systemType === "dali" ? daliRecommendation : systemType === "yachtica" ? yachticaRecommendation : dmxRecommendation;
         const recommendation = recFn(availablePorts, resolvedProtocol);
         if (liveClient) {
           try {
@@ -2439,6 +2624,7 @@ for (const sig of ["SIGINT", "SIGTERM"]) {
     try { closeKnxClient(); } catch { /* */ }
     try { closeDaliClient(); } catch { /* */ }
     try { closeDmxClient(); } catch { /* */ }
+    try { closeYachticaClient(); } catch { /* */ }
     process.exit(0);
   });
 }
@@ -3394,14 +3580,28 @@ app.post("/api/apps/:appId/backups/:id/restore", (req, res) => {
   res.json({ success: true, message: "Configuration restored" });
 });
 
-app.post("/api/apps/:appId/integrations/test", (req, res) => {
+app.post("/api/apps/:appId/integrations/test", async (req, res) => {
   const { integrationKey, config } = req.body;
-  if (!integrationKey) return res.status(400).json({ message: "integrationKey required" });
+  if (!integrationKey) return res.status(400).json({ message: "integrationKey required", ok: false });
+
+  const key = String(integrationKey).toLowerCase();
   const host = config?.host || config?.baseUrl || config?.brokerUrl;
-  if (!host && integrationKey !== "snmp") {
+
+  if (!host && !["snmp", "mqtt"].includes(key)) {
     return res.status(400).json({ message: "Host or URL required", ok: false });
   }
-  res.json({ ok: true, message: `${integrationKey} connection test succeeded (mock)` });
+
+  try {
+    const { runIntegrationProbe } = await import("../scanner/integrations/integrationProbes.js");
+    const result = await runIntegrationProbe(key, config || {});
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, message: result.message, detail: result.detail || null });
+    }
+    return res.json({ ok: true, message: result.message, detail: result.detail || null });
+  } catch (err) {
+    console.error("[integrations/test]", err);
+    return res.status(500).json({ ok: false, message: err.message || "Integration test failed" });
+  }
 });
 
 app.post("/api/apps/:appId/ai/test-key", (req, res) => {
