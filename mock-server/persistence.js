@@ -20,6 +20,7 @@ export function extractPersistentState(db) {
     signalLinks: db.signalLinks || [],
     deviceGroups: db.deviceGroups || [],
     speedTests: db.speedTests || [],
+    documents: db.documents || [],
   };
 }
 

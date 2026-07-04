@@ -214,6 +214,7 @@ const db = {
   rackLayouts: [],
   signalLinks: [],
   speedTests: [],
+  documents: [],
 };
 
 // Persist / restore from file
@@ -2986,6 +2987,47 @@ const entityHandlers = {
       return { success: true };
     },
   },
+  Document: {
+    list: () => db.documents,
+    filter: (q) => {
+      let rows = db.documents;
+      if (q?.category) rows = rows.filter(d => d.category === q.category);
+      if (q?.platformAccess != null) rows = rows.filter(d => d.platformAccess === q.platformAccess);
+      if (q?.aiAgentAccess != null) rows = rows.filter(d => d.aiAgentAccess === q.aiAgentAccess);
+      return rows;
+    },
+    get: (id) => db.documents.find(d => d.id === id),
+    create: (data) => {
+      const now = new Date().toISOString();
+      const e = {
+        id: "doc-" + Date.now(),
+        name: data.name || "Untitled",
+        ext: data.ext || "",
+        category: data.category || "Other",
+        size: data.size || "0 KB",
+        platformAccess: data.platformAccess !== false,
+        aiAgentAccess: data.aiAgentAccess !== false,
+        filePath: data.filePath || "",
+        fileUrl: data.fileUrl || "",
+        uploaded: now,
+        created_date: now,
+        updated_date: now,
+      };
+      db.documents.push(e);
+      return e;
+    },
+    update: (id, data) => {
+      const e = db.documents.find(d => d.id === id);
+      if (e) {
+        Object.assign(e, data, { updated_date: new Date().toISOString() });
+      }
+      return e;
+    },
+    delete: (id) => {
+      db.documents = db.documents.filter(d => d.id !== id);
+      return { success: true };
+    },
+  },
 };
 
 app.all("/api/apps/:appId/entities/:entityName/:id?", (req, res) => {
@@ -3140,6 +3182,35 @@ app.post(
     }
     const file_url = `http://localhost:${PORT}/uploads/${req.file.filename}`;
     res.json({ file_url });
+  }
+);
+
+app.post(
+  "/api/apps/:appId/functions/documentUpload",
+  upload.single("file"),
+  (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, error: "No file uploaded" });
+      }
+      const docSettings = db.systemSettings.find(s => s.key === "documentation")?.value || {};
+      const ext = path.extname(req.file.originalname).toLowerCase().replace(/^\./, "");
+      const record = entityHandlers.Document.create({
+        name: req.file.originalname,
+        ext,
+        category: req.body.category || "Other",
+        size: `${(req.file.size / 1024).toFixed(0)} KB`,
+        platformAccess: req.body.platformAccess !== "false",
+        aiAgentAccess: req.body.aiAgentAccess !== "false",
+        filePath: req.file.path,
+        fileUrl: `/uploads/${req.file.filename}`,
+      });
+      queueSave(db);
+      res.json({ success: true, document: record });
+    } catch (err) {
+      console.error("[documentUpload]", err);
+      res.status(500).json({ success: false, error: err.message });
+    }
   }
 );
 

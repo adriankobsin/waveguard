@@ -1,10 +1,12 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Upload, Search, Loader2,
   FileSpreadsheet, File, X, BookOpen, Download,
-  FolderOpen, Brain, Globe
+  FolderOpen, Brain, Globe, Trash2
 } from "lucide-react";
+
+const API_BASE = "/api/apps/mock-app";
 
 const FILE_ICONS = {
   pdf: { icon: FileText, color: "text-red-400", bg: "bg-red-500/10" },
@@ -40,9 +42,28 @@ export default function DocumentsPage() {
   const [results, setResults] = useState(null);
   const [dragging, setDragging] = useState(false);
   const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [uploadMeta, setUploadMeta] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(null);
   const fileInputRef = useRef(null);
+
+  const loadDocuments = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/entities/Document`);
+      if (res.ok) {
+        const data = await res.json();
+        setDocs(Array.isArray(data) ? data : []);
+      }
+    } catch {
+      /* offline */
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadDocuments(); }, [loadDocuments]);
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -85,39 +106,71 @@ export default function DocumentsPage() {
     });
   };
 
-  const confirmUpload = () => {
+  const confirmUpload = async () => {
     if (!uploadMeta) return;
-    const { file, ext, name, category, platformAccess, aiAgentAccess } = uploadMeta;
-    setDocs(prev => [{
-      id: Date.now().toString(),
-      name,
-      ext,
-      category,
-      platformAccess,
-      aiAgentAccess,
-      size: `${(file.size / 1024).toFixed(0)} KB`,
-      uploaded: "just now",
-      pages: null,
-    }, ...prev]);
-    setUploadMeta(null);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", uploadMeta.file);
+      fd.append("category", uploadMeta.category);
+      fd.append("platformAccess", String(uploadMeta.platformAccess));
+      fd.append("aiAgentAccess", String(uploadMeta.aiAgentAccess));
+      const res = await fetch(`${API_BASE}/functions/documentUpload`, {
+        method: "POST",
+        body: fd,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.document) {
+          setDocs(prev => [data.document, ...prev]);
+        }
+      }
+      setUploadMeta(null);
+    } catch {
+      /* upload failed */
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const toggleDocAccess = (id, field) => {
-    setDocs(prev => prev.map(d =>
-      d.id === id ? { ...d, [field]: !d[field] } : d
-    ));
+  const updateDoc = async (id, updates) => {
+    setSaving(id);
+    setDocs(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
+    try {
+      await fetch(`${API_BASE}/entities/Document/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+    } catch {
+      /* revert on error */
+      loadDocuments();
+    } finally {
+      setSaving(null);
+    }
   };
 
-  const setDocCategory = (id, category) => {
-    setDocs(prev => prev.map(d =>
-      d.id === id ? { ...d, category } : d
-    ));
+  const deleteDoc = async (id) => {
+    setDocs(prev => prev.filter(d => d.id !== id));
+    try {
+      await fetch(`${API_BASE}/entities/Document/${id}`, { method: "DELETE" });
+    } catch {
+      loadDocuments();
+    }
   };
 
   const categories = ["all", ...new Set(docs.map(d => d.category).filter(Boolean))];
   const filteredDocs = results !== null ? results : docs.filter(
     d => categoryFilter === "all" || d.category === categoryFilter
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background p-4 md:p-6 flex items-center justify-center">
+        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 space-y-6 animate-fade-in">
@@ -176,7 +229,7 @@ export default function DocumentsPage() {
         <input ref={fileInputRef} type="file" accept=".pdf,.docx,.xlsx,.csv" onChange={handleFileSelect} className="hidden" />
         <Upload size={20} className="text-muted-foreground mx-auto mb-2" />
         <p className="text-sm text-muted-foreground">Click or drag & drop PDF, DOCX, XLSX, or CSV files here</p>
-        <p className="text-xs text-muted-foreground/60 mt-1">Set category and access permissions on upload</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">Files are saved permanently and accessible until deleted</p>
       </div>
 
       {results !== null && (
@@ -204,7 +257,7 @@ export default function DocumentsPage() {
                   : "border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              {c === "all" ? "All" : c}
+              {c === "all" ? `All (${docs.length})` : c}
             </button>
           ))}
         </div>
@@ -231,13 +284,13 @@ export default function DocumentsPage() {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {doc.size} · Uploaded {doc.uploaded}
+                  {doc.size} · Uploaded {doc.uploaded ? new Date(doc.uploaded).toLocaleDateString() : "unknown"}
                   {doc.pages && ` · ${doc.pages} pages`}
                 </p>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <select
                     value={doc.category}
-                    onChange={e => setDocCategory(doc.id, e.target.value)}
+                    onChange={e => updateDoc(doc.id, { category: e.target.value })}
                     className="text-[11px] bg-secondary border border-border rounded-lg px-2 py-0.5 text-muted-foreground focus:outline-none cursor-pointer"
                   >
                     {CATEGORIES.map(c => (
@@ -245,7 +298,7 @@ export default function DocumentsPage() {
                     ))}
                   </select>
                   <button
-                    onClick={() => toggleDocAccess(doc.id, "platformAccess")}
+                    onClick={() => updateDoc(doc.id, { platformAccess: !doc.platformAccess })}
                     className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border transition-colors ${
                       doc.platformAccess
                         ? "border-emerald-500/40 bg-emerald-500/12 text-emerald-400"
@@ -256,7 +309,7 @@ export default function DocumentsPage() {
                     Platform
                   </button>
                   <button
-                    onClick={() => toggleDocAccess(doc.id, "aiAgentAccess")}
+                    onClick={() => updateDoc(doc.id, { aiAgentAccess: !doc.aiAgentAccess })}
                     className={`inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-lg border transition-colors ${
                       doc.aiAgentAccess
                         ? "border-violet-500/40 bg-violet-500/12 text-violet-400"
@@ -268,9 +321,23 @@ export default function DocumentsPage() {
                   </button>
                 </div>
               </div>
-              <button className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground">
-                <Download size={14} />
-              </button>
+              <div className="flex items-center gap-1">
+                {doc.fileUrl && (
+                  <a
+                    href={doc.fileUrl}
+                    download={doc.name}
+                    className="p-2 rounded-lg hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground"
+                  >
+                    <Download size={14} />
+                  </a>
+                )}
+                <button
+                  onClick={() => deleteDoc(doc.id)}
+                  className="p-2 rounded-lg hover:bg-red-500/10 transition-colors text-muted-foreground hover:text-red-400"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </motion.div>
           ))}
         </AnimatePresence>
@@ -337,15 +404,18 @@ export default function DocumentsPage() {
               <div className="flex gap-2 justify-end">
                 <button
                   onClick={() => setUploadMeta(null)}
-                  className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={uploading}
+                  className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmUpload}
-                  className="px-4 py-2 rounded-lg bg-cyan-500 text-black text-sm font-bold hover:bg-cyan-400 transition-colors"
+                  disabled={uploading}
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-cyan-500 text-black text-sm font-bold hover:bg-cyan-400 transition-colors disabled:opacity-60"
                 >
-                  Add document
+                  {uploading && <Loader2 size={12} className="animate-spin" />}
+                  {uploading ? "Uploading…" : "Add document"}
                 </button>
               </div>
             </motion.div>
