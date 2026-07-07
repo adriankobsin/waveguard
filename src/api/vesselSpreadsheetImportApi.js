@@ -1,11 +1,13 @@
-import { base44, isMockServer, MOCK_SERVER_URL } from "@/api/base44Client";
+import { base44, isMockServer } from "@/api/base44Client";
 import {
   listEquipment,
   createEquipment,
   updateEquipment,
   clearAllEquipment,
+  mockEntityApi,
 } from "@/api/equipmentApi";
 import { commitVesselImport } from "@/lib/spreadsheet/commitImport";
+import { isDemoModeActive } from "@/lib/platformMode";
 import {
   saveSiteLocationsLocal,
   loadSiteLocationsLocal,
@@ -23,6 +25,10 @@ import {
 import { saveRackLayoutLocal } from "@/lib/rackLayoutStorage";
 
 async function listCables() {
+  if (isMockServer) {
+    const data = await mockEntityApi("/entities/Cable");
+    return Array.isArray(data) ? data : [];
+  }
   const data = await base44.entities.Cable.list("label", 2000);
   return Array.isArray(data) ? data : [];
 }
@@ -30,9 +36,61 @@ async function listCables() {
 async function clearAllCables() {
   const cables = await listCables();
   for (const c of cables) {
-    if (c.id) await base44.entities.Cable.delete(c.id);
+    if (c.id) {
+      if (isMockServer) {
+        await mockEntityApi(`/entities/Cable/${c.id}`, { method: "DELETE" });
+      } else {
+        await base44.entities.Cable.delete(c.id);
+      }
+    }
   }
   return cables.length;
+}
+
+function mergeDecks(existing, imported) {
+  const byName = new Map((existing || []).map((d) => [d.name.toLowerCase(), { ...d, rooms: [...(d.rooms || [])] }]));
+  for (const deck of imported || []) {
+    const key = deck.name.toLowerCase();
+    if (!byName.has(key)) {
+      byName.set(key, deck);
+      continue;
+    }
+    const ex = byName.get(key);
+    const roomNames = new Set((ex.rooms || []).map((r) => r.name.toLowerCase()));
+    for (const room of deck.rooms || []) {
+      if (!roomNames.has(room.name.toLowerCase())) {
+        ex.rooms.push(room);
+        roomNames.add(room.name.toLowerCase());
+      }
+    }
+  }
+  return [...byName.values()];
+}
+
+function syncImportSideEffects(payload) {
+  if (payload.siteLocations?.decks?.length) {
+    const current = loadSiteLocationsLocal() || DEFAULT_SITE_LOCATIONS;
+    const merged = normalizeSiteLocations({
+      decks: mergeDecks(current.decks, payload.siteLocations.decks),
+    });
+    saveSiteLocationsLocal(merged);
+  }
+
+  if (payload.discoverySubnets?.length) {
+    const current = loadDiscoverySettingsLocal() || DEFAULT_DISCOVERY_SETTINGS;
+    const merged = normalizeDiscoverySettings({
+      ...current,
+      subnets: [...(current.subnets || []), ...payload.discoverySubnets],
+    });
+    saveDiscoverySettingsLocal(merged);
+  }
+
+  if (payload.rackLayout) {
+    saveRackLayoutLocal({
+      ...payload.rackLayout,
+      id: payload.rackLayout.id || `rack-import-${Date.now()}`,
+    });
+  }
 }
 
 function buildDeps() {
@@ -58,21 +116,42 @@ function buildDeps() {
       const cables = await listCables();
       return new Set(cables.map((c) => c.label).filter(Boolean));
     },
+    getExistingByPatchPort: async () => {
+      const cables = await listCables();
+      const map = new Map();
+      for (const c of cables) {
+        const panel = (c.patch_panel || "").trim().toLowerCase();
+        const port = c.port != null ? String(c.port).trim() : "";
+        if (panel && port) map.set(`${panel}|${port}`, c);
+      }
+      return map;
+    },
     createEquipment,
     updateEquipment,
-    createCable: (data) => base44.entities.Cable.create(data),
+    createCable: async (data) => {
+      if (isMockServer) {
+        return mockEntityApi("/entities/Cable", {
+          method: "POST",
+          body: JSON.stringify(data),
+        });
+      }
+      return base44.entities.Cable.create(data);
+    },
+    updateCable: async (id, data) => {
+      if (isMockServer) {
+        return mockEntityApi(`/entities/Cable/${id}`, {
+          method: "PUT",
+          body: JSON.stringify(data),
+        });
+      }
+      return base44.entities.Cable.update(id, data);
+    },
     bulkCreateCables: async (rows) => {
       if (isMockServer) {
-        const res = await fetch(
-          `${MOCK_SERVER_URL}/api/apps/mock-app/entities/Cable/bulk`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(rows),
-          }
-        );
-        if (!res.ok) throw new Error("Bulk cable create failed");
-        return res.json();
+        return mockEntityApi("/entities/Cable/bulk", {
+          method: "POST",
+          body: JSON.stringify(rows),
+        });
       }
       const created = [];
       for (const row of rows) {
@@ -124,34 +203,32 @@ function buildDeps() {
   };
 }
 
-function mergeDecks(existing, imported) {
-  const byName = new Map((existing || []).map((d) => [d.name.toLowerCase(), { ...d, rooms: [...(d.rooms || [])] }]));
-  for (const deck of imported || []) {
-    const key = deck.name.toLowerCase();
-    if (!byName.has(key)) {
-      byName.set(key, deck);
-      continue;
-    }
-    const ex = byName.get(key);
-    const roomNames = new Set((ex.rooms || []).map((r) => r.name.toLowerCase()));
-    for (const room of deck.rooms || []) {
-      if (!roomNames.has(room.name.toLowerCase())) {
-        ex.rooms.push(room);
-        roomNames.add(room.name.toLowerCase());
-      }
-    }
-  }
-  return [...byName.values()];
-}
-
-export async function commitVesselSpreadsheetImport(payload, options = {}) {
-  return commitVesselImport(buildDeps(), payload, options);
-}
-
 export async function invokeVesselSpreadsheetImport(payload, options = {}) {
   const res = await base44.functions.invoke("importVesselSpreadsheet", {
     payload,
     options,
   });
   return res?.data ?? res;
+}
+
+export async function commitVesselSpreadsheetImport(payload, options = {}) {
+  if (isDemoModeActive()) {
+    throw new Error(
+      "Demo mode is read-only. Switch to Live in Settings → Platform mode to import equipment."
+    );
+  }
+
+  // Local dev: one server-side commit avoids hundreds of per-row fetches (Failed to fetch).
+  if (isMockServer) {
+    const result = await invokeVesselSpreadsheetImport(payload, options);
+    if (result?.success === false) {
+      throw new Error(result.error || "Import failed");
+    }
+    syncImportSideEffects(payload);
+    return result;
+  }
+
+  const result = await commitVesselImport(buildDeps(), payload, options);
+  syncImportSideEffects(payload);
+  return result;
 }

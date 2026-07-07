@@ -43,6 +43,41 @@
     "notes": {
       "type": "string",
       "description": "Notes"
+    },
+    "patch_panel": {
+      "type": "string",
+      "description": "Patch panel name for schedule rows"
+    },
+    "port": {
+      "type": "string",
+      "description": "Patch panel port number"
+    },
+    "end_device_port": {
+      "type": "string",
+      "description": "Connected device port label"
+    },
+    "test_result": {
+      "type": "string",
+      "enum": ["pass", "fail", "pending", "not_tested"],
+      "default": "not_tested",
+      "description": "Last cable test result"
+    },
+    "last_tested_at": {
+      "type": "string",
+      "description": "ISO date of last cable test"
+    },
+    "room": {
+      "type": "string",
+      "description": "Room number or name"
+    },
+    "location": {
+      "type": "string",
+      "description": "Physical location detail"
+    },
+    "schedule_source": {
+      "type": "string",
+      "enum": ["vessel_import", "manual", "patch_import"],
+      "description": "How this schedule row was created"
     }
   },
   "required": [

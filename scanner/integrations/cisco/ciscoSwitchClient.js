@@ -22,6 +22,12 @@ import { probeCiscoPorts, recommendationFromPorts } from "./probeCiscoPorts.js";
 class CiscoSwitchClient extends EventEmitter {
   constructor(connection) {
     super();
+    this.on("error", (err) => {
+      console.warn(
+        `[ciscoSwitchClient] ${connection.host} error:`,
+        err?.message || err
+      );
+    });
     this.connection = { ...connection };
     this.host = connection.host;
     this.sshPort = Number(connection.sshPort) || 22;

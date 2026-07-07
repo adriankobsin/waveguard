@@ -5,15 +5,50 @@ import {
   applianceToEquipment,
   genericRowToEquipment,
   patchToCable,
+  patchEndpointToEquipment,
+  patchPanelToEquipment,
   switchPortToCable,
   collectSiteLocations,
   vlansToDiscoverySubnets,
   racksToLayout,
 } from "./normalize.js";
 import { stripVesselEquipmentName } from "./equipmentName.js";
+import { isSyntheticPatchLabel } from "./cableTag.js";
+
+function patchPortKey(cable) {
+  const panel = (cable.patch_panel || "").trim().toLowerCase();
+  const port = cable.port != null ? String(cable.port).trim() : "";
+  if (!panel || !port) return "";
+  return `${panel}|${port}`;
+}
 
 function equipmentKey(eq) {
   return (eq.name || "").trim().toLowerCase();
+}
+
+function fuzzyMatch(a, b) {
+  const x = String(a || "").trim().toLowerCase();
+  const y = String(b || "").trim().toLowerCase();
+  if (!x || !y) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
+
+function applyRackLayoutToEquipment(equipmentList, layoutData) {
+  if (!layoutData?.placements || !layoutData?.racks?.length) return equipmentList;
+  const rackById = new Map(layoutData.racks.map((r) => [r.id, r]));
+  for (const eq of equipmentList) {
+    if (eq.equipment_subtype !== "patch_panel") continue;
+    for (const placement of Object.values(layoutData.placements)) {
+      if (!fuzzyMatch(placement.label, eq.name)) continue;
+      const rack = rackById.get(placement.rackId);
+      if (rack) {
+        eq.rack_name = rack.name;
+        eq.rack_u = placement.u;
+      }
+      break;
+    }
+  }
+  return equipmentList;
 }
 
 /**
@@ -77,7 +112,37 @@ export function buildImportPayload(parsed, options = {}) {
     } else if (sheet.sheetType === SHEET_GROUPS.patchPanels) {
       for (const row of sheet.rows || []) {
         const cable = patchToCable(row, floorMap);
-        if (cable.label) cables.push(cable);
+        if (!cable.label) {
+          if (cable.patch_panel && cable.port) {
+            warnings.push(
+              `Patch panel ${cable.patch_panel} port ${cable.port}: missing cable tag (NET ####) — row skipped`
+            );
+          }
+          continue;
+        }
+        if (isSyntheticPatchLabel(cable.label, cable.patch_panel, cable.port)) {
+          warnings.push(
+            `Patch panel ${cable.patch_panel} port ${cable.port}: invalid cable label "${cable.label}" — row skipped`
+          );
+          continue;
+        }
+        cables.push(cable);
+        const endpoint = patchEndpointToEquipment(row, floorMap);
+        if (endpoint) addEquipment(endpoint);
+        const panelEq = patchPanelToEquipment(row, floorMap);
+        if (panelEq) {
+          const key = equipmentKey(panelEq);
+          if (equipmentByName.has(key)) {
+            const existing = equipmentByName.get(key);
+            equipmentByName.set(key, {
+              ...existing,
+              ...panelEq,
+              port_count: Math.max(existing.port_count || 24, panelEq.port_count || 24),
+            });
+          } else {
+            addEquipment(panelEq);
+          }
+        }
       }
     } else if (sheet.sheetType === SHEET_GROUPS.generic) {
       for (const row of sheet.rows || []) {
@@ -87,11 +152,7 @@ export function buildImportPayload(parsed, options = {}) {
     }
   }
 
-  const equipment = [...equipmentByName.values()];
-  const siteLocations = collectSiteLocations(equipment, floorMap);
-
   let discoverySubnets = [];
-  let rackLayout = null;
   if (enabled.has(SHEET_GROUPS.ipScheme)) {
     for (const sheet of parsed.sheets || []) {
       if (sheet.sheetType === SHEET_GROUPS.ipScheme && sheet.vlans) {
@@ -99,14 +160,24 @@ export function buildImportPayload(parsed, options = {}) {
       }
     }
   }
-  if (enabled.has(SHEET_GROUPS.rack)) {
-    rackLayout = racksToLayout(parsed.sheets);
-  }
+
+  const layoutData = enabled.has(SHEET_GROUPS.rack) ? racksToLayout(parsed.sheets) : null;
+  const equipment = applyRackLayoutToEquipment([...equipmentByName.values()], layoutData);
+  const siteLocations = collectSiteLocations(equipment, floorMap);
 
   const cableLabels = new Set();
+  const cablePorts = new Set();
   const dedupedCables = [];
   for (const c of cables) {
     if (!c.label) continue;
+    const portKey = patchPortKey(c);
+    if (portKey) {
+      if (cablePorts.has(portKey)) {
+        warnings.push(`Duplicate patch port skipped: ${c.patch_panel} P${c.port}`);
+        continue;
+      }
+      cablePorts.add(portKey);
+    }
     if (cableLabels.has(c.label)) {
       warnings.push(`Duplicate cable label skipped: ${c.label}`);
       continue;
@@ -120,7 +191,7 @@ export function buildImportPayload(parsed, options = {}) {
     cables: dedupedCables,
     siteLocations,
     discoverySubnets,
-    rackLayout,
+    rackLayout: layoutData,
     warnings,
     stats: {
       equipment: equipment.length,

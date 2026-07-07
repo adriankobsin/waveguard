@@ -59,6 +59,10 @@ const PAGER_PATTERNS = [/More:\s*<space>,/i, /--More--/i];
 export class CiscoSshClient extends EventEmitter {
   constructor(connection) {
     super();
+    // Failed SSH auth emits 'error'; without a listener Node exits the process.
+    this.on("error", (err) => {
+      log(`${this.key} error: ${err?.message || err}`);
+    });
     this.host = connection.host;
     this.port = Number(connection.port) || 22;
     this.username = connection.username || "cisco";
@@ -111,7 +115,11 @@ export class CiscoSshClient extends EventEmitter {
 
       const onError = (err) => {
         this._connected = false;
-        this.emit("error", err);
+        try {
+          client.end();
+        } catch {
+          /* */
+        }
         settle(err);
       };
 

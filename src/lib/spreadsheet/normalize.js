@@ -1,6 +1,11 @@
 import { DEFAULT_FLOOR_MAP, SHEET_GROUPS } from "./schemas.js";
 import { stripVesselEquipmentName } from "./equipmentName.js";
 import { extractExtraFieldsFromObject } from "./headerMapping.js";
+import {
+  extractCableTagFromText,
+  normalizeCableTag,
+  isSyntheticPatchLabel,
+} from "./cableTag.js";
 
 function appendNote(existing, addition) {
   if (!addition) return existing || "";
@@ -178,24 +183,193 @@ export function genericRowToEquipment(row, floorMap) {
   });
 }
 
+export function inferRackNameFromPanel(panelName) {
+  const name = String(panelName || "").trim();
+  if (!name) return "Unassigned";
+  const match = name.match(/^(.+?)-(?:PP|pp)\d+/i);
+  if (match) return match[1].trim();
+  const parts = name.split("-");
+  if (parts.length >= 2) return parts.slice(0, -1).join("-");
+  return name;
+}
+
+export function inferPortCountFromModel(modelOrType = "") {
+  const text = String(modelOrType || "");
+  const match = text.match(/(\d+)\s*[pP]/);
+  if (match) return parseInt(match[1], 10) || 24;
+  if (/48/i.test(text)) return 48;
+  if (/24/i.test(text)) return 24;
+  return 24;
+}
+
+export function parseTestedLength(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return { length: "", test_result: "not_tested" };
+
+  const lower = raw.toLowerCase();
+  let test_result = "not_tested";
+  if (/\bfail(ed)?\b/.test(lower)) test_result = "fail";
+  else if (/\bpass(ed)?\b/.test(lower)) test_result = "pass";
+  else if (/\bpending\b/.test(lower)) test_result = "pending";
+
+  const lengthMatch = raw.match(/(\d+(?:\.\d+)?)\s*m?\b/i);
+  const length = lengthMatch ? lengthMatch[1] : raw.replace(/\b(pass|fail|passed|failed|pending)\b/gi, "").trim();
+
+  return { length, test_result };
+}
+
+export function resolvePatchDeck(row, floorMap) {
+  const deck = String(row.deck || "").trim();
+  if (deck) {
+    const mapped = floorToDeckName(deck, floorMap);
+    return mapped || deck;
+  }
+  const floor = String(row.floor || "").trim();
+  if (!floor) return "";
+  return floorToDeckName(floor, floorMap) || floor;
+}
+
+const PATCH_RAW_CONSUMED = new Set([
+  "patch panel",
+  "patch_panel",
+  "port",
+  "cable no.",
+  "cable no",
+  "cable_no",
+  "net",
+  "type",
+  "system",
+  "code",
+  "deck",
+  "floor",
+  "destination",
+  "location",
+  "end device",
+  "notes",
+]);
+
+function resolveCableLabel(row, panel, portNum) {
+  const direct = String(row.cableNo || row.cable_no || "").trim();
+  if (direct) return normalizeCableTag(direct);
+
+  for (const val of Object.values(row.rawObj || {})) {
+    const tag = extractCableTagFromText(val);
+    if (tag) return tag;
+  }
+
+  for (const key of ["notes", "testedLength", "location", "destination", "endDevice"]) {
+    const tag = extractCableTagFromText(row[key]);
+    if (tag) return tag;
+  }
+
+  return "";
+}
+
+function finalizePatchCableFields(base, row, panel, portNum, floorMap) {
+  const destination = String(
+    row.location || row.destination || row.endDevice || base.location || ""
+  ).trim();
+
+  if (!base.location && base.room && !/^\d+$/.test(String(base.room).trim())) {
+    base.location = String(base.room).trim();
+    base.room = "";
+  }
+  if (!base.location && destination) base.location = destination;
+
+  if (!base.to_equipment) {
+    base.to_equipment = stripVesselEquipmentName(row.endDevice || destination || "");
+  }
+
+  if (!base.deck) {
+    base.deck = resolvePatchDeck(row, floorMap);
+  }
+
+  if (isSyntheticPatchLabel(base.label, panel, portNum)) {
+    base.label = "";
+  }
+
+  return base;
+}
+
+export function patchPanelToEquipment(row, floorMap) {
+  const panelName = stripVesselEquipmentName(row.patchPanel || "");
+  if (!panelName) return null;
+  const deck = resolvePatchDeck(row, floorMap);
+  return baseEquipment({
+    name: panelName,
+    model: row.type || "",
+    category: mapSystemToCategory(row.system, row.type),
+    location: row.location || buildLocation(row.floor || row.deck, row.room, floorMap),
+    floor: row.floor || row.deck || "",
+    room: row.room != null ? String(row.room) : "",
+    systemCategory: row.system || "",
+    notes: row.notes || "",
+    inventoryOnly: true,
+    waveguardClassification: "inventory",
+    equipment_subtype: "patch_panel",
+    rack_name: inferRackNameFromPanel(panelName),
+    port_count: inferPortCountFromModel(row.type),
+    deck,
+    importSource: { sheet: row.sheet, row: row.row },
+  });
+}
+
 export function patchToCable(row, floorMap) {
   const panel = stripVesselEquipmentName(row.patchPanel || "");
-  const endDevice = stripVesselEquipmentName(row.endDevice || "");
-  const label = row.cableNo || `${panel || row.patchPanel}-P${row.port}`;
-  const fromEq = panel ? `${panel} P${row.port}` : row.patchPanel ? `${row.patchPanel} P${row.port}` : "";
-  const notes = [row.notes, row.testedLength].filter(Boolean).join("; ");
-  return {
+  const portNum = row.port != null && row.port !== "" ? String(row.port).trim() : "";
+  const label = resolveCableLabel(row, panel, portNum);
+  const fromEq = panel && portNum ? `${panel} P${portNum}` : "";
+  const { length, test_result } = parseTestedLength(row.testedLength);
+  const deck = resolvePatchDeck(row, floorMap);
+  const destination = String(row.location || row.destination || "").trim();
+  const endDevice = stripVesselEquipmentName(row.endDevice || destination || "");
+  const base = {
     label,
     type: row.type || "",
     system_category: row.system || "",
     from_equipment: fromEq,
     to_equipment: endDevice,
-    length: "",
-    deck: floorToDeckName(row.floor, floorMap) || row.floor || "",
+    length,
+    deck,
+    room: row.room != null ? String(row.room) : "",
+    location: destination || endDevice,
     status: "installed",
-    notes,
+    notes: row.notes || "",
+    patch_panel: panel || row.patchPanel || "",
+    port: portNum,
+    end_device_port: row.endDevicePort || "",
+    test_result,
+    last_tested_at: null,
+    schedule_source: "vessel_import",
     importSource: { sheet: row.sheet, row: row.row },
   };
+  const consumed = new Set([...(row.consumedKeys || []), ...PATCH_RAW_CONSUMED]);
+  const extras = extractExtraFieldsFromObject(row.rawObj, consumed);
+  const { _extraNotes, ...recognized } = extras;
+  for (const [field, val] of Object.entries(recognized)) {
+    if (val == null || val === "") continue;
+    if (base[field] == null || base[field] === "") base[field] = val;
+  }
+  if (_extraNotes) base.notes = appendNote(base.notes, _extraNotes);
+  return finalizePatchCableFields(base, row, panel, portNum, floorMap);
+}
+
+export function patchEndpointToEquipment(row, floorMap) {
+  const name = stripVesselEquipmentName(row.endDevice || "");
+  if (!name) return null;
+  const base = baseEquipment({
+    name,
+    model: row.type || "",
+    category: mapSystemToCategory(row.system, row.type),
+    location: row.location || buildLocation(row.floor, row.room, floorMap),
+    floor: row.floor || "",
+    room: row.room != null ? String(row.room) : "",
+    systemCategory: row.system || "",
+    portLabel: row.endDevicePort || "",
+    notes: appendNote(row.notes, row.testedLength ? `Length: ${row.testedLength}` : ""),
+    importSource: { sheet: row.sheet, row: row.row },
+  });
+  return mergeExtrasIntoEquipment(base, row.rawObj, row.consumedKeys);
 }
 
 export function switchPortToCable(row) {

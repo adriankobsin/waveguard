@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import {
-  Bot, Send, Loader2, Globe, Cpu, Layers, User, Plus, Trash2, PanelLeftClose, PanelLeft, MessageSquare,
+  Bot, Send, Loader2, Globe, Cpu, Layers, User, Plus, Trash2, PanelLeftClose, PanelLeft, MessageSquare, Circle,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import {
@@ -8,9 +8,9 @@ import {
 } from "@/lib/chatStorage";
 
 const MODES = [
-  { id: "local", label: "Local", icon: Cpu, desc: "Ollama (offline)" },
-  { id: "online", label: "Online", icon: Globe, desc: "OpenAI GPT" },
-  { id: "both", label: "Both", icon: Layers, desc: "Local + Online" },
+  { id: "local", label: "Local", icon: Cpu, desc: "Offline agent + Ollama when available" },
+  { id: "online", label: "Online", icon: Globe, desc: "OpenAI GPT (requires API key)" },
+  { id: "both", label: "Both", icon: Layers, desc: "OpenAI + local" },
 ];
 
 const SAMPLE_QUESTIONS = [
@@ -22,7 +22,7 @@ const SAMPLE_QUESTIONS = [
 
 const WELCOME_MSG = {
   role: "assistant",
-  content: "Hello! I'm Wave Guard, your onboard AV/IT assistant. I can help you troubleshoot network issues, diagnose equipment faults, and search your technical documents. How can I help today?",
+  content: "Hello! I'm Wave Guard, your onboard AV/IT assistant. In **Local** mode I use live platform data for troubleshooting — no internet required. Ask about equipment status, offline devices, PoE faults, or WAN performance.",
 };
 
 function MessageBubble({ msg }) {
@@ -72,18 +72,19 @@ function MessageBubble({ msg }) {
 
 function WelcomeScreen({ onSend }) {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+    <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 min-h-0">
       <div className="w-14 h-14 rounded-2xl bg-primary/15 flex items-center justify-center mb-4">
         <Bot size={28} className="text-primary" />
       </div>
       <h1 className="text-xl font-bold text-foreground mb-1">Wave Guard Assistant</h1>
-      <p className="text-sm text-muted-foreground mb-8 text-center max-w-md">
-        AI-powered AV/IT support for your network. Ask about equipment, events, or troubleshooting.
+      <p className="text-sm text-muted-foreground mb-6 text-center max-w-md">
+        AI-powered AV/IT support using your live equipment data. Local mode works offline for troubleshooting and guidance.
       </p>
       <div className="flex flex-wrap gap-2 justify-center max-w-lg">
         {SAMPLE_QUESTIONS.map((q) => (
           <button
             key={q}
+            type="button"
             onClick={() => onSend(q)}
             className="text-xs bg-secondary border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 rounded-full px-3 py-1.5 transition-colors"
           >
@@ -91,6 +92,61 @@ function WelcomeScreen({ onSend }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ChatInputBar({ input, setInput, loading, onSend, inputRef }) {
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  return (
+    <div className="px-4 md:px-6 py-3 border-t border-border/50 bg-card/50 flex-shrink-0">
+      <form
+        onSubmit={(e) => { e.preventDefault(); onSend(); }}
+        className="flex gap-2 max-w-4xl mx-auto"
+      >
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask about equipment, faults, or troubleshooting…"
+          className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        />
+        <button
+          type="submit"
+          disabled={!input.trim() || loading}
+          className="w-10 h-10 flex items-center justify-center bg-primary text-primary-foreground rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity flex-shrink-0"
+          aria-label="Send message"
+        >
+          <Send size={14} />
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function AgentStatus({ health, mode }) {
+  if (!health) return null;
+  const localReady = health.offlineAgent || health.ollama;
+  const label =
+    mode === "online"
+      ? health.openai ? "OpenAI connected" : "OpenAI key missing"
+      : localReady
+        ? health.ollama ? "Ollama + platform data" : "Offline agent (platform data)"
+        : "Platform data unavailable";
+
+  const ok = mode === "online" ? health.openai : health.offlineAgent;
+
+  return (
+    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      <Circle size={8} className={ok ? "text-emerald-500 fill-emerald-500" : "text-amber-500 fill-amber-500"} />
+      <span>{label}</span>
     </div>
   );
 }
@@ -103,6 +159,7 @@ export default function AssistantPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [health, setHealth] = useState(null);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const sessionsRef = useRef(sessions);
@@ -113,7 +170,17 @@ export default function AssistantPage() {
   const messages = activeId ? localMessages : [];
   const mode = active?.mode ?? localMode;
 
-  // When switching to an existing session, load its messages
+  useEffect(() => {
+    fetch("/chat/health")
+      .then((r) => r.json())
+      .then(setHealth)
+      .catch(() => setHealth(null));
+  }, []);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
   const loadSessionMessages = useCallback((id) => {
     const s = sessionsRef.current.find((x) => x.id === id);
     if (s) {
@@ -122,7 +189,6 @@ export default function AssistantPage() {
     }
   }, []);
 
-  // Sync localMessages to the active session in sessions + persist
   const syncToSession = useCallback((newMessages) => {
     const id = activeId;
     if (!id) return;
@@ -195,7 +261,6 @@ export default function AssistantPage() {
       setLocalMessages(nextMessages);
       syncToSession(nextMessages);
 
-      // Auto-title on first user message
       if (messages.length <= 1) {
         const title = content.length > 40 ? content.slice(0, 40) + "…" : content;
         setSessions((prev) => {
@@ -222,11 +287,14 @@ export default function AssistantPage() {
 
       let reply;
       if (data.needsKey) {
-        reply = "⚠️ **OpenAI API key not configured.**\n\nThe platform operator can set the key in two ways:\n1. **Settings → AI** inside this app\n2. Environment variable `OPENAI_API_KEY` on the server\n\n**Local mode** (Ollama) doesn't need an API key — install Ollama on the server with `ollama pull llama3.2` and switch to Local mode.";
+        reply = "⚠️ **OpenAI API key not configured.**\n\nSwitch to **Local** mode for offline troubleshooting (uses live platform data), or add your key in **Settings → AI & OpenAI**.";
       } else if (data.error) {
         reply = `⚠️ ${data.error}`;
       } else {
         reply = data.response;
+        if (data.engine === "offline-agent") {
+          reply = "_Offline agent · live platform data_\n\n" + reply;
+        }
       }
 
       const finalMessages = [...currentMessages, { role: "assistant", content: reply }];
@@ -237,12 +305,11 @@ export default function AssistantPage() {
         saveSessions(updated);
         return updated;
       });
-    } catch (e) {
+    } catch {
       if (fetchIdRef.current !== thisFetch) return;
-      const fallback = "I'm unable to reach the AI service. Make sure the chat server is running (`pm2 status waveguard-chat`).";
+      const fallback = "⚠️ Could not reach the assistant service. Ensure the dev server is running (`npm run dev:all`).";
       const finalMessages = [...currentMessages, { role: "assistant", content: fallback }];
       setLocalMessages(finalMessages);
-
       setSessions((prev) => {
         const updated = updateSession(prev, currentId, { messages: finalMessages });
         saveSessions(updated);
@@ -252,13 +319,6 @@ export default function AssistantPage() {
 
     setLoading(false);
   }, [input, loading, activeId, mode, messages, localMode, syncToSession]);
-
-  const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  };
 
   const setActiveMode = (modeId) => {
     if (activeId) {
@@ -274,13 +334,14 @@ export default function AssistantPage() {
   };
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-[calc(100dvh-3.5rem)] min-h-0 bg-background">
       {/* Sidebar */}
       <div className={`flex-shrink-0 border-r border-border/50 bg-card/30 flex flex-col transition-all duration-200 ${
         sidebarOpen ? "w-60" : "w-0 overflow-hidden"
       }`}>
         <div className="p-3">
           <button
+            type="button"
             onClick={newChat}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm text-foreground hover:bg-secondary transition-colors"
           >
@@ -289,7 +350,7 @@ export default function AssistantPage() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
+        <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5 min-h-0">
           {sessions.map((s) => (
             <div
               key={s.id}
@@ -303,6 +364,7 @@ export default function AssistantPage() {
               <MessageSquare size={13} className="flex-shrink-0" />
               <span className="truncate flex-1">{s.title}</span>
               <button
+                type="button"
                 onClick={(e) => removeChat(e, s.id)}
                 className="flex-shrink-0 opacity-0 group-hover:opacity-100 hover:text-red-400 transition-opacity"
                 title="Delete chat"
@@ -315,30 +377,32 @@ export default function AssistantPage() {
       </div>
 
       {/* Main area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-card/50 flex-shrink-0">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-card/50 flex-shrink-0 gap-3">
+          <div className="flex items-center gap-2 min-w-0">
             <button
+              type="button"
               onClick={() => setSidebarOpen((o) => !o)}
               className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors"
               title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
             >
               {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeft size={15} />}
             </button>
-            {active && (
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center">
-                  <Bot size={14} className="text-primary" />
-                </div>
-                <p className="text-sm font-medium text-foreground truncate max-w-[200px]">{active.title}</p>
-              </div>
-            )}
+            <div className="min-w-0">
+              {active ? (
+                <p className="text-sm font-medium text-foreground truncate">{active.title}</p>
+              ) : (
+                <p className="text-sm font-medium text-foreground">New conversation</p>
+              )}
+              <AgentStatus health={health} mode={mode} />
+            </div>
           </div>
-          <div className="flex items-center gap-1 bg-secondary rounded-lg p-1">
+          <div className="flex items-center gap-1 bg-secondary rounded-lg p-1 flex-shrink-0">
             {MODES.map((m) => (
               <button
                 key={m.id}
+                type="button"
                 onClick={() => setActiveMode(m.id)}
                 title={m.desc}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
@@ -352,52 +416,35 @@ export default function AssistantPage() {
           </div>
         </div>
 
+        {/* Messages or welcome */}
         {!activeId ? (
           <WelcomeScreen onSend={sendMessage} />
         ) : (
-          <>
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-4">
-              {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
-              {loading && (
-                <div className="flex gap-3 justify-start">
-                  <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
-                    <Bot size={13} className="text-primary" />
-                  </div>
-                  <div className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center gap-2">
-                    <Loader2 size={13} className="animate-spin text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">Thinking…</span>
-                  </div>
+          <div className="flex-1 overflow-y-auto px-4 md:px-6 py-4 space-y-4 min-h-0">
+            {messages.map((msg, i) => <MessageBubble key={i} msg={msg} />)}
+            {loading && (
+              <div className="flex gap-3 justify-start">
+                <div className="w-7 h-7 rounded-lg bg-primary/15 flex items-center justify-center flex-shrink-0">
+                  <Bot size={13} className="text-primary" />
                 </div>
-              )}
-              <div ref={bottomRef} />
-            </div>
-
-            {/* Input */}
-            <div className="px-4 md:px-6 py-3 border-t border-border/50 bg-card/50 flex-shrink-0">
-              <form
-                onSubmit={(e) => { e.preventDefault(); sendMessage(); }}
-                className="flex gap-2"
-              >
-                <input
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Ask about your AV/IT systems…"
-                  className="flex-1 bg-secondary border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || loading}
-                  className="w-10 h-10 flex items-center justify-center bg-primary text-primary-foreground rounded-xl hover:opacity-90 disabled:opacity-40 transition-opacity flex-shrink-0"
-                >
-                  <Send size={14} />
-                </button>
-              </form>
-            </div>
-          </>
+                <div className="bg-card border border-border rounded-2xl px-4 py-3 flex items-center gap-2">
+                  <Loader2 size={13} className="animate-spin text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Thinking…</span>
+                </div>
+              </div>
+            )}
+            <div ref={bottomRef} />
+          </div>
         )}
+
+        {/* Chat input — always visible */}
+        <ChatInputBar
+          input={input}
+          setInput={setInput}
+          loading={loading}
+          onSend={() => sendMessage()}
+          inputRef={inputRef}
+        />
       </div>
     </div>
   );

@@ -16,16 +16,25 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function mockApi(path, options = {}) {
+export async function mockEntityApi(path, options = {}) {
   const base = `${MOCK_SERVER_URL}/api/apps/${MOCK_APP}`;
-  const res = await fetch(`${base}${path}`, {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...authHeaders(),
-      ...options.headers,
-    },
-  });
+  let res;
+  try {
+    res = await fetch(`${base}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...authHeaders(),
+        ...options.headers,
+      },
+    });
+  } catch (err) {
+    throw new Error(
+      err?.message === "Failed to fetch"
+        ? "Could not reach the WaveGuard API. Start the dev stack with npm run dev:all."
+        : err?.message || "Network request failed"
+    );
+  }
   const text = await res.text();
   let data = {};
   if (text) {
@@ -49,7 +58,7 @@ function unwrapList(result) {
 
 export async function listEquipment() {
   if (isMockServer) {
-    const data = await mockApi("/entities/Equipment");
+    const data = await mockEntityApi("/entities/Equipment");
     return Array.isArray(data) ? data : unwrapList(data);
   }
   const rows = await base44.entities.Equipment.list();
@@ -60,7 +69,7 @@ export async function findEquipmentByIp(ip) {
   if (!ip) return null;
   if (isMockServer) {
     try {
-      const rows = await mockApi(`/entities/Equipment?q=${encodeURIComponent(JSON.stringify({ ip }))}`);
+      const rows = await mockEntityApi(`/entities/Equipment?q=${encodeURIComponent(JSON.stringify({ ip }))}`);
       const list = Array.isArray(rows) ? rows : unwrapList(rows);
       return list[0] || null;
     } catch {
@@ -83,7 +92,7 @@ export async function findEquipmentByName(name) {
 export async function createEquipment(data) {
   guardDemoWrite();
   if (isMockServer) {
-    return mockApi("/entities/Equipment", {
+    return mockEntityApi("/entities/Equipment", {
       method: "POST",
       body: JSON.stringify(data),
     });
@@ -94,7 +103,7 @@ export async function createEquipment(data) {
 export async function updateEquipment(id, data) {
   guardDemoWrite();
   if (isMockServer) {
-    return mockApi(`/entities/Equipment/${id}`, {
+    return mockEntityApi(`/entities/Equipment/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
@@ -105,7 +114,7 @@ export async function updateEquipment(id, data) {
 export async function deleteEquipment(id) {
   guardDemoWrite();
   if (isMockServer) {
-    return mockApi(`/entities/Equipment/${id}`, { method: "DELETE" });
+    return mockEntityApi(`/entities/Equipment/${id}`, { method: "DELETE" });
   }
   return base44.entities.Equipment.delete(id);
 }
