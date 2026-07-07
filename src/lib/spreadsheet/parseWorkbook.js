@@ -1,7 +1,13 @@
 import * as XLSX from "xlsx";
 import { detectSheetType, headerRowForType } from "./detectSheetType.js";
 import { SHEET_GROUPS, normalizeHeader, isCredentialHeader } from "./schemas.js";
+import {
+  parseCompactPatchRows,
+  isPatchPanelHeaderRow,
+  looksLikePatchDataRow,
+} from "./parseCompactPatchPanel.js";
 import { detectGenericHeaderRow, rowToGenericEquipment } from "./headerMapping.js";
+import { extractCableTagFromText } from "./cableTag.js";
 
 /** Sheet names we should never auto-import even via the generic fallback. */
 const EXPLICIT_SKIP_NAMES = new Set([
@@ -40,10 +46,11 @@ function findHeaderRow(rows, sheetType) {
     const line = (rows[r] || []).map(cellStr).map(normalizeHeader);
     const joined = line.join("|");
     if (sheetType === SHEET_GROUPS.deviceList && joined.includes("end device") && joined.includes("floor")) return r;
-    if (sheetType === SHEET_GROUPS.patchPanels && joined.includes("patch panel") && joined.includes("cable no")) return r;
+    if (sheetType === SHEET_GROUPS.patchPanels && joined.includes("patch panel") && (joined.includes("cable no") || joined.includes("deck") || joined.includes("port"))) return r;
     if (sheetType === SHEET_GROUPS.switchPorts && joined.includes("hostname") && joined.includes("management ip")) return r;
     if (sheetType === SHEET_GROUPS.appliance && joined.includes("hostname") && (joined.includes("management ip") || joined.includes("model no"))) return r;
     if (sheetType === SHEET_GROUPS.rack && (joined.includes("552-r") || line.some((c) => /^\d+$/.test(c) && parseInt(c, 10) > 10))) return r;
+    if (sheetType === SHEET_GROUPS.rack && (line[0] === "u" || line[0]?.includes("position"))) return r;
     if (sheetType === SHEET_GROUPS.ipScheme && joined.includes("ip range")) return r;
   }
   return preferred;
@@ -69,6 +76,25 @@ function isInterfaceName(hostname) {
 
 function looksLikeMac(val) {
   return /^([0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/.test(String(val || "").trim());
+}
+
+function parsePatchPanelPayload(sheetName, rows, headerIdx) {
+  const compactRows = parseCompactPatchRows(sheetName, rows);
+  const headerIsPatch = isPatchPanelHeaderRow(rows[headerIdx]);
+  const standardRows = headerIsPatch
+    ? parseGenericRows(sheetName, SHEET_GROUPS.patchPanels, rows, headerIdx)
+    : [];
+
+  const compactLooksPrimary =
+    compactRows.length > 0 &&
+    (looksLikePatchDataRow(rows[0]) || !headerIsPatch);
+
+  if (compactLooksPrimary && compactRows.length >= standardRows.length) {
+    return { rows: compactRows, compact: true };
+  }
+  if (standardRows.length) return { rows: standardRows };
+  if (compactRows.length) return { rows: compactRows, compact: true };
+  return { rows: parseGenericRows(sheetName, SHEET_GROUPS.patchPanels, rows, headerIdx) };
 }
 
 function parseSwitchSheet(sheetName, rows, headerIdx) {
@@ -254,16 +280,48 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
         row: i + 1,
         patchPanel: obj["patch panel"] || "",
         port: obj.port || "",
-        cableNo: obj["cable no."] || obj["cable no"] || "",
+        cableNo:
+          extractCableTagFromText(obj["cable no."] || obj["cable no"] || obj.net || obj["cable number"] || obj["cable #"] || "") ||
+          String(obj["cable no."] || obj["cable no"] || obj.net || obj["cable number"] || obj["cable #"] || "").trim(),
         type: obj.type || "",
-        system: obj.system || "",
-        floor: obj.floor || "",
+        system: obj.system || obj.code || "",
+        deck: obj.deck || obj.code || "",
+        floor: obj.floor || obj.deck || obj.code || "",
         room: obj.room || "",
-        location: obj.location || "",
-        endDevice: obj["end device"] || "",
-        endDevicePort: obj["end device port/int"] || obj["end device port"] || "",
+        location: obj.location || obj.destination || "",
+        endDevice: obj["end device"] || obj.destination || "",
+        endDevicePort:
+          obj["end device port/i"] ||
+          obj["end device port/int"] ||
+          obj["end device port"] ||
+          "",
         testedLength: obj["tested/length"] || obj["tested\\length"] || "",
         notes: obj.notes || "",
+        rawObj: obj,
+        consumedKeys: [
+          "patch panel",
+          "port",
+          "cable no.",
+          "cable no",
+          "net",
+          "cable number",
+          "cable #",
+          "type",
+          "system",
+          "code",
+          "deck",
+          "floor",
+          "room",
+          "location",
+          "destination",
+          "end device",
+          "end device port/i",
+          "end device port/int",
+          "end device port",
+          "tested/length",
+          "tested\\length",
+          "notes",
+        ],
         kind: "patch",
       });
     } else if (sheetType === SHEET_GROUPS.appliance) {
@@ -323,8 +381,44 @@ export function parseWorkbook(buffer) {
     const ws = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
 
-    // Unknown sheet → attempt auto-detect using column header synonyms.
+    // Unknown sheet → try compact patch rows first, then header-based patch, then generic equipment.
     if (sheetType === SHEET_GROUPS.skip) {
+      const compactRows = parseCompactPatchRows(sheetName, rows);
+      if (compactRows.length) {
+        summary.byGroup[SHEET_GROUPS.patchPanels] =
+          (summary.byGroup[SHEET_GROUPS.patchPanels] || 0) + compactRows.length;
+        summary.totalRows += compactRows.length;
+        sheets.push({
+          sheetName,
+          sheetType: SHEET_GROUPS.patchPanels,
+          headerRow: 0,
+          rowCount: compactRows.length,
+          compact: true,
+          rows: compactRows,
+        });
+        continue;
+      }
+
+      const patchHeaderIdx = findHeaderRow(rows, SHEET_GROUPS.patchPanels);
+      const patchProbe = (rows[patchHeaderIdx] || []).map(cellStr).map(normalizeHeader).join("|");
+      if (patchProbe.includes("patch panel") && (patchProbe.includes("cable no") || patchProbe.includes("port"))) {
+        const patchRows = parseGenericRows(sheetName, SHEET_GROUPS.patchPanels, rows, patchHeaderIdx);
+        if (patchRows.length) {
+          summary.byGroup[SHEET_GROUPS.patchPanels] =
+            (summary.byGroup[SHEET_GROUPS.patchPanels] || 0) + patchRows.length;
+          summary.totalRows += patchRows.length;
+          sheets.push({
+            sheetName,
+            sheetType: SHEET_GROUPS.patchPanels,
+            headerRow: patchHeaderIdx + 1,
+            rowCount: patchRows.length,
+            headers: (rows[patchHeaderIdx] || []).map(cellStr),
+            rows: patchRows,
+          });
+          continue;
+        }
+      }
+
       const generic = parseGenericEquipmentSheet(sheetName, rows);
       if (generic && generic.rows.length) {
         summary.byGroup[SHEET_GROUPS.generic] =
@@ -354,6 +448,8 @@ export function parseWorkbook(buffer) {
       payload = parseRackSheet(sheetName, rows, headerIdx);
     } else if (sheetType === SHEET_GROUPS.ipScheme) {
       payload = parseIpScheme(rows);
+    } else if (sheetType === SHEET_GROUPS.patchPanels) {
+      payload = parsePatchPanelPayload(sheetName, rows, headerIdx);
     } else {
       payload = { rows: parseGenericRows(sheetName, sheetType, rows, headerIdx) };
     }
@@ -370,7 +466,18 @@ export function parseWorkbook(buffer) {
     summary.byGroup[sheetType] = (summary.byGroup[sheetType] || 0) + rowCount;
     summary.totalRows += rowCount;
 
-    sheets.push({ sheetName, sheetType, headerRow: headerIdx + 1, rowCount, ...payload });
+    sheets.push({
+      sheetName,
+      sheetType,
+      headerRow: payload.compact ? 0 : headerIdx + 1,
+      rowCount,
+      headers: payload.compact
+        ? undefined
+        : sheetType === SHEET_GROUPS.patchPanels
+          ? (rows[headerIdx] || []).map(cellStr)
+          : undefined,
+      ...payload,
+    });
   }
 
   return { sheets, summary };

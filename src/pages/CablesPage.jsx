@@ -4,6 +4,8 @@ import { base44 } from "@/api/base44Client";
 import { motion, AnimatePresence } from "framer-motion";
 import { Cable, Plus, Search, Pencil, Trash2, X, Check, Network, ChevronDown, ChevronRight, Upload, Loader2, AlertTriangle, CheckCircle2, GitBranch, Sparkles, Filter } from "lucide-react";
 import SnmpPortMapPanel from "../components/snmp/SnmpPortMapPanel";
+import PatchPanelSchedulePanel from "../components/cables/PatchPanelSchedulePanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBulkSelection } from "@/hooks/useBulkSelection";
 import BulkActionBar from "@/components/shared/BulkActionBar";
 import BulkEditModal from "@/components/shared/BulkEditModal";
@@ -389,6 +391,7 @@ export default function CablesPage() {
   const [systemFilter, setSystemFilter] = useState("All");
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState("register");
   const bulk = useBulkSelection();
 
   const viewOnTopology = (cable) => {
@@ -526,20 +529,33 @@ export default function CablesPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
             <Cable size={22} className="text-cyan-400" />
-            Cable Register
+            Cables
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Physical links between equipment — type, deck, status tracking</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            {activeTab === "register"
+              ? "Physical links between equipment — type, deck, status tracking"
+              : "Patch panel port schedules by rack — cable tags, devices, and test records"}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setImportOpen(true)} className="flex items-center gap-2 px-3 py-2 bg-secondary border border-border text-muted-foreground rounded-lg text-sm hover:text-foreground transition-colors">
-            <Upload size={14} /> Import CSV / Excel
-          </button>
-          <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
-            <Plus size={14} /> Add Cable
-          </button>
-        </div>
+        {activeTab === "register" && (
+          <div className="flex items-center gap-2">
+            <button onClick={() => setImportOpen(true)} className="flex items-center gap-2 px-3 py-2 bg-secondary border border-border text-muted-foreground rounded-lg text-sm hover:text-foreground transition-colors">
+              <Upload size={14} /> Import CSV / Excel
+            </button>
+            <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:opacity-90 transition-opacity">
+              <Plus size={14} /> Add Cable
+            </button>
+          </div>
+        )}
       </div>
 
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="bg-secondary/50">
+          <TabsTrigger value="register">Cable Register</TabsTrigger>
+          <TabsTrigger value="patchPanels">Patch Panel Schedules</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="register" className="space-y-6 mt-0">
       {/* Search + filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex items-center gap-2 bg-secondary border border-border rounded-xl px-3 py-2.5 flex-1 max-w-md">
@@ -646,6 +662,12 @@ export default function CablesPage() {
           )}
         </AnimatePresence>
       </div>
+        </TabsContent>
+
+        <TabsContent value="patchPanels" className="mt-0">
+          <PatchPanelSchedulePanel onRefresh={load} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

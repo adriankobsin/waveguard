@@ -15,7 +15,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/chat': {
-        target: 'http://localhost:3003',
+        target: process.env.VITE_SCANNER_URL || 'http://localhost:3002',
         changeOrigin: true,
       },
     },

@@ -20,6 +20,13 @@ export const PHASE1_GROUPS = [
   SHEET_GROUPS.generic,
 ];
 
+/** Groups imported with patch panel schedule uploads (panels + rack placement + auto-detected sheets). */
+export const PATCH_PANEL_IMPORT_GROUPS = [
+  SHEET_GROUPS.patchPanels,
+  SHEET_GROUPS.rack,
+  SHEET_GROUPS.generic,
+];
+
 /** Phase 2 groups. */
 export const PHASE2_GROUPS = [SHEET_GROUPS.ipScheme, SHEET_GROUPS.rack];
 
@@ -60,12 +67,19 @@ export const PATCH_PANEL_HEADERS = [
   "port",
   "cable no.",
   "cable no",
+  "net",
+  "cable number",
+  "cable #",
   "type",
   "system",
+  "code",
+  "deck",
   "floor",
   "room",
   "location",
+  "destination",
   "end device",
+  "end device port/i",
   "end device port/int",
   "end device port",
   "tested\\length",

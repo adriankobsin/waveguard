@@ -25,6 +25,8 @@ export function stripVesselEquipmentName(name) {
     const rest = s.slice(dash + 1).trim();
     if (
       rest &&
+      /[A-Za-z]/.test(rest) &&
+      rest.length > 3 &&
       /^[A-Za-z][A-Za-z0-9_\s]*$/.test(prefix) &&
       !/\d/.test(prefix) &&
       prefix.length >= 5

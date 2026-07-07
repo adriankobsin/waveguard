@@ -3264,6 +3264,21 @@ app.put("/api/apps/:appId/entities/:entityName/bulk", (req, res) => {
   res.json({ modifiedCount: (req.body || []).length });
 });
 
+app.post("/api/apps/:appId/entities/:entityName/bulk", (req, res) => {
+  const { entityName } = req.params;
+  const handler = entityHandlers[entityName];
+  if (!handler?.create) {
+    return res.status(404).json({ message: `Unknown entity: ${entityName}` });
+  }
+  try {
+    const result = (Array.isArray(req.body) ? req.body : []).map((d) => handler.create(d));
+    queueSave(db);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message, code: "server_error" });
+  }
+});
+
 app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) => {
   try {
     const { commitVesselImport } = await import("../src/lib/spreadsheet/commitImport.js");
@@ -3293,14 +3308,21 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
     );
     const existingByIp = new Map(db.equipment.filter((e) => e.ip).map((e) => [e.ip, e]));
     const existingCableLabels = new Set(db.cables.map((c) => c.label).filter(Boolean));
+    const existingByPatchPort = new Map(
+      db.cables
+        .filter((c) => c.patch_panel && c.port != null && c.port !== "")
+        .map((c) => [`${String(c.patch_panel).trim().toLowerCase()}|${String(c.port).trim()}`, c])
+    );
 
     const deps = {
       getExistingByName: async () => existingByName,
       getExistingByIp: async () => existingByIp,
       getExistingCableLabels: async () => existingCableLabels,
+      getExistingByPatchPort: async () => existingByPatchPort,
       createEquipment: (data) => entityHandlers.Equipment.create(data),
       updateEquipment: (id, data) => entityHandlers.Equipment.update(id, data),
       createCable: (data) => entityHandlers.Cable.create(data),
+      updateCable: (id, data) => entityHandlers.Cable.update(id, data),
       bulkCreateCables: (rows) => rows.map((r) => entityHandlers.Cable.create(r)),
       clearEquipment: async () => {
         const n = db.equipment.length;
@@ -3349,6 +3371,7 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
     };
 
     const result = await commitVesselImport(deps, payload, options);
+    queueSave(db);
     res.json({ success: true, ...result });
   } catch (err) {
     console.error("[importVesselSpreadsheet]", err);
@@ -3794,6 +3817,25 @@ setInterval(pollAllSwitchProfiles, DEFAULT_POLL_INTERVAL_MS);
 import createAudioRouter from "./audioRoutes.js";
 import createHVACRouter from "./hvacRoutes.js";
 import createCrestronGatewayRouter from "./crestronHVACGateway.js";
+import { handleChatRequest, getChatHealth } from "../chat-server/handler.js";
+
+app.post("/chat", async (req, res) => {
+  try {
+    const result = await handleChatRequest(req.body);
+    res.status(result.status).json(result.body);
+  } catch (err) {
+    console.error("[chat]", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/chat/health", async (_req, res) => {
+  try {
+    res.json(await getChatHealth());
+  } catch (err) {
+    res.status(500).json({ status: "error", error: err.message });
+  }
+});
 
 app.use(`/api/apps/${APP_ID}/audio`, createAudioRouter(db, broadcast));
 app.use("/api/hvac", createHVACRouter());
@@ -3810,4 +3852,5 @@ app.listen(PORT, () => {
   console.log(`  - Integrations: /api/apps/${APP_ID}/integration-endpoints/Core/*`);
   console.log(`  - Network scanner: ${USE_MOCK_SCAN ? "MOCK (demo devices only)" : "LIVE (ping/arp/full on this host)"}`);
   console.log(`  - Scanner health: GET /api/apps/${APP_ID}/scanner/health`);
+  console.log(`  - AI Assistant: POST /chat (offline agent + optional Ollama/OpenAI)`);
 });

@@ -1,9 +1,11 @@
 export { parseWorkbook } from "./parseWorkbook.js";
 export { buildImportPayload } from "./linkRows.js";
+export { readSpreadsheetToBuffer } from "./readSpreadsheet.js";
 export {
   SHEET_GROUPS,
   PHASE1_GROUPS,
   PHASE2_GROUPS,
+  PATCH_PANEL_IMPORT_GROUPS,
   DEFAULT_FLOOR_MAP,
 } from "./schemas.js";
 export { detectSheetType } from "./detectSheetType.js";
