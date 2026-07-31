@@ -43,7 +43,7 @@ async function runPool(items, concurrency, fn) {
   return results;
 }
 
-async function probeHost(ip, subnet, scanType, opts, arpMap) {
+async function probeHost(ip, subnet, scanType, opts, arpMap, knownName = "") {
   const timeoutMs = opts.timeoutMs;
   let alive = false;
   let responseTimeMs = null;
@@ -104,6 +104,7 @@ async function probeHost(ip, subnet, scanType, opts, arpMap) {
     }
   }
 
+  if (!hostname && knownName) hostname = knownName;
   const category = guessCategory(hostname, vendor, openPorts);
   return {
     id: `disc-${subnet.replace(/\//g, "-")}-${ip.replace(/\./g, "-")}`,
@@ -157,11 +158,29 @@ export async function scan(userOptions = {}) {
   }
 
   const tasks = [];
+  const queued = new Set();
+  const subnetForIp = (ip) => {
+    const prefix = String(ip || "").split(".").slice(0, 3).join(".");
+    return (
+      scanSubnets.find((s) => s.startsWith(`${prefix}.`)) ||
+      (prefix ? `${prefix}.0/24` : scanSubnets[0])
+    );
+  };
+
+  // Priority-probe known IT hosts from the vessel spreadsheet (gateways, switches, APs…).
+  for (const host of opts.knownHosts || []) {
+    const ip = typeof host === "string" ? host : host?.ip;
+    if (!ip || queued.has(ip)) continue;
+    queued.add(ip);
+    tasks.push({ ip, subnet: subnetForIp(ip), knownName: host?.name || "" });
+  }
+
   if (opts.scanType === "arp" && arpMap.size > 0) {
     for (const subnet of scanSubnets) {
       const subnetPrefix = subnet.split("/")[0].split(".").slice(0, 3).join(".");
-      for (const [ip, mac] of arpMap) {
-        if (ip.startsWith(subnetPrefix)) {
+      for (const [ip] of arpMap) {
+        if (ip.startsWith(subnetPrefix) && !queued.has(ip)) {
+          queued.add(ip);
           tasks.push({ ip, subnet });
         }
       }
@@ -169,13 +188,15 @@ export async function scan(userOptions = {}) {
   } else {
     for (const subnet of scanSubnets) {
       for (const ip of expandCidr(subnet, 512)) {
+        if (queued.has(ip)) continue;
+        queued.add(ip);
         tasks.push({ ip, subnet });
       }
     }
   }
 
-  const found = await runPool(tasks, opts.maxConcurrent, ({ ip, subnet }) =>
-    probeHost(ip, subnet, opts.scanType, opts, arpMap)
+  const found = await runPool(tasks, opts.maxConcurrent, ({ ip, subnet, knownName }) =>
+    probeHost(ip, subnet, opts.scanType, opts, arpMap, knownName || "")
   );
 
   const seen = new Set();

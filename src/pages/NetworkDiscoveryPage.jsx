@@ -195,6 +195,8 @@ export default function NetworkDiscoveryPage() {
                   setScanType(t);
                 }}
                 onDetectSubnets={handleDetect}
+                subnetLabels={discoveryCfg?.subnetLabels || {}}
+                knownHosts={discoveryCfg?.knownHosts || []}
               />
             </motion.div>
           )}

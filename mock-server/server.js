@@ -643,9 +643,18 @@ app.post("/api/apps/:appId/users/invite-user", (req, res) => {
 // ============================================================
 function getDiscoverySettings() {
   const row = db.systemSettings.find((s) => s.key === "discovery");
-  const v = row?.value && typeof row.value === "object" ? row.value : {};
+  let v = {};
+  if (row?.value) {
+    try {
+      v = typeof row.value === "string" ? JSON.parse(row.value) : row.value;
+    } catch {
+      v = typeof row.value === "object" ? row.value : {};
+    }
+  }
   return {
     subnets: v.subnets || ["192.168.10.0/24"],
+    subnetLabels: v.subnetLabels || {},
+    knownHosts: Array.isArray(v.knownHosts) ? v.knownHosts : [],
     scanType: v.scanType || "ping",
     autoDetectLocalSubnets: v.autoDetectLocalSubnets !== false,
     snmpEnabled: v.snmpEnabled !== false,
@@ -669,8 +678,10 @@ function mergeScanOptions(body = {}) {
     const local = detectLocalSubnets();
     if (local.length) subnets = local;
   }
+  const knownHosts = body.knownHosts?.length ? body.knownHosts : saved.knownHosts;
   return {
     subnets,
+    knownHosts,
     scanType: body.scanType || saved.scanType,
     target: body.target,
     maxConcurrent: body.maxConcurrent ?? saved.maxConcurrent,
@@ -3381,11 +3392,11 @@ app.post("/api/apps/:appId/entities/:entityName/bulk", (req, res) => {
 app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) => {
   try {
     const { commitVesselImport } = await import("../src/lib/spreadsheet/commitImport.js");
-    const { parseAndBuildImport } = await import("../src/lib/spreadsheet/index.js");
     const { payload: bodyPayload, options = {}, fileBase64 } = req.body || {};
 
     let payload = bodyPayload;
     if (!payload && fileBase64) {
+      const { parseAndBuildImport } = await import("../src/lib/spreadsheet/index.js");
       const buffer = Buffer.from(fileBase64, "base64");
       const { payload: built } = parseAndBuildImport(buffer, {
         enabledGroups: options.enabledGroups,
@@ -3443,15 +3454,15 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
         if (existing) existing.value = value;
         else db.systemSettings.push({ id: `setting-${Date.now()}`, key, value });
       },
-      saveDiscoverySubnets: async (subnets) => {
+      saveDiscoverySubnets: async (subnets, knownHosts = []) => {
         const key = "discovery";
         const existing = db.systemSettings.find((s) => s.key === key);
-        let parsed = { subnets: [] };
+        let parsed = { subnets: [], subnetLabels: {}, knownHosts: [] };
         if (existing?.value) {
           try {
             parsed = typeof existing.value === "string" ? JSON.parse(existing.value) : existing.value;
           } catch {
-            parsed = { subnets: [] };
+            parsed = { subnets: [], subnetLabels: {}, knownHosts: [] };
           }
         }
         const toCidr = (entry) => {
@@ -3460,8 +3471,32 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
           if (typeof entry === "object" && entry.cidr) return String(entry.cidr).trim() || null;
           return null;
         };
-        const merge = (arr) => [...new Set((arr || []).map(toCidr).filter(Boolean))];
-        parsed.subnets = merge([...(parsed.subnets || []), ...(subnets || [])]);
+        const labels = { ...(parsed.subnetLabels || {}) };
+        for (const entry of subnets || []) {
+          if (entry && typeof entry === "object" && entry.cidr && entry.label) {
+            labels[String(entry.cidr).trim()] = String(entry.label).trim();
+          }
+        }
+        parsed.subnets = [
+          ...new Set([...(parsed.subnets || []).map(toCidr), ...(subnets || []).map(toCidr)].filter(Boolean)),
+        ];
+        parsed.subnetLabels = labels;
+        const hostByIp = new Map(
+          (parsed.knownHosts || [])
+            .filter((h) => h?.ip)
+            .map((h) => [String(h.ip).trim(), h])
+        );
+        for (const h of knownHosts || []) {
+          const ip = String(h?.ip || "").trim();
+          if (!ip || hostByIp.has(ip)) continue;
+          hostByIp.set(ip, {
+            ip,
+            name: String(h.name || ip).trim(),
+            vlan: String(h.vlan || "").trim(),
+            source: h.source || "import",
+          });
+        }
+        parsed.knownHosts = [...hostByIp.values()];
         const value = JSON.stringify(parsed);
         if (existing) existing.value = value;
         else db.systemSettings.push({ id: `setting-${Date.now()}`, key, value });

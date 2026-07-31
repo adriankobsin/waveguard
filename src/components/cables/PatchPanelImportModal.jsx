@@ -10,13 +10,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Upload, FileSpreadsheet, Loader2, AlertCircle, CheckCircle, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
-import { parseWorkbook, buildImportPayload, DEFAULT_FLOOR_MAP } from "@/lib/spreadsheet";
+import { parseAndBuildImport, DEFAULT_FLOOR_MAP } from "@/lib/spreadsheet";
 import { readSpreadsheetToBuffer } from "@/lib/spreadsheet/readSpreadsheet";
-import {
-  buildPatchImportPreview,
-  detectEnabledGroupsFromWorkbook,
-} from "@/lib/patchPanelSchedule/patchImportPreview";
+import { buildPatchImportPreview } from "@/lib/patchPanelSchedule/patchImportPreview";
 import { commitVesselSpreadsheetImport } from "@/api/vesselSpreadsheetImportApi";
+import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
 
 const SHEET_TYPE_LABELS = {
   patchPanels: "Patch Panels",
@@ -57,21 +55,14 @@ export default function PatchPanelImportModal({ isOpen, onClose, onComplete }) {
     setImportPreview(null);
     try {
       const buffer = await readSpreadsheetToBuffer(file);
-      const parsed = parseWorkbook(buffer);
-      const enabledGroups = detectEnabledGroupsFromWorkbook(parsed);
-      const payload = buildImportPayload(parsed, {
-        enabledGroups,
+      // Same full-document pipeline as Equipment → Import spreadsheet.
+      const { parsed, payload } = parseAndBuildImport(buffer, {
         floorMap: DEFAULT_FLOOR_MAP,
       });
 
-      if (payload.stats.cables === 0) {
-        const patchSheets = (parsed?.sheets || []).filter(
-          (s) => s.sheetType === "patchPanels" && !s.skipped
-        );
+      if (payload.stats.cables === 0 && payload.stats.equipment === 0) {
         setParseError(
-          patchSheets.length
-            ? "Patch panel sheets were found but contained no importable rows. Each row needs a patch panel name and port number."
-            : "No patch panel data found. Include columns: patch panel, port, cable no., end device, tested/length — on any sheet."
+          "No importable rows found. Expected Device List, Patch Panels, switches, appliances, or similar sheets."
         );
         setImportPreview(buildPatchImportPreview(parsed, payload));
         return;
@@ -94,8 +85,9 @@ export default function PatchPanelImportModal({ isOpen, onClose, onComplete }) {
     try {
       const commitResult = await commitVesselSpreadsheetImport(preview, { replace: false });
       setResult(commitResult);
+      window.dispatchEvent(new CustomEvent(EQUIPMENT_CHANGED_EVENT));
       toast.success(
-        `Imported ${commitResult.equipmentCreated} panels/equipment, ${commitResult.cablesCreated} port rows`
+        `Imported ${commitResult.equipmentCreated} equipment, ${commitResult.cablesCreated} cables/port rows`
       );
       onComplete?.();
     } catch (err) {
@@ -116,8 +108,9 @@ export default function PatchPanelImportModal({ isOpen, onClose, onComplete }) {
             Import patch panel schedule
           </DialogTitle>
           <DialogDescription>
-            Upload any workbook (.xlsx, .csv). All sheets are scanned automatically — patch panel columns are
-            mapped to port schedules, rack sheets link panels to racks, and extra columns are preserved.
+            Upload any vessel workbook (.xlsx, .csv). Every sheet is scanned — Device List, Patch Panels,
+            switches, appliances, racks, and IP Scheme are mapped to equipment, cables, and schedules.
+            Patch rows import even when the cable tag is blank (panel + port is enough).
           </DialogDescription>
         </DialogHeader>
 
@@ -299,7 +292,8 @@ export default function PatchPanelImportModal({ isOpen, onClose, onComplete }) {
               ) : (
                 <Button onClick={handleCommit} disabled={busy}>
                   {busy && <Loader2 size={14} className="animate-spin mr-2" />}
-                  Import {importPreview?.stats?.cables ?? 0} port rows
+                  Import {importPreview?.stats?.equipment ?? 0} equipment,{" "}
+                  {importPreview?.stats?.cables ?? 0} cables
                 </Button>
               )}
             </DialogFooter>

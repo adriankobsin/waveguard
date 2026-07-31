@@ -1,4 +1,4 @@
-import { normalizeHeader } from "@/lib/spreadsheet/schemas.js";
+import { normalizeHeader } from "../spreadsheet/schemas.js";
 
 const USERNAME_HEADERS = new Set([
   "username",

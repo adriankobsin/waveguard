@@ -30,8 +30,23 @@ function doSave(db) {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const tmp = DATA_PATH + ".tmp";
     const serializable = extractPersistentState(db);
-    fs.writeFileSync(tmp, JSON.stringify(serializable, null, 2), "utf-8");
-    fs.renameSync(tmp, DATA_PATH);
+    const json = JSON.stringify(serializable, null, 2);
+    fs.writeFileSync(tmp, json, "utf-8");
+    try {
+      fs.renameSync(tmp, DATA_PATH);
+    } catch (renameErr) {
+      // Windows/OneDrive often blocks atomic rename — fall back to overwrite.
+      if (renameErr.code === "EPERM" || renameErr.code === "EEXIST") {
+        fs.writeFileSync(DATA_PATH, json, "utf-8");
+        try {
+          fs.unlinkSync(tmp);
+        } catch {
+          /* ignore */
+        }
+      } else {
+        throw renameErr;
+      }
+    }
   } catch (err) {
     console.error("[persistence] Write failed:", err.message);
   }

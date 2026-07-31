@@ -11,7 +11,7 @@ import { extractCableTagFromText } from "./cableTag.js";
 import {
   extractCredentialsFromSheetRows,
   dedupeExtractedCredentials,
-} from "@/lib/credentials/extractCredentials.js";
+} from "../credentials/extractCredentials.js";
 
 /** Sheet names we should never auto-import even via the generic fallback. */
 const EXPLICIT_SKIP_NAMES = new Set([
@@ -30,6 +30,25 @@ function cellStr(v) {
   if (v == null || v === "") return "";
   if (typeof v === "number" && !Number.isNaN(v)) return String(v);
   return String(v).trim();
+}
+
+/** Excel sheets sometimes expand to tens of thousands of empty columns — clip them. */
+function trimSheetRows(rows, maxCols = 40) {
+  let lastCol = 0;
+  for (const row of rows || []) {
+    for (let i = Math.min((row?.length || 0) - 1, maxCols - 1); i >= 0; i--) {
+      if (cellStr(row[i]) !== "") {
+        if (i + 1 > lastCol) lastCol = i + 1;
+        break;
+      }
+    }
+  }
+  const width = Math.min(Math.max(lastCol, 1), maxCols);
+  return (rows || []).map((row) => {
+    const out = Array.isArray(row) ? row.slice(0, width) : [];
+    while (out.length < width) out.push("");
+    return out;
+  });
 }
 
 function rowToObject(headers, row) {
@@ -52,7 +71,13 @@ function findHeaderRow(rows, sheetType) {
     if (sheetType === SHEET_GROUPS.deviceList && joined.includes("end device") && joined.includes("floor")) return r;
     if (sheetType === SHEET_GROUPS.patchPanels && joined.includes("patch panel") && (joined.includes("cable no") || joined.includes("deck") || joined.includes("port"))) return r;
     if (sheetType === SHEET_GROUPS.switchPorts && joined.includes("hostname") && joined.includes("management ip")) return r;
-    if (sheetType === SHEET_GROUPS.appliance && joined.includes("hostname") && (joined.includes("management ip") || joined.includes("model no"))) return r;
+    if (
+      sheetType === SHEET_GROUPS.appliance &&
+      (joined.includes("management ip") || joined.includes("model no")) &&
+      (joined.includes("hostname") || joined.includes("mac address") || joined.includes("serial number"))
+    ) {
+      return r;
+    }
     if (sheetType === SHEET_GROUPS.rack && (joined.includes("552-r") || line.some((c) => /^\d+$/.test(c) && parseInt(c, 10) > 10))) return r;
     if (sheetType === SHEET_GROUPS.rack && (line[0] === "u" || line[0]?.includes("position"))) return r;
     if (sheetType === SHEET_GROUPS.ipScheme && joined.includes("ip range")) return r;
@@ -188,33 +213,106 @@ function parseRackSheet(sheetName, rows, headerIdx) {
   return { placements };
 }
 
+function isIpv4Cell(value) {
+  const s = cellStr(value);
+  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) return false;
+  return s.split(".").every((o) => {
+    const n = Number(o);
+    return n >= 0 && n <= 255;
+  });
+}
+
 function parseIpScheme(rows) {
   const vlans = [];
+  const hosts = [];
   let vlanRowIdx = -1;
   let rangeRowIdx = -1;
-  for (let r = 0; r < Math.min(rows.length, 15); r++) {
+  let maskRowIdx = -1;
+  let gatewayRowIdx = -1;
+  let addressHeaderIdx = -1;
+
+  for (let r = 0; r < Math.min(rows.length, 40); r++) {
     const line = (rows[r] || []).map(cellStr).join("|").toLowerCase();
     if (line.includes("vlan") && vlanRowIdx < 0) vlanRowIdx = r;
     if (line.includes("ip range") && rangeRowIdx < 0) rangeRowIdx = r;
+    if (line.includes("subnet mask") && maskRowIdx < 0) maskRowIdx = r;
+    if (line.includes("default gateway") && gatewayRowIdx < 0) gatewayRowIdx = r;
+    if (line.includes("address used") && line.includes("device name") && addressHeaderIdx < 0) {
+      addressHeaderIdx = r;
+    }
   }
-  if (vlanRowIdx < 0 || rangeRowIdx < 0) return { vlans };
+  if (vlanRowIdx < 0 || rangeRowIdx < 0) return { vlans, hosts };
 
   const vlanRow = rows[vlanRowIdx] || [];
   const rangeRow = rows[rangeRowIdx] || [];
+  const maskRow = maskRowIdx >= 0 ? rows[maskRowIdx] || [] : [];
+  const gatewayRow = gatewayRowIdx >= 0 ? rows[gatewayRowIdx] || [] : [];
+  const seenRanges = new Set();
+
   for (let c = 0; c < Math.max(vlanRow.length, rangeRow.length); c++) {
     const vlanCell = cellStr(vlanRow[c]);
-    const rangeCell = cellStr(rangeRow[c]);
-    if (rangeCell && /^\d+\.\d+/.test(rangeCell)) {
-      const vlanName = vlanCell || cellStr(vlanRow[c - 1]) || cellStr(vlanRow[c - 2]) || "";
-      vlans.push({ vlan: vlanName, ipRange: rangeCell, column: c });
-    } else if (vlanCell.toLowerCase().includes("vlan")) {
-      const nextRange = cellStr(rangeRow[c + 1]) || cellStr(rangeRow[c + 2]);
-      if (nextRange && /^\d+\.\d+/.test(nextRange)) {
-        vlans.push({ vlan: vlanCell, ipRange: nextRange, column: c });
+    const rangeAt = cellStr(rangeRow[c]);
+    const rangeNext = cellStr(rangeRow[c + 1]);
+    const rangeCell =
+      rangeAt && /^\d+\.\d+/.test(rangeAt)
+        ? rangeAt
+        : rangeNext && /^\d+\.\d+/.test(rangeNext)
+          ? rangeNext
+          : "";
+    if (!rangeCell) continue;
+
+    const vlanName =
+      (vlanCell && !/^ip range$/i.test(vlanCell) ? vlanCell : "") ||
+      cellStr(vlanRow[c - 1]) ||
+      cellStr(vlanRow[c - 2]) ||
+      "";
+    if (!vlanName || /^ip range$/i.test(vlanName)) continue;
+
+    const rangeKey = `${vlanName}|${rangeCell}`;
+    if (seenRanges.has(rangeKey)) continue;
+    seenRanges.add(rangeKey);
+
+    const rangeCol = rangeAt && /^\d+\.\d+/.test(rangeAt) ? c : c + 1;
+    vlans.push({
+      vlan: vlanName,
+      ipRange: rangeCell,
+      gateway: isIpv4Cell(gatewayRow[rangeCol]) ? cellStr(gatewayRow[rangeCol]) : "",
+      mask: cellStr(maskRow[rangeCol]) || "",
+      column: c,
+      rangeColumn: rangeCol,
+    });
+  }
+
+  // Address Used / Device Name tables sit under each VLAN block:
+  // [VLAN title / Address Used] | [range col / Device Name]
+  if (addressHeaderIdx >= 0) {
+    for (const vlan of vlans) {
+      const ipCol = vlan.column;
+      const nameCol = vlan.rangeColumn;
+      let blankStreak = 0;
+      for (let r = addressHeaderIdx + 1; r < rows.length; r++) {
+        const ip = cellStr(rows[r]?.[ipCol]);
+        const name = cellStr(rows[r]?.[nameCol]);
+        if (!isIpv4Cell(ip)) {
+          blankStreak += 1;
+          if (blankStreak >= 8) break;
+          continue;
+        }
+        blankStreak = 0;
+        // Sheet lists every address in the range — keep real assignments only.
+        // "DHCP" marks pool placeholders, not devices to probe.
+        if (!name || /^dhcp$/i.test(name) || /^\d+$/.test(name)) continue;
+        hosts.push({
+          ip,
+          name,
+          vlan: vlan.vlan,
+          source: "ipScheme",
+        });
       }
     }
   }
-  return { vlans };
+
+  return { vlans, hosts };
 }
 
 function parseGenericEquipmentSheet(sheetName, rows) {
@@ -279,11 +377,18 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
       });
     } else if (sheetType === SHEET_GROUPS.patchPanels) {
       if (!obj["patch panel"]) continue;
+      const port = obj.port || "";
+      const rawPanel = obj["patch panel"] || "";
+      // Albatros lists panel IDs as MEC552-R1-PP1-P1 with a separate Port column.
+      const panel =
+        port && new RegExp(`-P${String(port).trim()}$`, "i").test(rawPanel)
+          ? rawPanel.replace(new RegExp(`-P${String(port).trim()}$`, "i"), "")
+          : rawPanel;
       parsed.push({
         sheet: sheetName,
         row: i + 1,
-        patchPanel: obj["patch panel"] || "",
-        port: obj.port || "",
+        patchPanel: panel,
+        port,
         cableNo:
           extractCableTagFromText(obj["cable no."] || obj["cable no"] || obj.net || obj["cable number"] || obj["cable #"] || "") ||
           String(obj["cable no."] || obj["cable no"] || obj.net || obj["cable number"] || obj["cable #"] || "").trim(),
@@ -293,11 +398,17 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
         floor: obj.floor || obj.deck || obj.code || "",
         room: obj.room || "",
         location: obj.location || obj.destination || "",
-        endDevice: obj["end device"] || obj.destination || "",
+        endDevice:
+          obj["end device sw"] ||
+          obj["end device"] ||
+          obj.device ||
+          obj.destination ||
+          "",
         endDevicePort:
           obj["end device port/i"] ||
           obj["end device port/int"] ||
           obj["end device port"] ||
+          (obj.device && obj.device !== "0" && !obj["end device sw"] ? obj.device : "") ||
           "",
         testedLength: obj["tested/length"] || obj["tested\\length"] || "",
         notes: obj.notes || "",
@@ -319,6 +430,8 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
           "location",
           "destination",
           "end device",
+          "end device sw",
+          "device",
           "end device port/i",
           "end device port/int",
           "end device port",
@@ -329,16 +442,31 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
         kind: "patch",
       });
     } else if (sheetType === SHEET_GROUPS.appliance) {
-      const name = obj.hostname || obj["base mac address"] || "";
+      const mac =
+        looksLikeMac(obj["mac address"])
+          ? obj["mac address"]
+          : looksLikeMac(obj["base mac address"])
+            ? obj["base mac address"]
+            : "";
+      const model = obj["model no"] || obj["model no (controller)"] || "";
+      const name =
+        obj.hostname ||
+        obj["base mac address"] ||
+        model ||
+        mac ||
+        obj["management ip"] ||
+        "";
       if (!name || isInterfaceName(name)) continue;
+      // Skip header/legend leftovers
+      if (/^(mac address|hostname|model)/i.test(name)) continue;
       parsed.push({
         sheet: sheetName,
         row: i + 1,
         hostname: name,
-        mac: looksLikeMac(obj["mac address"]) ? obj["mac address"] : looksLikeMac(obj["base mac address"]) ? obj["base mac address"] : "",
+        mac,
         location: obj.location || "",
         firmware: obj.firmware || obj["firmware version"] || "",
-        model: obj["model no"] || obj["model no (controller)"] || "",
+        model,
         managementIp: obj["management ip"] || "",
         serial: obj["serial number"] || "",
         notes: obj.notes || "",
@@ -384,7 +512,9 @@ export function parseWorkbook(buffer) {
     }
 
     const ws = wb.Sheets[sheetName];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
+    const rows = trimSheetRows(
+      XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false })
+    );
     extractedCredentials.push(...extractCredentialsFromSheetRows(sheetName, rows));
 
     // Unknown sheet → try compact patch rows first, then header-based patch, then generic equipment.
