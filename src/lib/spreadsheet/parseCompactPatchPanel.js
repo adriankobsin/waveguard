@@ -3,10 +3,7 @@
  * (common in exported schedules: panel | port | [blank] | NET 1545 | [blank] | CAT6A | ...).
  */
 
-import {
-  extractCableTagFromText,
-  rowContainsCableTag,
-} from "./cableTag.js";
+import { extractCableTagFromText } from "./cableTag.js";
 
 const PATCH_PANEL_RE = /-PP\d|PP\d/i;
 const PORT_RE = /^\d+$/;
@@ -19,10 +16,10 @@ export function compactRowCells(row) {
 
 export function looksLikePatchDataRow(row) {
   const cells = compactRowCells(row);
-  if (cells.length < 3) return false;
+  // Panel + port is enough — cable tags are optional (spare / untagged ports).
+  if (cells.length < 2) return false;
   if (!PATCH_PANEL_RE.test(cells[0])) return false;
-  if (!PORT_RE.test(cells[1])) return false;
-  return rowContainsCableTag(cells.slice(2));
+  return PORT_RE.test(cells[1]);
 }
 
 export function isPatchPanelHeaderRow(row) {
@@ -64,8 +61,6 @@ export function compactCellsToPatchRow(cells, sheetName, rowIndex) {
     classifyTrailingCell(cells[i], state);
   }
 
-  if (!state.cableNo) return null;
-
   const patchPanel = cells[0];
   const port = cells[1];
   const apNote = [state.notes, state.destination].find((s) => s && /^AP\s/i.test(s)) || "";
@@ -77,7 +72,7 @@ export function compactCellsToPatchRow(cells, sheetName, rowIndex) {
     row: rowIndex,
     patchPanel,
     port,
-    cableNo: state.cableNo,
+    cableNo: state.cableNo || `${patchPanel}-P${port}`,
     type: state.type,
     system: "",
     deck: state.deck,
@@ -136,7 +131,7 @@ export function parseCompactPatchRows(sheetName, rows) {
 export const COMPACT_PATCH_COLUMNS = [
   { sourceColumn: "Column A", platformField: "patch_panel", importTarget: "Patch panel ID" },
   { sourceColumn: "Column B", platformField: "port", importTarget: "Port number" },
-  { sourceColumn: "Column C+", platformField: "label", importTarget: "Cable tag (NET ####)" },
+  { sourceColumn: "Column C+", platformField: "label", importTarget: "Cable tag (NET ####, optional)" },
   { sourceColumn: "Next", platformField: "type", importTarget: "Cable type (CAT6A, etc.)" },
   { sourceColumn: "Next", platformField: "deck", importTarget: "Deck code (LD, TD, …)" },
   { sourceColumn: "Next", platformField: "location + to_equipment", importTarget: "Destination / end device" },

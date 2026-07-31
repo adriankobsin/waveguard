@@ -13,6 +13,7 @@ import {
   loadDiscoverySettingsLocal,
   saveDiscoverySettingsLocal,
   DISCOVERY_SETTINGS_KEY,
+  DISCOVERY_CHANGED_EVENT,
   normalizeDiscoverySettings,
 } from "@/lib/discoverySettings";
 
@@ -97,6 +98,15 @@ export function useSettings(key, defaults, options = {}) {
     };
     window.addEventListener("waveguard-general-settings-changed", onLocalChange);
     return () => window.removeEventListener("waveguard-general-settings-changed", onLocalChange);
+  }, [key]);
+
+  useEffect(() => {
+    if (key !== DISCOVERY_SETTINGS_KEY) return;
+    const onDiscoveryChange = (e) => {
+      if (e.detail) setValue(normalizeDiscoverySettings(e.detail));
+    };
+    window.addEventListener(DISCOVERY_CHANGED_EVENT, onDiscoveryChange);
+    return () => window.removeEventListener(DISCOVERY_CHANGED_EVENT, onDiscoveryChange);
   }, [key]);
 
   const save = useCallback(

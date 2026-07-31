@@ -2,8 +2,8 @@ import { useState, useRef } from "react";
 import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
-  Wifi, Menu, X, Search, Bell, Share2, Zap,
-  BookOpen, Bot, Cable, Package, FileText,   Lightbulb, Music, Radar, HelpCircle, Thermometer,
+  Wifi, Menu, X, Search, Bell, Share2,
+  BookOpen, Bot, Cable, Package, FileText,   Lightbulb, Music, Radar, Thermometer,
   Sun, Moon, FlaskConical, Loader2,
 } from "lucide-react";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
@@ -26,10 +26,8 @@ const NAV = [
   { to: "/assistant", icon: Bot, label: "AI Assistant" },
   { to: "/lighting", icon: Lightbulb, label: "Lights and Shades" },
   { to: "/audio", icon: Music, label: "Audio DSP" },
-  { to: "/automation", icon: Zap, label: "Automation" },
   { to: "/reports", icon: FileText, label: "Reports" },
   { to: "/hvac", icon: Thermometer, label: "HVAC" },
-  { to: "/help", icon: HelpCircle, label: "Help" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 

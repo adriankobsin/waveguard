@@ -246,7 +246,9 @@ export default function InventoryPage() {
             Equipment
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            {isLoading ? "Loading…" : `${equipment.length} items from discovery and manual entry`}
+            {isLoading
+              ? "Loading…"
+              : `${equipment.length} items from vessel spreadsheet, discovery, and manual entry`}
           </p>
         </div>
         <div className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Settings, Trash2, X, ExternalLink, Loader2, Radio } from "lucide-react";
 import { toast } from "sonner";
@@ -44,11 +44,14 @@ export default function SnmpSwitchSettingsDrawer({
   const [draft, setDraft] = useState(profile);
   const [eqDraft, setEqDraft] = useState(() => equipmentToDraft(equipment));
   const [testingPeplink, setTestingPeplink] = useState(false);
+  const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
     setDraft(profile);
     setEqDraft(equipmentToDraft(equipment));
     if (!profile?.equipmentId) return;
     listCredentials().then((creds) => {
+      if (!mountedRef.current) return;
       const linked = findCredentialForEquipment(
         creds,
         profile.equipmentId,
@@ -81,6 +84,7 @@ export default function SnmpSwitchSettingsDrawer({
         }
       }
     });
+    return () => { mountedRef.current = false; };
   }, [profile, equipment]);
   if (!draft) return null;
 

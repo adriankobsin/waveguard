@@ -20,6 +20,8 @@ export default function DiscoverySubnetConfig({
   scanType,
   onScanTypeChange,
   onDetectSubnets,
+  subnetLabels = {},
+  knownHosts = [],
 }) {
   const [newSubnet, setNewSubnet] = useState("");
   const [detecting, setDetecting] = useState(false);
@@ -56,14 +58,35 @@ export default function DiscoverySubnetConfig({
 
         <div className="flex flex-wrap gap-2 mb-3">
           {safeSubnets.map(s => (
-            <span key={s} className="flex items-center gap-1.5 text-xs bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-lg font-mono">
-              {s}
+            <span
+              key={s}
+              title={subnetLabels[s] || s}
+              className="flex items-center gap-1.5 text-xs bg-cyan-500/10 border border-cyan-500/20 text-cyan-300 px-2.5 py-1 rounded-lg"
+            >
+              <span className="font-mono">{s}</span>
+              {subnetLabels[s] && (
+                <span className="text-[10px] text-cyan-200/70 max-w-[140px] truncate">
+                  {subnetLabels[s]}
+                </span>
+              )}
               <button onClick={() => removeSubnet(s)} className="text-cyan-400/60 hover:text-red-400 transition-colors">
                 <X size={10} />
               </button>
             </span>
           ))}
+          {safeSubnets.length === 0 && (
+            <p className="text-[11px] text-muted-foreground">
+              No subnets yet — import a vessel spreadsheet (IP Scheme) or detect local subnets.
+            </p>
+          )}
         </div>
+
+        {knownHosts.length > 0 && (
+          <p className="text-[10px] text-muted-foreground mb-3">
+            {knownHosts.length} known IT hosts from spreadsheet will be priority-probed on scan
+            (gateways, switches, APs, management IPs).
+          </p>
+        )}
 
         <div className="flex gap-2 mb-3">
           <input

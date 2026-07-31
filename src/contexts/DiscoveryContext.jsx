@@ -109,6 +109,7 @@ export function DiscoveryProvider({ children }) {
           ? Math.max(2000, cfg?.timeoutMs || 1500)
           : cfg?.timeoutMs,
         autoDetectLocalSubnets: cfg?.autoDetectLocalSubnets,
+        knownHosts: cfg?.knownHosts || [],
       }, cfg?.agentUrl);
       stopProgress();
       setProgress(100);

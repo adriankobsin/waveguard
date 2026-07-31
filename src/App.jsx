@@ -13,8 +13,7 @@ import SnmpPage from './pages/SnmpPage';
 import SettingsPage from './pages/SettingsPage';
 import TopologyPage from './pages/TopologyPage';
 import EquipmentDetailPage from './pages/EquipmentDetailPage';
-import HelpPage from './pages/HelpPage';
-import AutomationPage from './pages/AutomationPage';
+// AutomationPage hidden from nav/routes until re-enabled — see pages/AutomationPage.jsx
 import DocumentsPage from './pages/DocumentsPage';
 import AssistantPage from './pages/AssistantPage';
 import CablesPage from './pages/CablesPage';
@@ -61,8 +60,7 @@ function App() {
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/topology" element={<TopologyPage />} />
             <Route path="/equipment/:id" element={<EquipmentDetailPage />} />
-            <Route path="/help" element={<HelpPage />} />
-            <Route path="/automation" element={<AutomationPage />} />
+            <Route path="/help" element={<Navigate to="/settings?section=help" replace />} />
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/assistant" element={<AssistantPage />} />
             <Route path="/cables" element={<CablesPage />} />

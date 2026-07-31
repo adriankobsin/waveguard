@@ -5,7 +5,7 @@ import {
   Settings, Mail, Brain, Database, Bell,
   ChevronRight, CheckCircle2, AlertTriangle, Loader2, Eye, EyeOff, Plus, X, Upload, ImageIcon,
   Anchor, LayoutDashboard, Puzzle, Key, BookOpen, Users, HardDrive, Wifi, MapPin,
-  Save, RotateCcw, Activity, FlaskConical,
+  Save, RotateCcw, Activity, FlaskConical, HelpCircle,
 } from "lucide-react";
 import { useSettings } from "@/hooks/useSettings";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
@@ -25,26 +25,28 @@ import DecksRoomsPanel from "@/pages/settings/DecksRoomsPanel";
 import DiscoverySettingsPanel from "@/pages/settings/DiscoverySettingsPanel";
 import PlatformResetPanel from "@/pages/settings/PlatformResetPanel";
 import CredentialsVaultPanel from "@/components/credentials/CredentialsVaultPanel";
+import { HelpPanel } from "@/pages/HelpPage";
 import { uploadLogoFile } from "@/lib/uploadLogo";
 import { toast } from "sonner";
 
-// ─── Sections list ─────────────────────────────────────────────────────────────
+// ─── Sections list (profile → users → connectivity → AI/docs → alerts → data) ───
 const SECTIONS = [
-  { key: "general",            label: "General",             icon: Anchor,        desc: "Vessel / property profile" },
-  { key: "platform-mode",      label: "Platform mode",       icon: Activity,      desc: "Switch between Live and Demo operation" },
-  { key: "site-locations",     label: "Decks & rooms",       icon: MapPin,        desc: "Decks and rooms for equipment placement" },
-  { key: "discovery",          label: "Network discovery",   icon: Wifi,          desc: "Scan subnets, SNMP, and agent URL" },
+  { key: "general",            label: "General",             icon: Anchor,          desc: "Vessel / property profile" },
+  { key: "platform-mode",      label: "Platform mode",       icon: Activity,        desc: "Switch between Live and Demo operation" },
+  { key: "site-locations",     label: "Decks & rooms",       icon: MapPin,          desc: "Decks and rooms for equipment placement" },
+  { key: "users",              label: "Users & roles",       icon: Users,           desc: "Invite and manage operator accounts" },
   { key: "dashboard",          label: "Dashboard widgets",   icon: LayoutDashboard, desc: "Add and arrange dashboard widgets" },
-  { key: "integrations",       label: "Integrations",        icon: Puzzle,        desc: "Vendor drivers and external services" },
-  { key: "credentials",      label: "Login credentials",   icon: Key,           desc: "Usernames and passwords for devices and platforms" },
-  { key: "ai",                 label: "AI & OpenAI",         icon: Brain,         desc: "OpenAI API key, chat model, embeddings" },
-  { key: "documentation",      label: "Documentation",       icon: BookOpen,      desc: "Storage path and AI re-indexing" },
-  { key: "notifications",      label: "Notifications",       icon: Bell,          desc: "Bell retention, email, WhatsApp" },
-  { key: "email",              label: "Email alerts",        icon: Mail,          desc: "SMTP config, recipients, alerts" },
-  { key: "users",              label: "Users & roles",       icon: Users,         desc: "Invite and manage operator accounts" },
-  { key: "backup",             label: "Backup & restore",    icon: HardDrive,     desc: "Export and restore platform configuration" },
-  { key: "retention",          label: "Data Retention",      icon: Database,      desc: "Auto-purge old records" },
-  { key: "platform-reset",     label: "Factory reset",       icon: RotateCcw,     desc: "Clear all data for a new deployment" },
+  { key: "discovery",          label: "Network discovery",   icon: Wifi,            desc: "Scan subnets, SNMP, and agent URL" },
+  { key: "integrations",       label: "Integrations",        icon: Puzzle,          desc: "Vendor drivers and external services" },
+  { key: "credentials",        label: "Login credentials",   icon: Key,             desc: "Import or manage device logins; auto-filled from spreadsheet imports" },
+  { key: "ai",                 label: "AI & OpenAI",         icon: Brain,           desc: "OpenAI API key, chat model, embeddings" },
+  { key: "documentation",      label: "Documentation",       icon: BookOpen,        desc: "Storage path and AI re-indexing" },
+  { key: "help",               label: "Help",                icon: HelpCircle,      desc: "Platform guides, deployment, and integration APIs" },
+  { key: "notifications",      label: "Notifications",       icon: Bell,            desc: "Bell retention, email, WhatsApp" },
+  { key: "email",              label: "Email alerts",        icon: Mail,            desc: "SMTP config, recipients, alerts" },
+  { key: "backup",             label: "Backup & restore",    icon: HardDrive,       desc: "Export and restore platform configuration" },
+  { key: "retention",          label: "Data Retention",      icon: Database,        desc: "Auto-purge old records" },
+  { key: "platform-reset",     label: "Factory reset",       icon: RotateCcw,       desc: "Clear all data for a new deployment" },
 ];
 
 // ─── Shared UI ─────────────────────────────────────────────────────────────────
@@ -510,6 +512,7 @@ const PANEL_COMPONENTS = {
   credentials:   CredentialsVaultPanel,
   ai:            AIPanel,
   documentation: DocumentationPanel,
+  help:          HelpPanel,
   notifications: NotificationsPanel,
   email:         EmailPanel,
   users:         UsersPanel,
@@ -566,7 +569,7 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground mt-0.5">Configure vessel profile, monitoring, integrations, and operator experience — settings are saved to the database.</p>
         {user?.role === "user" && visibleSections.length < SECTIONS.length && (
           <p className="text-xs text-amber-400/90 mt-2">
-            Signed in as a standard user — only dashboard layout is editable. Log in as an administrator (e.g. WaveAdmin) for full settings access.
+            Signed in as a standard user — only dashboard layout and help guides are available. Log in as an administrator (e.g. WaveAdmin) for full settings access.
           </p>
         )}
       </div>

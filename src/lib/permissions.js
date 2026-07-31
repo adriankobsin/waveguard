@@ -14,8 +14,8 @@ export function hasFullSettingsAccess(user) {
   return false;
 }
 
-/** Sections a standard user may open in Settings (dashboard layout only). */
-const USER_SETTINGS_SECTIONS = new Set(["dashboard"]);
+/** Sections a standard user may open in Settings (dashboard layout and help). */
+const USER_SETTINGS_SECTIONS = new Set(["dashboard", "help"]);
 
 export function canAccessSettingsSection(user, sectionKey) {
   if (!sectionKey) return true;

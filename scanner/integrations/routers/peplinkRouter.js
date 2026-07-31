@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { RouterAdapter, normalizePortShape, ERROR_CODES } from "./baseAdapter.js";
 import { mockProfileForPort, runMockSpeedTest, simulateSpeedTestLatency, mockWanTraffic } from "./mockRouterData.js";
 import { fetchJson, fetchWithTimeout, authHeader, cookieHeader } from "./transport.js";
@@ -337,7 +337,7 @@ function extractActiveGateway(wanData) {
 
 function pingLatency(host) {
   try {
-    const out = execSync(`ping -c 2 -W 2 ${host} 2>/dev/null`, { timeout: 5000, encoding: "utf8" });
+    const out = execFileSync("ping", ["-c", "2", "-W", "2", host], { timeout: 5000, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
     const m = out.match(/min\/avg\/max\/(?:mdev|stddev)\s*=\s*[\d.]+\/([\d.]+)/);
     if (m) return Promise.resolve(Math.round(parseFloat(m[1])));
     const avg = out.match(/round-trip\s*(?:min\s+)?(?:avg\s+)?(?:max\s+)?\s*=\s*[\d.]+\/([\d.]+)/);

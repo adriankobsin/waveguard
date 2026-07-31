@@ -4,7 +4,6 @@ import { extractExtraFieldsFromObject } from "./headerMapping.js";
 import {
   extractCableTagFromText,
   normalizeCableTag,
-  isSyntheticPatchLabel,
 } from "./cableTag.js";
 
 function appendNote(existing, addition) {
@@ -245,6 +244,8 @@ const PATCH_RAW_CONSUMED = new Set([
   "destination",
   "location",
   "end device",
+  "end device sw",
+  "device",
   "notes",
 ]);
 
@@ -262,6 +263,9 @@ function resolveCableLabel(row, panel, portNum) {
     if (tag) return tag;
   }
 
+  // Fallback used by vessel schedules: every panel/port row is importable even
+  // when the cable tag column is blank (spare / untagged ports).
+  if (panel && portNum) return `${panel}-P${portNum}`;
   return "";
 }
 
@@ -284,8 +288,8 @@ function finalizePatchCableFields(base, row, panel, portNum, floorMap) {
     base.deck = resolvePatchDeck(row, floorMap);
   }
 
-  if (isSyntheticPatchLabel(base.label, panel, portNum)) {
-    base.label = "";
+  if (!base.label && panel && portNum) {
+    base.label = `${panel}-P${portNum}`;
   }
 
   return base;
@@ -418,25 +422,142 @@ export function collectSiteLocations(equipmentList, floorMap) {
   return { decks };
 }
 
+function maskToPrefix(mask) {
+  const s = String(mask || "").trim();
+  if (/^\d{1,2}$/.test(s)) {
+    const n = Number(s);
+    return n >= 8 && n <= 32 ? n : 24;
+  }
+  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) return 24;
+  const bits = s
+    .split(".")
+    .map((o) => Number(o))
+    .reduce((acc, octet) => {
+      let n = octet;
+      let count = 0;
+      for (let i = 0; i < 8; i++) {
+        if (n & 0x80) count++;
+        n <<= 1;
+      }
+      return acc + count;
+    }, 0);
+  return bits >= 8 && bits <= 32 ? bits : 24;
+}
+
+function ipv4ToCidr(ip, mask = "255.255.255.0") {
+  const s = String(ip || "").trim();
+  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) return null;
+  const parts = s.split(".").map(Number);
+  if (parts.some((n) => n < 0 || n > 255)) return null;
+  const prefix = maskToPrefix(mask);
+  // For /24 vessel schemes (Albatros), keep the familiar .0/24 form.
+  if (prefix === 24) {
+    return `${parts[0]}.${parts[1]}.${parts[2]}.0/24`;
+  }
+  return `${parts[0]}.${parts[1]}.${parts[2]}.${parts[3]}/${prefix}`;
+}
+
 export function vlansToDiscoverySubnets(vlans) {
   const subnets = [];
   const seen = new Set();
   for (const v of vlans || []) {
     const range = v.ipRange || "";
     const match = range.match(/(\d+\.\d+\.\d+\.\d+)\s*[-–]\s*(\d+\.\d+\.\d+\.\d+)/);
-    if (match) {
-      const base = match[1].split(".").slice(0, 3).join(".");
-      const cidr = `${base}.0/24`;
-      if (seen.has(cidr)) continue;
-      seen.add(cidr);
-      subnets.push({
-        cidr,
-        label: v.vlan || range,
-        enabled: true,
-      });
-    }
+    const startIp = match?.[1] || (v.gateway && String(v.gateway).trim()) || "";
+    const cidr = ipv4ToCidr(startIp, v.mask);
+    if (!cidr || seen.has(cidr)) continue;
+    seen.add(cidr);
+    subnets.push({
+      cidr,
+      label: v.vlan || range || cidr,
+      gateway: v.gateway || "",
+      enabled: true,
+      source: "ipScheme",
+    });
   }
   return subnets;
+}
+
+/** Derive /24 discovery targets from imported IT / management IPs. */
+export function equipmentToDiscoverySubnets(equipmentList = []) {
+  const subnets = [];
+  const seen = new Set();
+  for (const eq of equipmentList) {
+    const ip = String(eq.ip || "").trim();
+    const cidr = ipv4ToCidr(ip);
+    if (!cidr || seen.has(cidr)) continue;
+    seen.add(cidr);
+    const isIt =
+      /^(IT|Network)$/i.test(eq.systemCategory || "") ||
+      /network|router|switch|server|firewall|wlc|wireless/i.test(
+        `${eq.category || ""} ${eq.name || ""} ${eq.model || ""}`
+      );
+    subnets.push({
+      cidr,
+      label: isIt
+        ? `IT · ${eq.name || cidr}`
+        : eq.name
+          ? `${eq.name}`
+          : cidr,
+      enabled: true,
+      source: "equipment",
+    });
+  }
+  return subnets;
+}
+
+export function mergeDiscoverySubnetLists(...lists) {
+  const byCidr = new Map();
+  for (const list of lists) {
+    for (const entry of list || []) {
+      const cidr =
+        typeof entry === "string"
+          ? entry.trim()
+          : String(entry?.cidr || "").trim();
+      if (!cidr) continue;
+      const prev = byCidr.get(cidr);
+      if (!prev) {
+        byCidr.set(cidr, {
+          cidr,
+          label: typeof entry === "object" ? entry.label || cidr : cidr,
+          gateway: typeof entry === "object" ? entry.gateway || "" : "",
+          enabled: typeof entry === "object" ? entry.enabled !== false : true,
+          source: typeof entry === "object" ? entry.source || "import" : "import",
+        });
+        continue;
+      }
+      // Prefer IP Scheme labels over equipment-derived ones.
+      if (prev.source !== "ipScheme" && entry?.source === "ipScheme") {
+        byCidr.set(cidr, {
+          ...prev,
+          ...entry,
+          cidr,
+          label: entry.label || prev.label,
+        });
+      } else if (!prev.label || prev.label === cidr) {
+        prev.label = entry?.label || prev.label;
+      }
+      if (!prev.gateway && entry?.gateway) prev.gateway = entry.gateway;
+    }
+  }
+  return [...byCidr.values()];
+}
+
+export function normalizeDiscoveryKnownHosts(hosts = []) {
+  const byIp = new Map();
+  for (const h of hosts || []) {
+    const ip = String(h.ip || "").trim();
+    if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) continue;
+    if (ip.split(".").some((o) => Number(o) > 255)) continue;
+    if (byIp.has(ip)) continue;
+    byIp.set(ip, {
+      ip,
+      name: String(h.name || ip).trim(),
+      vlan: String(h.vlan || "").trim(),
+      source: h.source || "import",
+    });
+  }
+  return [...byIp.values()];
 }
 
 export function racksToLayout(sheets) {

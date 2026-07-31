@@ -20,9 +20,8 @@ import { toast } from "sonner";
 import {
   parseAndBuildImport,
   SHEET_GROUPS,
-  PHASE1_GROUPS,
-  PHASE2_GROUPS,
   DEFAULT_FLOOR_MAP,
+  readSpreadsheetToBuffer,
 } from "@/lib/spreadsheet";
 import { commitVesselSpreadsheetImport } from "@/api/vesselSpreadsheetImportApi";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
@@ -43,10 +42,10 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
   const [commitBusy, setCommitBusy] = useState(false);
   const [parsed, setParsed] = useState(null);
   const [payload, setPayload] = useState(null);
+  const [enabledGroups, setEnabledGroups] = useState([]);
   const [parseError, setParseError] = useState(null);
   const [result, setResult] = useState(null);
   const [replace, setReplace] = useState(false);
-  const [enabledGroups, setEnabledGroups] = useState(() => new Set([...PHASE1_GROUPS, ...PHASE2_GROUPS]));
 
   const sheetSummary = useMemo(() => {
     if (!parsed?.sheets) return [];
@@ -63,6 +62,7 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
     setFile(null);
     setParsed(null);
     setPayload(null);
+    setEnabledGroups([]);
     setParseError(null);
     setResult(null);
     setReplace(false);
@@ -73,31 +73,26 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
     onClose();
   };
 
-  const toggleGroup = (group) => {
-    setEnabledGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(group)) next.delete(group);
-      else next.add(group);
-      return next;
-    });
-  };
-
   const handlePreview = async () => {
     if (!file) return;
     setBusy(true);
     setParseError(null);
     setParsed(null);
     setPayload(null);
+    setEnabledGroups([]);
     try {
-      const buffer = await file.arrayBuffer();
-      const { parsed: p, payload: pl } = parseAndBuildImport(buffer, {
-        enabledGroups: [...enabledGroups],
+      const buffer = await readSpreadsheetToBuffer(file);
+      // Import every sheet type present in the workbook (same pipeline as cable schedule).
+      const { parsed: p, payload: pl, enabledGroups: groups } = parseAndBuildImport(buffer, {
         floorMap: DEFAULT_FLOOR_MAP,
       });
       setParsed(p);
       setPayload(pl);
+      setEnabledGroups(groups || []);
       if (pl.stats.equipment === 0 && pl.stats.cables === 0) {
-        setParseError("No importable rows found. Check sheet names and enabled groups.");
+        setParseError(
+          "No importable rows found. Expected sheets such as Device List, Patch Panels, switches, or appliances."
+        );
       }
     } catch (err) {
       setParseError(err.message || "Failed to parse spreadsheet");
@@ -114,12 +109,14 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
     try {
       const commitResult = await commitVesselSpreadsheetImport(payload, {
         replace,
-        enabledGroups: [...enabledGroups],
+        enabledGroups,
       });
       setResult(commitResult);
       window.dispatchEvent(new CustomEvent(EQUIPMENT_CHANGED_EVENT));
+      const vlanCount = payload.stats?.vlans ?? 0;
       toast.success(
-        `Imported ${commitResult.equipmentCreated} new, updated ${commitResult.equipmentUpdated} equipment; ${commitResult.cablesCreated} cables`
+        `Imported ${commitResult.equipmentCreated} new, updated ${commitResult.equipmentUpdated} equipment; ${commitResult.cablesCreated} cables` +
+          (vlanCount ? `; ${vlanCount} discovery subnets` : "")
       );
       onComplete?.();
     } catch (err) {
@@ -139,9 +136,10 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
             Import vessel spreadsheet
           </DialogTitle>
           <DialogDescription>
-            Upload any equipment workbook (.xlsx). Albatros-style sheets are parsed with their native
-            templates; other sheets are auto-detected from their column headers (Name, Model, IP, MAC,
-            Serial, etc.) so every recognized cell is imported. Usernames and passwords are never imported.
+            Upload the same vessel workbook used for cable schedules (.xlsx / .csv). Every sheet is
+            scanned automatically — Device List, Patch Panels, switches, appliances, racks, and IP
+            Scheme map into Equipment, cables, and schedules. Credential columns go to Settings →
+            Login credentials.
           </DialogDescription>
         </DialogHeader>
 
@@ -149,28 +147,19 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
           <div className="space-y-4">
             <div className="border-2 border-dashed border-border rounded-xl p-6 text-center">
               <Upload size={24} className="mx-auto text-muted-foreground mb-2" />
-              <p className="text-sm text-muted-foreground mb-3">Select .xlsx workbook</p>
+              <p className="text-sm text-muted-foreground mb-3">Select vessel workbook (.xlsx / .csv)</p>
               <input
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx,.xls,.csv"
                 onChange={(e) => setFile(e.target.files?.[0] || null)}
                 className="block mx-auto text-xs text-muted-foreground file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-primary/15 file:text-primary"
               />
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Sheets to import</p>
-              {[...PHASE1_GROUPS, ...PHASE2_GROUPS].map((g) => (
-                <label key={g} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={enabledGroups.has(g)}
-                    onChange={() => toggleGroup(g)}
-                  />
-                  {GROUP_LABELS[g]}
-                </label>
-              ))}
-            </div>
+            <p className="text-xs text-muted-foreground">
+              All sheets found in the document are imported together — the same mapping as
+              Cables → Import patch schedule / Full vessel import.
+            </p>
 
             {parseError && (
               <p className="text-xs text-destructive flex items-center gap-1">
@@ -193,7 +182,7 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
 
         {parsed && payload && !result && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-center">
               <div className="rounded-lg bg-secondary p-3">
                 <p className="text-2xl font-bold text-foreground">{payload.stats.equipment}</p>
                 <p className="text-xs text-muted-foreground">Equipment</p>
@@ -203,10 +192,27 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
                 <p className="text-xs text-muted-foreground">Cables</p>
               </div>
               <div className="rounded-lg bg-secondary p-3">
+                <p className="text-2xl font-bold text-foreground">{payload.stats.credentials ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Logins</p>
+              </div>
+              <div className="rounded-lg bg-secondary p-3">
+                <p className="text-2xl font-bold text-foreground">{payload.stats.vlans ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Discovery subnets</p>
+              </div>
+              <div className="rounded-lg bg-secondary p-3">
+                <p className="text-2xl font-bold text-foreground">{payload.stats.knownHosts ?? 0}</p>
+                <p className="text-xs text-muted-foreground">IT hosts</p>
+              </div>
+              <div className="rounded-lg bg-secondary p-3">
                 <p className="text-2xl font-bold text-foreground">{payload.stats.decks}</p>
                 <p className="text-xs text-muted-foreground">Decks</p>
               </div>
             </div>
+            {(payload.stats.vlans ?? 0) > 0 && (
+              <p className="text-xs text-cyan-400">
+                IP Scheme / IT management networks will be added to Discovery for scans and tests.
+              </p>
+            )}
 
             <div className="max-h-40 overflow-y-auto rounded-lg border border-border">
               <table className="w-full text-xs">
@@ -249,10 +255,10 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
             </label>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => { setParsed(null); setPayload(null); }}>
+              <Button variant="outline" onClick={() => { setParsed(null); setPayload(null); setEnabledGroups([]); }}>
                 Back
               </Button>
-              <Button onClick={handleCommit} disabled={commitBusy}>
+              <Button onClick={handleCommit} disabled={commitBusy || (payload.stats.equipment === 0 && payload.stats.cables === 0)}>
                 {commitBusy && <Loader2 size={14} className="animate-spin mr-2" />}
                 Import {payload.stats.equipment} equipment, {payload.stats.cables} cables
               </Button>
@@ -270,6 +276,9 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
               <li>Equipment created: {result.equipmentCreated ?? 0}</li>
               <li>Equipment updated: {result.equipmentUpdated ?? 0}</li>
               <li>Cables created: {result.cablesCreated ?? 0}</li>
+              {(result.credentialsImported ?? 0) > 0 && (
+                <li>Login credentials added: {result.credentialsImported}</li>
+              )}
               {result.cablesSkipped > 0 && <li>Cables skipped (duplicates): {result.cablesSkipped}</li>}
             </ul>
             {result.errors?.length > 0 && (

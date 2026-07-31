@@ -29,8 +29,14 @@ export async function commitVesselImport(deps, payload, options = {}) {
     await deps.saveSiteLocations(payload.siteLocations);
   }
 
-  if (deps.saveDiscoverySubnets && payload.discoverySubnets?.length) {
-    await deps.saveDiscoverySubnets(payload.discoverySubnets);
+  if (
+    deps.saveDiscoverySubnets &&
+    (payload.discoverySubnets?.length || payload.discoveryKnownHosts?.length)
+  ) {
+    await deps.saveDiscoverySubnets(
+      payload.discoverySubnets || [],
+      payload.discoveryKnownHosts || []
+    );
   }
 
   if (deps.saveRackLayout && payload.rackLayout) {

@@ -79,9 +79,13 @@ export default function DiscoverySettingsPanel() {
           {subnets.map((s) => (
             <span
               key={s}
-              className="flex items-center gap-1 text-xs font-mono bg-primary/10 border border-primary/20 text-primary px-2 py-1 rounded-lg"
+              title={cfg.subnetLabels?.[s] || s}
+              className="flex items-center gap-1 text-xs bg-primary/10 border border-primary/20 text-primary px-2 py-1 rounded-lg"
             >
-              {s}
+              <span className="font-mono">{s}</span>
+              {cfg.subnetLabels?.[s] && (
+                <span className="text-[10px] opacity-70 max-w-[120px] truncate">{cfg.subnetLabels[s]}</span>
+              )}
               <button
                 type="button"
                 onClick={() =>
@@ -93,6 +97,11 @@ export default function DiscoverySettingsPanel() {
             </span>
           ))}
         </div>
+        {(cfg.knownHosts?.length || 0) > 0 && (
+          <p className="text-[11px] text-muted-foreground mb-2">
+            {cfg.knownHosts.length} known IT hosts from vessel spreadsheet (priority-probed on scan).
+          </p>
+        )}
         <div className="flex gap-2">
           <input
             value={newSubnet}

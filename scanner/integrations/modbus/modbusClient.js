@@ -191,7 +191,9 @@ class ModbusTcpClient extends EventEmitter {
     data.writeUInt16BE(count, 2);
     const resp = await this.sendRequest(FC_READ_HOLDING_REGISTERS, data);
     const registers = [];
-    for (let i = 0; i < resp.data.length - 1; i += 2) {
+    const bufLen = resp.data.length - 1;
+    if (bufLen < 2) return registers;
+    for (let i = 0; i < bufLen && i + 2 <= bufLen; i += 2) {
       registers.push(resp.data.readUInt16BE(i + 1));
     }
     return registers;
@@ -203,7 +205,9 @@ class ModbusTcpClient extends EventEmitter {
     data.writeUInt16BE(count, 2);
     const resp = await this.sendRequest(FC_READ_INPUT_REGISTERS, data);
     const registers = [];
-    for (let i = 0; i < resp.data.length - 1; i += 2) {
+    const bufLen = resp.data.length - 1;
+    if (bufLen < 2) return registers;
+    for (let i = 0; i < bufLen && i + 2 <= bufLen; i += 2) {
       registers.push(resp.data.readUInt16BE(i + 1));
     }
     return registers;

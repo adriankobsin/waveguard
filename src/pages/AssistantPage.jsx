@@ -281,6 +281,7 @@ export default function AssistantPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: content, mode: currentMode, conversation: msgHistory }),
       });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
 
       if (fetchIdRef.current !== thisFetch) return;

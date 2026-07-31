@@ -5,6 +5,7 @@ export const CREDENTIAL_PLATFORMS = [
   { id: "web", label: "Web / browser" },
   { id: "peplink", label: "Peplink" },
   { id: "cisco", label: "Cisco" },
+  { id: "cisco_wlc", label: "Cisco WLC (RESTCONF)" },
   { id: "fortinet", label: "Fortinet" },
   { id: "unifi", label: "UniFi" },
   { id: "kerio", label: "Kerio" },
@@ -22,7 +23,7 @@ export const DEFAULT_BROWSER_LOGIN = {
 };
 
 function normId() {
-  return `cred-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return `cred-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 export function normalizeCredential(raw) {
@@ -96,4 +97,65 @@ export function findCredentialForEquipment(credentials, equipmentId, platform = 
   return normalizeCredentialsVault(credentials).find(
     (c) => c.equipmentId === equipmentId && (!platform || c.platform === platform)
   );
+}
+
+export function credentialDedupKey(cred) {
+  const host = (cred.host || "").trim().toLowerCase();
+  const user = (cred.username || "").trim().toLowerCase();
+  const platform = cred.platform || "web";
+  if (host) return `${platform}|${host}|${user}`;
+  const label = (cred.label || cred.equipmentName || "").trim().toLowerCase();
+  return `${platform}|${label}|${user}`;
+}
+
+/** Match imported credentials to equipment by name or IP. */
+export function linkCredentialsToEquipment(credentials, equipmentList = []) {
+  const byName = new Map();
+  const byIp = new Map();
+  for (const eq of equipmentList || []) {
+    const name = (eq.name || "").trim().toLowerCase();
+    if (name) byName.set(name, eq);
+    if (eq.ip) byIp.set(eq.ip, eq);
+  }
+
+  return (credentials || []).map((cred) => {
+    const nameKey = (cred.equipmentName || cred.label || "").trim().toLowerCase().replace(/\s+login$/i, "");
+    let eq = nameKey ? byName.get(nameKey) : null;
+    if (!eq && cred.host) eq = byIp.get(cred.host.trim());
+    if (!eq && nameKey) {
+      for (const [k, candidate] of byName) {
+        if (k.includes(nameKey) || nameKey.includes(k)) {
+          eq = candidate;
+          break;
+        }
+      }
+    }
+    return {
+      ...cred,
+      equipmentId: eq?.id || cred.equipmentId || "",
+      host: cred.host || eq?.ip || "",
+    };
+  });
+}
+
+/** Merge imported credentials into an existing vault (upsert by host/platform/username). */
+export function mergeCredentialsIntoVault(existing, incoming) {
+  const list = [...normalizeCredentialsVault(existing)];
+  for (const raw of incoming || []) {
+    const next = normalizeCredential(raw);
+    if (!next.username && !next.password) continue;
+    const key = credentialDedupKey(next);
+    const idx = list.findIndex((c) => credentialDedupKey(c) === key);
+    if (idx >= 0) {
+      list[idx] = {
+        ...list[idx],
+        ...next,
+        id: list[idx].id,
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      list.push(next);
+    }
+  }
+  return list;
 }

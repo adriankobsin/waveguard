@@ -104,6 +104,17 @@ const INTEGRATION_DEFS = [
       { k: "enablePassword", l: "Enable password (optional)", secret: true },
     ],
   },
+  {
+    key: "cisco_wlc",
+    label: "Cisco WLC (C9800 RESTCONF)",
+    hint: "Manage under Core Network → Wireless. HTTPS RESTCONF on port 443.",
+    fields: [
+      { k: "host", l: "WLC IP" },
+      { k: "user", l: "Username" },
+      { k: "password", l: "Password", secret: true },
+      { k: "port", l: "HTTPS port (443)" },
+    ],
+  },
   { key: "crestron", label: "Crestron (CIP / NVX)", fields: [{ k: "host", l: "Processor or NVX IP" }, { k: "user", l: "API user (optional)" }, { k: "password", l: "Password", secret: true }] },
   { key: "qsys", label: "Q-SYS", fields: [{ k: "host", l: "Core IP" }, { k: "port", l: "QRC port (1702)" }] },
   { key: "dahua", label: "Dahua CCTV", fields: [{ k: "host", l: "Host" }, { k: "user", l: "User" }, { k: "password", l: "Password", secret: true }] },
@@ -176,6 +187,8 @@ const defaultIntegrations = () => {
                   ? "4001"
                   : i.key === "unifi"
                     ? "8443"
+                    : i.key === "cisco_wlc"
+                      ? "443"
               : i.key === "symetrix"
                     ? "48630"
                     : i.key === "yachtica"
@@ -277,6 +290,18 @@ export function IntegrationsPanel() {
         });
         if (!res.success) throw new Error(res.message || res.error || "Cisco SSH test failed");
         setTestResult({ key, ok: true, message: res.message || "Cisco SSH connection OK" });
+      } else if (key === "cisco_wlc") {
+        const ic = cfg[key] || {};
+        const { testCiscoWlcController } = await import("@/api/ciscoWlcApi");
+        const res = await testCiscoWlcController({
+          host: ic.host,
+          httpsPort: Number(ic.port) || 443,
+          username: ic.user || "admin",
+          password: ic.password,
+          allowInsecure: true,
+        });
+        if (!res.success) throw new Error(res.message || res.error || "WLC RESTCONF test failed");
+        setTestResult({ key, ok: true, message: res.message || "WLC RESTCONF connection OK" });
       } else {
         const res = await testIntegration(key, cfg[key]);
         setTestResult({ key, ok: true, message: res.message });
@@ -671,7 +696,9 @@ export function UsersPanel() {
 
   const load = () => {
     import("@/api/base44Client").then(({ base44 }) =>
-      base44.entities.User.list().then(setUsers).finally(() => setLoading(false))
+      base44.entities.User.list().then(setUsers).catch((err) => {
+        console.error("Failed to load users:", err);
+      }).finally(() => setLoading(false))
     );
   };
 

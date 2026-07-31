@@ -79,6 +79,8 @@ export const PATCH_PANEL_HEADERS = [
   "location",
   "destination",
   "end device",
+  "end device sw",
+  "device",
   "end device port/i",
   "end device port/int",
   "end device port",

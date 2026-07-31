@@ -259,7 +259,11 @@ export class CiscoSshClient extends EventEmitter {
 
   /** Run a single command. Serialized — each command waits for the previous one. */
   runCommand(command) {
-    this._cmdQueue = this._cmdQueue.then(() => this._runCommandInner(command));
+    this._cmdQueue = this._cmdQueue
+      .then(() => this._runCommandInner(command))
+      .catch((err) => {
+        console.warn(`[ciscoSsh] Command "${command}" failed: ${err.message}`);
+      });
     return this._cmdQueue;
   }
 

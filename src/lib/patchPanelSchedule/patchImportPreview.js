@@ -14,6 +14,8 @@ export const PATCH_COLUMN_TARGETS = {
   room: { field: "room", target: "Room" },
   location: { field: "location", target: "Location" },
   "end device": { field: "to_equipment", target: "Connected device" },
+  "end device sw": { field: "to_equipment", target: "Connected device" },
+  device: { field: "end_device_port", target: "Device port / ID" },
   "end device port/int": { field: "end_device_port", target: "Device port" },
   "end device port": { field: "end_device_port", target: "Device port" },
   "tested/length": { field: "length + test_result", target: "Cable length & test result" },

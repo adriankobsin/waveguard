@@ -11,6 +11,7 @@ import net from "node:net";
 import { snmpProbe } from "../snmp.js";
 import { probeCiscoPorts } from "./cisco/probeCiscoPorts.js";
 import { getCiscoSwitchClient } from "./cisco/ciscoSwitchClient.js";
+import { getWlcRestconfClient } from "./cisco/wlcRestconfClient.js";
 
 const DEFAULT_TIMEOUT_MS = 4000;
 
@@ -152,6 +153,38 @@ async function probeCisco(config) {
     ok: true,
     message: result.message || `Connected to ${label}`,
     detail: result.system,
+  };
+}
+
+async function probeCiscoWlc(config) {
+  const host = parseHost(config?.host);
+  if (!host) return { ok: false, message: "Host required" };
+  if (!config?.password && !config?.sshPassword) {
+    const https = await tcpProbe(host, parsePort(config?.port, 443), 3000);
+    if (!https.open) {
+      return { ok: false, message: `HTTPS (port 443) closed on ${host}. Enable RESTCONF on the WLC.` };
+    }
+    return {
+      ok: true,
+      message: `HTTPS port open on ${host}. Add credentials under Core Network → Wireless.`,
+    };
+  }
+  const client = getWlcRestconfClient({
+    host,
+    httpsPort: parsePort(config?.port, 443),
+    username: config?.user || config?.username || "admin",
+    password: config?.password || config?.sshPassword,
+    allowInsecure: config?.allowInsecure !== false,
+    allowMock: false,
+  });
+  const result = await client.testConnection();
+  if (!result.success) {
+    return { ok: false, message: result.message || "Catalyst 9800 RESTCONF test failed" };
+  }
+  return {
+    ok: true,
+    message: result.message || `RESTCONF connected (${result.apCount ?? 0} APs)`,
+    detail: result.controller,
   };
 }
 
@@ -451,6 +484,7 @@ async function probeSymetrix(config) {
 const PROBE_HANDLERS = {
   snmp: probeSnmp,
   cisco: probeCisco,
+  cisco_wlc: probeCiscoWlc,
   crestron: probeCrestron,
   qsys: probeQsys,
   dahua: probeDahua,

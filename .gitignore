@@ -36,6 +36,10 @@ mock-server/uploads/
 mock-server/.captures/
 *.zip
 
+# Local dev/test spreadsheets (not part of the app)
+/test-import.xlsx
+/test-*.xlsx
+
 # Paired Lutron LEAP certificates (host-specific, contains private key)
 mock-server/leap-certs/
 leap-certs/

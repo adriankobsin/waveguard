@@ -135,12 +135,18 @@ export class HVACService {
     if (this.pollTimer) return;
     const ms = intervalMs ?? this.config.pollIntervalMs;
     this.log(`Starting polling every ${ms}ms`);
-    this.pollTimer = setInterval(() => this.pollOnce(), ms);
+    const poll = () => {
+      this.pollTimer = setTimeout(async () => {
+        await this.pollOnce();
+        if (this.pollTimer) poll();
+      }, ms);
+    };
+    poll();
   }
 
   stopPolling(): void {
     if (this.pollTimer) {
-      clearInterval(this.pollTimer);
+      clearTimeout(this.pollTimer);
       this.pollTimer = null;
       this.log("Polling stopped");
     }

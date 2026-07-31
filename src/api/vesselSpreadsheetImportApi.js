@@ -18,11 +18,12 @@ import {
 import {
   saveDiscoverySettingsLocal,
   loadDiscoverySettingsLocal,
-  normalizeDiscoverySettings,
+  mergeDiscoveryImport,
   DEFAULT_DISCOVERY_SETTINGS,
   DISCOVERY_SETTINGS_KEY,
 } from "@/lib/discoverySettings";
 import { saveRackLayoutLocal } from "@/lib/rackLayoutStorage";
+import { importCredentialsBatch } from "@/api/credentialsApi";
 
 async function listCables() {
   if (isMockServer) {
@@ -76,12 +77,13 @@ function syncImportSideEffects(payload) {
     saveSiteLocationsLocal(merged);
   }
 
-  if (payload.discoverySubnets?.length) {
+  if (payload.discoverySubnets?.length || payload.discoveryKnownHosts?.length) {
     const current = loadDiscoverySettingsLocal() || DEFAULT_DISCOVERY_SETTINGS;
-    const merged = normalizeDiscoverySettings({
-      ...current,
-      subnets: [...(current.subnets || []), ...payload.discoverySubnets],
-    });
+    const merged = mergeDiscoveryImport(
+      current,
+      payload.discoverySubnets || [],
+      payload.discoveryKnownHosts || []
+    );
     saveDiscoverySettingsLocal(merged);
   }
 
@@ -176,12 +178,9 @@ function buildDeps() {
         /* local-only ok */
       }
     },
-    saveDiscoverySubnets: async (subnets) => {
+    saveDiscoverySubnets: async (subnets, knownHosts = []) => {
       const current = loadDiscoverySettingsLocal() || DEFAULT_DISCOVERY_SETTINGS;
-      const merged = normalizeDiscoverySettings({
-        ...current,
-        subnets: [...(current.subnets || []), ...subnets],
-      });
+      const merged = mergeDiscoveryImport(current, subnets || [], knownHosts || []);
       saveDiscoverySettingsLocal(merged);
       try {
         const records = await base44.entities.SystemSettings.filter({ key: DISCOVERY_SETTINGS_KEY });
@@ -211,6 +210,12 @@ export async function invokeVesselSpreadsheetImport(payload, options = {}) {
   return res?.data ?? res;
 }
 
+async function persistSpreadsheetCredentials(payload) {
+  if (!payload?.credentials?.length) return { credentialsImported: 0 };
+  const equipment = await listEquipment();
+  return importCredentialsBatch(payload.credentials, equipment);
+}
+
 export async function commitVesselSpreadsheetImport(payload, options = {}) {
   if (isDemoModeActive()) {
     throw new Error(
@@ -225,10 +230,12 @@ export async function commitVesselSpreadsheetImport(payload, options = {}) {
       throw new Error(result.error || "Import failed");
     }
     syncImportSideEffects(payload);
-    return result;
+    const credResult = await persistSpreadsheetCredentials(payload);
+    return { ...result, ...credResult };
   }
 
   const result = await commitVesselImport(buildDeps(), payload, options);
   syncImportSideEffects(payload);
-  return result;
+  const credResult = await persistSpreadsheetCredentials(payload);
+  return { ...result, ...credResult };
 }

@@ -27,6 +27,11 @@ export const webTools = {
   },
 
   web_fetch: async ({ url }) => {
+    const parsed = new URL(url);
+    const blockedHosts = ["127.0.0.1", "localhost", "0.0.0.0", "::1", "[::1]", "169.254.169.254", "metadata.google.internal", "100.100.100.200"];
+    if (blockedHosts.includes(parsed.hostname) || /^10\.|^172\.(1[6-9]|2\d|3[01])\.|^192\.168\./.test(parsed.hostname) || parsed.hostname.endsWith(".internal") || parsed.hostname.endsWith(".local")) {
+      throw new Error("Fetch from private/internal networks is not allowed");
+    }
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Fetch error: ${res.status}`);
     const text = await res.text();

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import {
-  HelpCircle, Server, Cpu, Lightbulb, Music, Network, Zap,
+  Server, Cpu, Lightbulb, Music, Network, Zap,
   ChevronDown, ChevronRight, BookOpen, Globe, Shield, Thermometer,
   Radio, CheckCircle2, AlertTriangle, Info, FileDown, Loader2
 } from "lucide-react";
@@ -1753,9 +1753,9 @@ const COLOR_MAP = {
   slate: "text-slate-300 bg-white/5 border-white/10",
 };
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+// ─── Panel (embedded in Settings) ─────────────────────────────────────────────
 
-export default function HelpPage() {
+export function HelpPanel() {
   const [tab, setTab] = useState("usage");
   const [exporting, setExporting] = useState(false);
 
@@ -1786,18 +1786,9 @@ export default function HelpPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-6 space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20">
-            <HelpCircle size={20} className="text-cyan-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Help & Documentation</h1>
-            <p className="text-sm text-muted-foreground mt-0.5">Step-by-step guides for operation, local deployment, and all integration APIs</p>
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">Step-by-step guides for operation, local deployment, and all integration APIs</p>
         <button
           onClick={handleExportPdf}
           disabled={exporting}
@@ -1808,7 +1799,6 @@ export default function HelpPage() {
         </button>
       </div>
 
-      {/* Info banner */}
       <div className="flex items-start gap-3 bg-cyan-500/8 border border-cyan-500/20 rounded-xl px-4 py-3">
         <Info size={15} className="text-cyan-400 mt-0.5 flex-shrink-0" />
         <p className="text-xs text-slate-300 leading-relaxed">
@@ -1816,7 +1806,6 @@ export default function HelpPage() {
         </p>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-1 bg-secondary rounded-xl p-1 w-fit">
         {tabs.map(t => (
           <button
@@ -1829,15 +1818,11 @@ export default function HelpPage() {
         ))}
       </div>
 
-      {/* Content */}
-      <div className="space-y-3 max-w-4xl">
-
-        {/* Using the Platform */}
+      <div className="space-y-3">
         {tab === "usage" && USAGE_SECTIONS.map(s => (
           <AccordionSection key={s.id} section={s} accent={COLOR_MAP[s.color] || COLOR_MAP.slate} />
         ))}
 
-        {/* Local Deployment */}
         {tab === "deploy" && (
           <div className="rounded-xl border border-white/8 overflow-hidden">
             <div className="px-5 py-4 border-b border-white/8 flex items-center gap-3">
@@ -1863,7 +1848,6 @@ export default function HelpPage() {
           </div>
         )}
 
-        {/* Integration APIs */}
         {tab === "integrations" && (
           <>
             <div className="flex items-start gap-2 p-3 bg-white/4 border border-white/8 rounded-lg">
@@ -1875,8 +1859,13 @@ export default function HelpPage() {
             ))}
           </>
         )}
-
       </div>
     </div>
   );
+}
+
+// ─── Standalone page (legacy route redirects to Settings) ─────────────────────
+
+export default function HelpPage() {
+  return <HelpPanel />;
 }

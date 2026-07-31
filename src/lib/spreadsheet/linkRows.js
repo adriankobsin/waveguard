@@ -10,10 +10,12 @@ import {
   switchPortToCable,
   collectSiteLocations,
   vlansToDiscoverySubnets,
+  equipmentToDiscoverySubnets,
+  mergeDiscoverySubnetLists,
+  normalizeDiscoveryKnownHosts,
   racksToLayout,
 } from "./normalize.js";
 import { stripVesselEquipmentName } from "./equipmentName.js";
-import { isSyntheticPatchLabel } from "./cableTag.js";
 
 function patchPortKey(cable) {
   const panel = (cable.patch_panel || "").trim().toLowerCase();
@@ -112,19 +114,14 @@ export function buildImportPayload(parsed, options = {}) {
     } else if (sheet.sheetType === SHEET_GROUPS.patchPanels) {
       for (const row of sheet.rows || []) {
         const cable = patchToCable(row, floorMap);
-        if (!cable.label) {
-          if (cable.patch_panel && cable.port) {
-            warnings.push(
-              `Patch panel ${cable.patch_panel} port ${cable.port}: missing cable tag (NET ####) — row skipped`
-            );
-          }
-          continue;
-        }
-        if (isSyntheticPatchLabel(cable.label, cable.patch_panel, cable.port)) {
+        if (!cable.patch_panel || !cable.port) {
           warnings.push(
-            `Patch panel ${cable.patch_panel} port ${cable.port}: invalid cable label "${cable.label}" — row skipped`
+            `Patch row skipped (sheet ${row.sheet || "?"}, row ${row.row || "?"}): missing patch panel or port`
           );
           continue;
+        }
+        if (!cable.label) {
+          cable.label = `${cable.patch_panel}-P${cable.port}`;
         }
         cables.push(cable);
         const endpoint = patchEndpointToEquipment(row, floorMap);
@@ -152,11 +149,16 @@ export function buildImportPayload(parsed, options = {}) {
     }
   }
 
-  let discoverySubnets = [];
+  let vlanSubnets = [];
+  const schemeHosts = [];
   if (enabled.has(SHEET_GROUPS.ipScheme)) {
     for (const sheet of parsed.sheets || []) {
-      if (sheet.sheetType === SHEET_GROUPS.ipScheme && sheet.vlans) {
-        discoverySubnets = vlansToDiscoverySubnets(sheet.vlans);
+      if (sheet.sheetType !== SHEET_GROUPS.ipScheme) continue;
+      if (sheet.vlans?.length) {
+        vlanSubnets = vlansToDiscoverySubnets(sheet.vlans);
+      }
+      if (sheet.hosts?.length) {
+        schemeHosts.push(...sheet.hosts);
       }
     }
   }
@@ -164,6 +166,31 @@ export function buildImportPayload(parsed, options = {}) {
   const layoutData = enabled.has(SHEET_GROUPS.rack) ? racksToLayout(parsed.sheets) : null;
   const equipment = applyRackLayoutToEquipment([...equipmentByName.values()], layoutData);
   const siteLocations = collectSiteLocations(equipment, floorMap);
+
+  // Discovery targets = IP Scheme VLANs + /24s inferred from IT/management IPs.
+  const discoverySubnets = mergeDiscoverySubnetLists(
+    vlanSubnets,
+    equipmentToDiscoverySubnets(equipment)
+  );
+  const knownHosts = normalizeDiscoveryKnownHosts([
+    ...schemeHosts,
+    ...equipment
+      .filter((e) => e.ip)
+      .map((e) => ({
+        ip: e.ip,
+        name: e.name || e.ip,
+        vlan: e.systemCategory || e.category || "",
+        source: "equipment",
+      })),
+    ...discoverySubnets
+      .filter((s) => s.gateway)
+      .map((s) => ({
+        ip: s.gateway,
+        name: `${s.label || s.cidr} gateway`,
+        vlan: s.label || "",
+        source: "ipScheme",
+      })),
+  ]);
 
   const cableLabels = new Set();
   const cablePorts = new Set();
@@ -177,6 +204,17 @@ export function buildImportPayload(parsed, options = {}) {
         continue;
       }
       cablePorts.add(portKey);
+      // Same NET/tag can appear on multiple panels — keep both rows with a unique label.
+      if (cableLabels.has(c.label)) {
+        const unique = `${c.label} (${c.patch_panel} P${c.port})`;
+        warnings.push(
+          `Duplicate cable label "${c.label}" on ${c.patch_panel} P${c.port} kept as "${unique}"`
+        );
+        c.label = unique;
+      }
+      cableLabels.add(c.label);
+      dedupedCables.push(c);
+      continue;
     }
     if (cableLabels.has(c.label)) {
       warnings.push(`Duplicate cable label skipped: ${c.label}`);
@@ -191,13 +229,17 @@ export function buildImportPayload(parsed, options = {}) {
     cables: dedupedCables,
     siteLocations,
     discoverySubnets,
+    discoveryKnownHosts: knownHosts,
     rackLayout: layoutData,
+    credentials: parsed.credentials || [],
     warnings,
     stats: {
       equipment: equipment.length,
       cables: dedupedCables.length,
       decks: siteLocations.decks?.length || 0,
       vlans: discoverySubnets.length,
+      knownHosts: knownHosts.length,
+      credentials: (parsed.credentials || []).length,
     },
   };
 }
