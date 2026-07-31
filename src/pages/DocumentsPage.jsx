@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FileText, Upload, Search, Loader2,
   FileSpreadsheet, File, X, BookOpen, Download,
-  FolderOpen, Brain, Globe, Trash2
+  FolderOpen, Brain, Globe, Trash2, AlertCircle, CheckCircle2
 } from "lucide-react";
 
 const API_BASE = "/api/apps/mock-app";
@@ -43,21 +43,32 @@ export default function DocumentsPage() {
   const [dragging, setDragging] = useState(false);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [uploadMeta, setUploadMeta] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const [saving, setSaving] = useState(null);
+  const [toast, setToast] = useState(null);
   const fileInputRef = useRef(null);
 
+  const showToast = (message, type) => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
   const loadDocuments = useCallback(async () => {
+    setLoadError("");
     try {
       const res = await fetch(`${API_BASE}/entities/Document`);
       if (res.ok) {
         const data = await res.json();
         setDocs(Array.isArray(data) ? data : []);
+      } else {
+        setLoadError(`Server returned ${res.status}`);
       }
     } catch (err) {
-      console.error("Failed to load documents:", err);
+      setLoadError("Could not reach server. Is the mock server running on port 3002?");
     } finally {
       setLoading(false);
     }
@@ -104,11 +115,13 @@ export default function DocumentsPage() {
       platformAccess: true,
       aiAgentAccess: true,
     });
+    setUploadError("");
   };
 
   const confirmUpload = async () => {
     if (!uploadMeta) return;
     setUploading(true);
+    setUploadError("");
     try {
       const fd = new FormData();
       fd.append("file", uploadMeta.file);
@@ -123,11 +136,17 @@ export default function DocumentsPage() {
         const data = await res.json();
         if (data.success && data.document) {
           setDocs(prev => [data.document, ...prev]);
+          setUploadMeta(null);
+          showToast("Document uploaded successfully", "success");
+        } else {
+          setUploadError(data.error || "Server returned unexpected response");
         }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setUploadError(data.error || data.message || `Upload failed (HTTP ${res.status})`);
       }
-      setUploadMeta(null);
     } catch (err) {
-      console.error("Upload failed:", err);
+      setUploadError("Network error — is the mock server running?");
     } finally {
       setUploading(false);
     }
@@ -142,22 +161,21 @@ export default function DocumentsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
-      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
-    } catch (err) {
-      console.error("Failed to update document:", err);
+      if (!res.ok) loadDocuments();
+    } catch {
       loadDocuments();
     } finally {
       setSaving(null);
     }
   };
 
-  const deleteDoc = async (id) => {
+  const deleteDoc = async (id, name) => {
     setDocs(prev => prev.filter(d => d.id !== id));
     try {
       const res = await fetch(`${API_BASE}/entities/Document/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
-    } catch (err) {
-      console.error("Failed to delete document:", err);
+      if (res.ok) showToast(`"${name}" deleted`, "success");
+      else loadDocuments();
+    } catch {
       loadDocuments();
     }
   };
@@ -177,6 +195,15 @@ export default function DocumentsPage() {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 space-y-6 animate-fade-in">
+      {toast && (
+        <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium transition-all ${
+          toast.type === "success" ? "bg-emerald-600 text-white" : "bg-red-600 text-white"
+        }`}>
+          {toast.type === "success" ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          {toast.message}
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-foreground tracking-tight flex items-center gap-2">
           <BookOpen size={22} className="text-cyan-400" />
@@ -184,6 +211,14 @@ export default function DocumentsPage() {
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">Upload, categorise and manage documents for platform and AI agent access</p>
       </div>
+
+      {loadError && (
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-sm text-red-400">
+          <AlertCircle size={16} className="flex-shrink-0" />
+          {loadError}
+          <button onClick={loadDocuments} className="ml-auto text-xs underline hover:no-underline">Retry</button>
+        </div>
+      )}
 
       <form onSubmit={handleSearch} className="glass rounded-xl p-4 flex flex-col sm:flex-row gap-3">
         <div className="flex-1 flex items-center gap-2 bg-secondary border border-border rounded-lg px-3 py-2">
@@ -288,7 +323,6 @@ export default function DocumentsPage() {
                 <p className="text-sm font-medium text-foreground truncate">{doc.name}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {doc.size} · Uploaded {doc.uploaded ? new Date(doc.uploaded).toLocaleDateString() : "unknown"}
-                  {doc.pages && ` · ${doc.pages} pages`}
                 </p>
                 <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                   <select
@@ -322,6 +356,7 @@ export default function DocumentsPage() {
                     <Brain size={10} />
                     AI Agent
                   </button>
+                  {saving === doc.id && <Loader2 size={10} className="animate-spin text-muted-foreground" />}
                 </div>
               </div>
               <div className="flex items-center gap-1">
@@ -335,7 +370,7 @@ export default function DocumentsPage() {
                   </a>
                 )}
                 <button
-                  onClick={() => deleteDoc(doc.id)}
+                  onClick={() => deleteDoc(doc.id, doc.name)}
                   className="p-2 rounded-lg hover:bg-red-500/10 transition-colors text-muted-foreground hover:text-red-400"
                 >
                   <Trash2 size={14} />
@@ -363,6 +398,13 @@ export default function DocumentsPage() {
             >
               <h3 className="text-sm font-bold text-foreground mb-4">Document settings</h3>
               <p className="text-xs text-muted-foreground mb-4 truncate">{uploadMeta.name}</p>
+
+              {uploadError && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-400 mb-4">
+                  <AlertCircle size={12} className="flex-shrink-0" />
+                  {uploadError}
+                </div>
+              )}
 
               <label className="text-xs font-medium text-foreground block mb-1.5">Category</label>
               <select

@@ -368,21 +368,131 @@ Recommended server hardware for maritime deployment:
   },
   {
     label: "Step 2 — Install the Operating System",
-    body: `On Ubuntu 22.04:
-1. Download Ubuntu Server 22.04 LTS from ubuntu.com
-2. Flash to USB using Balena Etcher
-3. Boot server from USB, follow installer
-4. During install: set static IP, enable OpenSSH server
-5. After install, update the system:
+    body: `Choose your operating system below and follow the corresponding guide.
 
+────────────────────────────────────────
+█  LINUX — Ubuntu 22.04 / 24.04 LTS
+────────────────────────────────────────
+
+1. Download Ubuntu Server LTS from ubuntu.com/download/server
+2. Flash to a USB drive using Balena Etcher or Rufus
+3. Boot the server from the USB drive and follow the installer
+4. During installation:
+   • Set a static IP address (or configure DHCP reservation later)
+   • Enable "Install OpenSSH server" when prompted
+   • Choose "Use entire disk" with ext4 filesystem
+5. After installation, log in and update:
    sudo apt update && sudo apt upgrade -y
-
 6. Set the hostname:
-   sudo hostnamectl set-hostname guardian-ai`
+   sudo hostnamectl set-hostname waveguard
+7. (Optional) Install helpful tools:
+   sudo apt install -y net-tools htop ufw
+
+────────────────────────────────────────
+█  LINUX — Debian 12 (Bookworm)
+────────────────────────────────────────
+
+1. Download Debian 12 netinst ISO from debian.org
+2. Flash to USB with Balena Etcher
+3. Boot from USB, choose "Install" (not graphical)
+4. During installation:
+   • Configure network with a static IP
+   • Set hostname to "waveguard"
+   • Uncheck "Debian desktop environment" — server only
+   • Check "SSH server" and "standard system utilities"
+5. After first boot, log in as root and install sudo:
+   apt update && apt install -y sudo
+   usermod -aG sudo YOUR_USERNAME
+6. Log out and back in, then update:
+   sudo apt update && sudo apt upgrade -y
+7. Verify hostname:
+   hostnamectl
+
+────────────────────────────────────────
+█  LINUX — Raspberry Pi OS (Bullseye/Bookworm)
+────────────────────────────────────────
+
+For smaller deployments or testing on a Raspberry Pi 4/5:
+
+1. Flash Raspberry Pi OS Lite (64-bit) to an SD card using
+   the Raspberry Pi Imager tool (raspberrypi.com/software)
+2. Before writing, click the gear icon ⚙ and pre-configure:
+   • Hostname: waveguard
+   • Enable SSH (with public-key or password auth)
+   • Set username/password
+   • Configure Wi-Fi or wired network with static IP
+3. Insert the SD card, power on the Pi
+4. SSH into the Pi:
+   ssh USERNAME@waveguard.local
+5. Update the system:
+   sudo apt update && sudo apt upgrade -y
+6. Install Node.js (Raspberry Pi OS ships an old version):
+   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+   sudo apt install -y nodejs
+
+────────────────────────────────────────
+█  WINDOWS — Server 2022 / 10 / 11 Pro
+────────────────────────────────────────
+
+1. Download Windows Server 2022 ISO (or Windows 10/11 Pro)
+   from microsoft.com
+2. Create installation media with Rufus (USB) or mount the ISO
+3. Boot from the media and install Windows
+4. During setup:
+   • Choose "Custom: Install Windows only (advanced)"
+   • Select the target drive and continue
+   • Create a local account (do NOT sign in with Microsoft)
+5. After Windows starts:
+   • Open Settings → Network & Internet → Ethernet
+   • Click your network → Edit → set a static IP
+6. Rename the PC (hostname):
+   • Settings → System → About → Rename this PC → "WAVEGUARD"
+   • Restart when prompted
+7. Install Node.js 20 LTS:
+   • Download the .msi from nodejs.org
+   • Run the installer — ensure "Add to PATH" is checked
+8. Install Git for Windows:
+   • Download from git-scm.com
+   • Accept defaults, choose "Git from the command line"
+9. Open PowerShell as Administrator and verify:
+   node --version
+   npm --version
+   git --version
+10. Enable inbound firewall rule for port 8080:
+    New-NetFirewallRule -DisplayName "WaveGuard" -Direction Inbound -LocalPort 8080 -Protocol TCP -Action Allow
+
+────────────────────────────────────────
+█  macOS — Ventura / Sonoma / Sequoia
+────────────────────────────────────────
+
+For development, testing, or small-scale deployment:
+
+1. Ensure you have admin access and Xcode Command Line Tools:
+   xcode-select --install
+2. If you use Homebrew (recommended), install Node.js:
+   brew install node@20
+   brew link --overwrite node@20
+3. Without Homebrew — download the macOS .pkg from nodejs.org
+4. Verify installation:
+   node --version   # v20.x.x
+   npm --version    # 10.x.x
+5. (Optional) Set a static IP:
+   • System Settings → Network → Ethernet (or Wi-Fi)
+   • Click Details → TCP/IP → Configure IPv4 → Manually
+   • Enter your IP, subnet mask, and router
+6. macOS does not use hostnames the same way — the local
+   hostname is set in Sharing settings if needed:
+   System Settings → General → Sharing → Local hostname`
   },
   {
     label: "Step 3 — Install Node.js & Dependencies",
-    body: `# Install Node.js 20 LTS via NodeSource:
+    body: `Choose your OS:
+
+────────────────────────────────────────
+█  LINUX (Ubuntu / Debian / Raspberry Pi)
+────────────────────────────────────────
+
+# Install Node.js 20 LTS via NodeSource:
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 sudo apt install -y nodejs
 
@@ -394,27 +504,92 @@ npm --version    # should show 10.x.x
 sudo npm install -g serve
 
 # Install git:
-sudo apt install -y git`
+sudo apt install -y git
+
+────────────────────────────────────────
+█  WINDOWS (Server 2022 / 10 / 11)
+────────────────────────────────────────
+
+1. Download Node.js 20 LTS .msi from nodejs.org
+2. Run the installer — check "Add to PATH"
+3. Open PowerShell (Admin) and verify:
+   node --version
+   npm --version
+4. Install 'serve' globally:
+   npm install -g serve
+5. Install Git for Windows from git-scm.com
+
+────────────────────────────────────────
+█  macOS (Ventura / Sonoma / Sequoia)
+────────────────────────────────────────
+
+# With Homebrew:
+brew install node@20
+brew link --overwrite node@20
+npm install -g serve
+
+# Without Homebrew, download the .pkg from nodejs.org
+
+# Git comes with Xcode Command Line Tools:
+xcode-select --install`
   },
   {
     label: "Step 4 — Deploy the Application",
-    body: `# Create application directory:
-sudo mkdir -p /opt/guardian-ai
-sudo chown $USER:$USER /opt/guardian-ai
+    body: `Create the application directory and clone or copy the source code.
 
-# Copy your built app files to the server (from your dev machine):
-scp -r ./dist/* user@<server-ip>:/opt/guardian-ai/
+────────────────────────────────────────
+█  LINUX (Ubuntu / Debian / Raspberry Pi)
+────────────────────────────────────────
 
-# Or clone from your GitHub repo:
-git clone https://github.com/<your-org>/guardian-ai.git /opt/guardian-ai
-cd /opt/guardian-ai
+# Create application directory:
+sudo mkdir -p /opt/waveguard
+sudo chown $USER:$USER /opt/waveguard
+
+# From your dev machine — copy pre-built files via SCP:
+scp -r ./dist/* user@<server-ip>:/opt/waveguard/
+
+# OR — clone directly on the server from your GitHub repo:
+git clone https://github.com/<your-org>/waveguard.git /opt/waveguard
+cd /opt/waveguard
 npm install
-npm run build`
+npm run build
+
+────────────────────────────────────────
+█  WINDOWS (Server 2022 / 10 / 11)
+────────────────────────────────────────
+
+1. Open PowerShell (Admin)
+2. Create the application folder:
+   mkdir C:\WaveGuard
+3. Copy your build files or clone the repo:
+   git clone https://github.com/<your-org>/waveguard.git C:\WaveGuard
+4. Install dependencies and build:
+   cd C:\WaveGuard
+   npm install
+   npm run build
+5. Start the app to test:
+   serve -s dist -l 8080
+
+────────────────────────────────────────
+█  macOS (Ventura / Sonoma / Sequoia)
+────────────────────────────────────────
+
+# Create the app directory:
+mkdir -p /opt/waveguard
+
+# Clone the repo:
+git clone https://github.com/<your-org>/waveguard.git /opt/waveguard
+cd /opt/waveguard
+npm install
+npm run build
+
+# Start with serve for testing:
+serve -s dist -l 8080`
   },
   {
     label: "Step 5 — Configure Environment Variables",
     body: `# Create the .env file:
-nano /opt/guardian-ai/.env
+nano /opt/waveguard/.env
 
 # Add your configuration:
 NODE_ENV=production
@@ -455,23 +630,36 @@ KNX_GATEWAY_HOST=192.168.1.203
   },
   {
     label: "Step 6 — Test the Application",
-    body: `# Start the app manually first to verify it works:
-cd /opt/guardian-ai
+    body: `Start the app manually to verify it works before setting up auto-start:
+
+────────────────────────────────────────
+█  ALL PLATFORMS
+────────────────────────────────────────
+
+# Navigate to the app directory, then start the test server:
+cd /opt/waveguard        # Linux / macOS
+cd C:\WaveGuard          # Windows
 serve -s dist -l 8080
 
 # From another machine on the same network, open a browser:
 # http://<server-ip>:8080
 
-# Check you can see the Wave Guard login page
-# Log in with your admin credentials
-# Verify the Dashboard loads correctly
+# Verify you can see the Wave Guard login page.
+# Log in with your admin credentials.
+# Confirm the Dashboard loads without errors.
 
-# Press Ctrl+C to stop the test server before proceeding to Step 7`
+# Press Ctrl+C to stop the test server before proceeding.`
   },
   {
-    label: "Step 7 — Create a systemd Service (Auto-start)",
-    body: `# Create service file:
-sudo nano /etc/systemd/system/guardian-ai.service
+    label: "Step 7 — Configure Auto-start (Service / Task)",
+    body: `Configure the app to start automatically when the server boots.
+
+────────────────────────────────────────
+█  LINUX — systemd (Ubuntu / Debian / Raspberry Pi)
+────────────────────────────────────────
+
+# Create service file:
+sudo nano /etc/systemd/system/waveguard.service
 
 # Paste the following:
 [Unit]
@@ -481,58 +669,136 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=guardian
-Group=guardian
-WorkingDirectory=/opt/guardian-ai
+User=waveguard
+Group=waveguard
+WorkingDirectory=/opt/waveguard
 ExecStart=/usr/bin/serve -s dist -l 8080
 Restart=always
 RestartSec=5
 StandardOutput=syslog
 StandardError=syslog
-SyslogIdentifier=guardian-ai
+SyslogIdentifier=waveguard
 Environment=NODE_ENV=production
 
 [Install]
 WantedBy=multi-user.target
 
 # Create a dedicated user for security:
-sudo useradd -r -s /bin/false guardian
-sudo chown -R guardian:guardian /opt/guardian-ai
+sudo useradd -r -s /bin/false waveguard
+sudo chown -R waveguard:waveguard /opt/waveguard
 
 # Enable and start:
 sudo systemctl daemon-reload
-sudo systemctl enable guardian-ai
-sudo systemctl start guardian-ai
+sudo systemctl enable waveguard
+sudo systemctl start waveguard
 
 # Check status:
-sudo systemctl status guardian-ai`
+sudo systemctl status waveguard
+
+────────────────────────────────────────
+█  WINDOWS — NSSM (Non-Sucking Service Manager)
+────────────────────────────────────────
+
+NSSM wraps any Node.js app as a Windows service with auto-start.
+
+1. Download NSSM from nssm.cc (or via chocolatey):
+   choco install nssm
+
+2. Open PowerShell (Admin) and create the service:
+   nssm install WaveGuard "C:\Program Files\nodejs\node.exe"
+   nssm set WaveGuard AppParameters "C:\Program Files\nodejs\serve -s dist -l 8080"
+   nssm set WaveGuard AppDirectory "C:\WaveGuard"
+   nssm set WaveGuard AppStdout "C:\WaveGuard\logs\stdout.log"
+   nssm set WaveGuard AppStderr "C:\WaveGuard\logs\stderr.log"
+   nssm set WaveGuard Start SERVICE_AUTO_START
+
+3. Start the service:
+   nssm start WaveGuard
+
+4. Or use Windows Task Scheduler (GUI alternative):
+   • Open Task Scheduler → Create Basic Task
+   • Name: WaveGuard
+   • Trigger: When the computer starts
+   • Action: Start a program
+   • Program: node.exe
+   • Arguments: C:\Program Files\nodejs\node_modules\serve\build\main.js -s dist -l 8080
+   • Start in: C:\WaveGuard
+
+────────────────────────────────────────
+█  macOS — launchd (for persistent background service)
+────────────────────────────────────────
+
+# Create a launchd plist:
+sudo nano /Library/LaunchDaemons/com.waveguard.plist
+
+# Paste:
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.waveguard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/serve</string>
+    <string>-s</string>
+    <string>dist</string>
+    <string>-l</string>
+    <string>8080</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/opt/waveguard</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/opt/waveguard/logs/stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/opt/waveguard/logs/stderr.log</string>
+</dict>
+</plist>
+
+# Load and start:
+sudo launchctl load -w /Library/LaunchDaemons/com.waveguard.plist
+sudo launchctl start com.waveguard
+
+# Check status:
+sudo launchctl list | grep waveguard`
   },
   {
-    label: "Step 8 — Set Up Nginx Reverse Proxy (HTTPS)",
-    body: `# Install Nginx:
+    label: "Step 8 — Set Up Reverse Proxy & HTTPS",
+    body: `A reverse proxy provides HTTPS encryption, port 443 forwarding, and future flexibility for multi-app routing.
+
+────────────────────────────────────────
+█  LINUX — Nginx (Ubuntu / Debian / Raspberry Pi)
+────────────────────────────────────────
+
+# Install Nginx:
 sudo apt install -y nginx
 
 # Generate a self-signed certificate (or use Let's Encrypt):
 sudo openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \\
-  -keyout /etc/ssl/private/guardian.key \\
-  -out /etc/ssl/certs/guardian.crt \\
-  -subj "/CN=guardian.local/O=Wave Guard"
+  -keyout /etc/ssl/private/waveguard.key \\
+  -out /etc/ssl/certs/waveguard.crt \\
+  -subj "/CN=waveguard.local/O=Wave Guard"
 
 # Create Nginx config:
-sudo nano /etc/nginx/sites-available/guardian-ai
+sudo nano /etc/nginx/sites-available/waveguard
 
 # Paste:
 server {
     listen 80;
-    server_name guardian.local;
+    server_name waveguard.local;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name guardian.local;
-    ssl_certificate     /etc/ssl/certs/guardian.crt;
-    ssl_certificate_key /etc/ssl/private/guardian.key;
+    server_name waveguard.local;
+    ssl_certificate     /etc/ssl/certs/waveguard.crt;
+    ssl_certificate_key /etc/ssl/private/waveguard.key;
     ssl_protocols TLSv1.2 TLSv1.3;
 
     location / {
@@ -546,58 +812,116 @@ server {
 }
 
 # Enable and reload:
-sudo ln -s /etc/nginx/sites-available/guardian-ai /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/waveguard /etc/nginx/sites-enabled/
 sudo nginx -t
-sudo systemctl enable --now nginx`
+sudo systemctl enable --now nginx
+
+────────────────────────────────────────
+█  WINDOWS — IIS with URL Rewrite
+────────────────────────────────────────
+
+1. Open Server Manager → Add Roles and Features
+2. Install the Web Server (IIS) role, including:
+   • Common HTTP Features
+   • Health and Diagnostics
+   • URL Rewrite Module (download separately from iis.net)
+3. Install Application Request Routing (ARR) from iis.net
+4. Open IIS Manager:
+   • Select the server node → Application Request Routing Cache
+   • Click Server Proxy Settings → Enable proxy
+5. Add a reverse proxy rule:
+   • Sites → Default Web Site → URL Rewrite
+   • Add Rule → Reverse Proxy
+   • Inbound: http://localhost:8080
+   • Outbound: rewrite host headers
+6. Bind HTTPS certificate:
+   • In IIS Manager, select Default Web Site → Bindings
+   • Add https binding with your self-signed certificate
+   • Generate certificate with PowerShell:
+     New-SelfSignedCertificate -DnsName "waveguard.local" -CertStoreLocation "cert:\LocalMachine\My"
+   • Export and import into IIS if needed
+
+────────────────────────────────────────
+█  macOS — Caddy (simple HTTPS reverse proxy)
+────────────────────────────────────────
+
+Caddy automatically provisions TLS and is much simpler than Nginx:
+
+# Install Caddy via Homebrew:
+brew install caddy
+
+# Create a Caddyfile:
+sudo nano /etc/caddy/Caddyfile
+
+# Paste:
+waveguard.local {
+    reverse_proxy localhost:8080
+}
+
+# Run Caddy:
+sudo caddy run --config /etc/caddy/Caddyfile`
   },
   {
     label: "Step 9 — Configure Local DNS",
-    body: `So crew can reach the platform at https://guardian.local instead of an IP address:
+    body: `So crew can reach the platform at https://waveguard.local instead of an IP address:
 
 Option A — Router/DHCP DNS entry:
   Log into your managed switch or router
-  Add a static DNS record: guardian.local → <server-ip>
+  Add a static DNS record: waveguard.local → <server-ip>
 
 Option B — Hosts file on each client (quick test):
   Windows: C:\\Windows\\System32\\drivers\\etc\\hosts
   Mac/Linux: /etc/hosts
-  Add line: 192.168.x.x   guardian.local
+  Add line: 192.168.x.x   waveguard.local
 
 Option C — Pi-hole or local DNS server:
-  Add an A record: guardian.local → <server-ip>
+  Add an A record: waveguard.local → <server-ip>
   Clients must use the Pi-hole as their DNS server`
   },
   {
     label: "Step 10 — Docker Deployment (Alternative)",
-    body: `If you prefer Docker:
+    body: `Docker works on all platforms and is the recommended deployment method.
+
+────────────────────────────────────────
+█  LINUX / WINDOWS / macOS
+────────────────────────────────────────
+
+Prerequisites:
+• Linux: install Docker Engine (get.docker.com)
+• Windows: install Docker Desktop with WSL2 backend
+• macOS: install Docker Desktop for Mac
 
 # Build the image:
-docker build -t guardian-ai:latest .
+docker build -t waveguard:latest .
 
 # Run with auto-restart and env file:
 docker run -d \\
-  --name guardian-ai \\
+  --name waveguard \\
   --restart unless-stopped \\
   -p 8080:8080 \\
-  --env-file /opt/guardian-ai/.env \\
-  guardian-ai:latest
+  --env-file /opt/waveguard/.env \\
+  waveguard:latest
 
 # View logs:
-docker logs -f guardian-ai
+docker logs -f waveguard
 
 # Update to new version:
-docker pull guardian-ai:latest
-docker stop guardian-ai && docker rm guardian-ai
+docker pull waveguard:latest
+docker stop waveguard && docker rm waveguard
 docker run -d ... (repeat run command above)
 
 # Docker Compose (recommended for production):
-# See docker-compose.yml in the project root`
+# See docker-compose.yml in the project root
+
+# On Windows, adjust paths for volume mounts:
+# docker run -d --name waveguard -p 8080:8080 ^
+#   --env-file C:\WaveGuard\.env waveguard:latest`
   },
   {
     label: "Step 11 — Verify & Monitor",
     body: `After deployment, verify everything is working:
 
-1. Open https://guardian.local in a browser — login page should appear
+1. Open https://waveguard.local in a browser — login page should appear
 2. Log in as admin — Dashboard should load with no errors
 3. Navigate to Topology → click Refresh — SNMP scan should populate devices
 4. Check Settings → Integrations — confirm all credentials are saved
@@ -605,16 +929,16 @@ docker run -d ... (repeat run command above)
 
 Monitor ongoing health:
 # View app logs:
-sudo journalctl -u guardian-ai -f
+sudo journalctl -u waveguard -f
 
 # Check system resources:
 htop
 
 # Check disk space:
-df -h /opt/guardian-ai
+df -h /opt/waveguard
 
 # Set up log rotation:
-sudo nano /etc/logrotate.d/guardian-ai`
+sudo nano /etc/logrotate.d/waveguard`
   }
 ];
 
@@ -943,7 +1267,7 @@ asyncio.run(bridge.connect())
 # Follow the pairing instructions — press the physical button on the bridge
 # Certificates are saved automatically
 
-3. Copy the generated .crt, .key, and cacert.crt files to /opt/guardian-ai/certs/
+3. Copy the generated .crt, .key, and cacert.crt files to /opt/waveguard/certs/
 4. Update .env: LUTRON_CERT=./certs/lutron.crt, LUTRON_KEY=./certs/lutron.key`
       },
       {
@@ -1507,7 +1831,7 @@ export function HelpPanel() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">Local Server Deployment Guide</p>
-                <p className="text-xs text-slate-400">Ubuntu 22.04 LTS · Node.js · Nginx · Docker</p>
+                <p className="text-xs text-slate-400">Ubuntu · Debian · Raspberry Pi · Windows · macOS · Nginx · Docker</p>
               </div>
             </div>
             <div className="px-5 py-5 space-y-6">
