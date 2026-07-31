@@ -372,7 +372,7 @@ export function patchToCable(row, floorMap) {
 
 export function patchEndpointToEquipment(row, floorMap) {
   const name = stripVesselEquipmentName(row.endDevice || "");
-  if (!name) return null;
+  if (!name || /^(none|0|n\/a|-)$/i.test(name)) return null;
   const base = baseEquipment({
     name,
     model: row.type || "",
@@ -385,6 +385,8 @@ export function patchEndpointToEquipment(row, floorMap) {
     notes: appendNote(row.notes, row.testedLength ? `Length: ${row.testedLength}` : ""),
     importSource: { sheet: row.sheet, row: row.row },
   });
+  // Don't treat cable media / "0" location as the device location.
+  if (base.location === "0") base.location = buildLocation(row.floor, row.room, floorMap);
   return mergeExtrasIntoEquipment(base, row.rawObj, row.consumedKeys);
 }
 

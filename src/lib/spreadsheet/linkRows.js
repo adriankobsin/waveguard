@@ -171,18 +171,23 @@ export function buildImportPayload(parsed, options = {}) {
         const cable = switchPortToCable(row);
         if (cable) cables.push(cable);
         const endName = stripVesselEquipmentName(row.endDevice || "");
-        if (endName && !equipmentByName.has(equipmentKey({ name: endName }))) {
-          addEquipment({
-            name: endName,
-            model: "",
-            category: "Other",
-            location: row.location || "",
-            notes: row.notes || "",
-            inventoryOnly: true,
-            waveguardClassification: "inventory",
-            importSource: { sheet: row.sheet, row: row.row },
-          });
-        }
+        if (!endName || /^(none|0|end device|n\/a|-)$/i.test(endName)) continue;
+        const endIp =
+          row.managementIp && /^(\d{1,3}\.){3}\d{1,3}$/.test(String(row.managementIp).trim())
+            ? String(row.managementIp).trim()
+            : "";
+        // Always merge so Device List rows pick up IPs discovered on switch ports.
+        addEquipment({
+          name: endName,
+          model: "",
+          category: "Other",
+          ip: endIp,
+          location: row.location || "",
+          notes: row.notes || "",
+          inventoryOnly: true,
+          waveguardClassification: "inventory",
+          importSource: { sheet: row.sheet, row: row.row },
+        });
       }
     } else if (sheet.sheetType === SHEET_GROUPS.patchPanels) {
       for (const row of sheet.rows || []) {
@@ -269,9 +274,22 @@ export function buildImportPayload(parsed, options = {}) {
       .filter((h) => h.name && h.ip)
       .map((h) => [String(h.name).trim().toLowerCase(), h.ip])
   );
+  function resolveHostIp(name) {
+    const key = String(name || "").trim().toLowerCase();
+    if (!key) return "";
+    if (hostIpByName.has(key)) return hostIpByName.get(key);
+    // Soft match: "AP - 101 Massage" ↔ "AP - 101 Massage (101)" etc.
+    for (const [n, ip] of hostIpByName) {
+      if (n === key) return ip;
+      if (n.startsWith(key + " ") || key.startsWith(n + " ")) return ip;
+      if (n.includes(key) && key.length >= 8) return ip;
+      if (key.includes(n) && n.length >= 8) return ip;
+    }
+    return "";
+  }
   equipment = equipment.map((eq) => {
     if (eq.ip) return eq;
-    const fromScheme = hostIpByName.get(equipmentKey(eq));
+    const fromScheme = resolveHostIp(eq.name);
     return fromScheme ? { ...eq, ip: fromScheme } : eq;
   });
 
