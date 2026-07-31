@@ -3677,6 +3677,11 @@ function collectBackupSnapshot() {
   return {
     systemSettings: settings,
     users,
+    // Operational data — required so patch panel / cable edits survive restore.
+    cables: Array.isArray(db.cables) ? db.cables : [],
+    equipment: Array.isArray(db.equipment) ? db.equipment : [],
+    actionLogs: Array.isArray(db.actionLogs) ? db.actionLogs : [],
+    rackLayouts: Array.isArray(db.rackLayouts) ? db.rackLayouts : [],
     exportedAt: new Date().toISOString(),
   };
 }
@@ -3744,6 +3749,9 @@ app.post("/api/apps/:appId/backups", (req, res) => {
     snapshot,
   };
   db.backups.unshift(backup);
+  // Keep the newest 40 backups so patch-panel autosaves cannot grow forever.
+  if (db.backups.length > 40) db.backups = db.backups.slice(0, 40);
+  queueSave(db);
   res.json({ backup });
 });
 
@@ -3758,7 +3766,12 @@ app.post("/api/apps/:appId/backups/:id/restore", (req, res) => {
       else db.systemSettings.push({ id: "setting-" + Date.now(), ...s });
     });
   }
-  res.json({ success: true, message: "Configuration restored" });
+  if (Array.isArray(snap?.cables)) db.cables = snap.cables;
+  if (Array.isArray(snap?.equipment)) db.equipment = snap.equipment;
+  if (Array.isArray(snap?.actionLogs)) db.actionLogs = snap.actionLogs;
+  if (Array.isArray(snap?.rackLayouts)) db.rackLayouts = snap.rackLayouts;
+  queueSave(db);
+  res.json({ success: true, message: "Configuration and cable data restored" });
 });
 
 app.post("/api/apps/:appId/integrations/test", async (req, res) => {

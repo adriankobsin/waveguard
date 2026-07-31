@@ -10,11 +10,20 @@ import {
   X,
   Save,
   LayoutGrid,
+  StickyNote,
+  ScrollText,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { base44 } from "@/api/base44Client";
 import { listEquipment, createEquipment, updateEquipment } from "@/api/equipmentApi";
-import { listCables, upsertPatchPortCable, backfillCablesBatch } from "@/api/cableApi";
+import {
+  listCables,
+  upsertPatchPortCable,
+  backfillCablesBatch,
+  schedulePatchPanelBackup,
+  createPatchPanelBackupNow,
+} from "@/api/cableApi";
 import { loadRackLayoutLocal } from "@/lib/rackLayoutStorage";
 import {
   buildSchedule,
@@ -22,6 +31,10 @@ import {
   collectFilterOptions,
   TEST_RESULTS,
 } from "@/lib/patchPanelSchedule/buildSchedule";
+import {
+  listPatchPanelEventLogs,
+  recordPatchPanelEvent,
+} from "@/lib/patchPanelSchedule/patchPanelEventLog";
 import { inferRackNameFromPanel } from "@/lib/spreadsheet/normalize";
 import PatchPanelImportModal from "./PatchPanelImportModal";
 import VesselSpreadsheetImportModal from "../inventory/VesselSpreadsheetImportModal";
@@ -36,30 +49,68 @@ function testResultColor(result) {
   return "text-slate-400 bg-slate-500/10";
 }
 
-function PortRow({ port, panelName, onSave, saving }) {
+const EDITABLE_PORT_FIELDS = [
+  "label",
+  "type",
+  "system_category",
+  "deck",
+  "room",
+  "location",
+  "to_equipment",
+  "end_device_port",
+  "length",
+  "test_result",
+  "last_tested_at",
+  "notes",
+  "status",
+];
+
+function portDraftDirty(draft, port) {
+  return EDITABLE_PORT_FIELDS.some(
+    (key) => String(draft[key] ?? "") !== String(port[key] ?? "")
+  );
+}
+
+function PortRow({ port, panelName, onSave, saving, onDraftChange }) {
   const [draft, setDraft] = useState({ ...port });
   useEffect(() => {
     setDraft({ ...port });
   }, [port]);
 
+  const setField = (field, value) => {
+    setDraft((d) => {
+      const next = { ...d, [field]: value };
+      onDraftChange?.(port.port, next, portDraftDirty(next, port));
+      return next;
+    });
+  };
+
   const handleBlur = async (field) => {
-    if (draft[field] === port[field]) return;
+    if (String(draft[field] ?? "") === String(port[field] ?? "")) return;
     try {
       await onSave(panelName, port.port, draft);
+      onDraftChange?.(port.port, draft, false);
     } catch {
       setDraft({ ...port });
+      onDraftChange?.(port.port, port, false);
     }
   };
 
+  const dirty = portDraftDirty(draft, port);
+
   return (
-    <tr className={`border-b border-border/40 hover:bg-secondary/20 ${port.isSpare ? "opacity-80" : ""}`}>
+    <tr
+      className={`border-b border-border/40 hover:bg-secondary/20 ${
+        port.isSpare && !dirty ? "opacity-80" : ""
+      } ${dirty ? "bg-amber-500/5" : ""}`}
+    >
       <td className="px-2 py-1.5 font-mono text-xs text-cyan-400">{port.port}</td>
       <td className="px-1 py-1">
         <input
           className={INPUT}
           value={draft.label}
           placeholder="Cable tag"
-          onChange={(e) => setDraft((d) => ({ ...d, label: e.target.value }))}
+          onChange={(e) => setField("label", e.target.value)}
           onBlur={() => handleBlur("label")}
           disabled={saving}
         />
@@ -68,7 +119,7 @@ function PortRow({ port, panelName, onSave, saving }) {
         <input
           className={INPUT}
           value={draft.type}
-          onChange={(e) => setDraft((d) => ({ ...d, type: e.target.value }))}
+          onChange={(e) => setField("type", e.target.value)}
           onBlur={() => handleBlur("type")}
           disabled={saving}
         />
@@ -77,7 +128,7 @@ function PortRow({ port, panelName, onSave, saving }) {
         <input
           className={INPUT}
           value={draft.system_category}
-          onChange={(e) => setDraft((d) => ({ ...d, system_category: e.target.value }))}
+          onChange={(e) => setField("system_category", e.target.value)}
           onBlur={() => handleBlur("system_category")}
           disabled={saving}
         />
@@ -87,7 +138,7 @@ function PortRow({ port, panelName, onSave, saving }) {
           className={INPUT}
           value={draft.deck}
           placeholder="Deck"
-          onChange={(e) => setDraft((d) => ({ ...d, deck: e.target.value }))}
+          onChange={(e) => setField("deck", e.target.value)}
           onBlur={() => handleBlur("deck")}
           disabled={saving}
         />
@@ -97,7 +148,7 @@ function PortRow({ port, panelName, onSave, saving }) {
           className={INPUT}
           value={draft.room}
           placeholder="Room"
-          onChange={(e) => setDraft((d) => ({ ...d, room: e.target.value }))}
+          onChange={(e) => setField("room", e.target.value)}
           onBlur={() => handleBlur("room")}
           disabled={saving}
         />
@@ -107,7 +158,7 @@ function PortRow({ port, panelName, onSave, saving }) {
           className={INPUT}
           value={draft.location}
           placeholder="Location"
-          onChange={(e) => setDraft((d) => ({ ...d, location: e.target.value }))}
+          onChange={(e) => setField("location", e.target.value)}
           onBlur={() => handleBlur("location")}
           disabled={saving}
         />
@@ -117,7 +168,7 @@ function PortRow({ port, panelName, onSave, saving }) {
           className={INPUT}
           value={draft.to_equipment}
           placeholder="End device"
-          onChange={(e) => setDraft((d) => ({ ...d, to_equipment: e.target.value }))}
+          onChange={(e) => setField("to_equipment", e.target.value)}
           onBlur={() => handleBlur("to_equipment")}
           disabled={saving}
         />
@@ -126,7 +177,7 @@ function PortRow({ port, panelName, onSave, saving }) {
         <input
           className={INPUT}
           value={draft.end_device_port}
-          onChange={(e) => setDraft((d) => ({ ...d, end_device_port: e.target.value }))}
+          onChange={(e) => setField("end_device_port", e.target.value)}
           onBlur={() => handleBlur("end_device_port")}
           disabled={saving}
         />
@@ -135,7 +186,7 @@ function PortRow({ port, panelName, onSave, saving }) {
         <input
           className={INPUT}
           value={draft.length}
-          onChange={(e) => setDraft((d) => ({ ...d, length: e.target.value }))}
+          onChange={(e) => setField("length", e.target.value)}
           onBlur={() => handleBlur("length")}
           disabled={saving}
         />
@@ -147,7 +198,9 @@ function PortRow({ port, panelName, onSave, saving }) {
           onChange={async (e) => {
             const next = { ...draft, test_result: e.target.value };
             setDraft(next);
+            onDraftChange?.(port.port, next, portDraftDirty(next, port));
             await onSave(panelName, port.port, next);
+            onDraftChange?.(port.port, next, false);
           }}
           disabled={saving}
         >
@@ -167,7 +220,9 @@ function PortRow({ port, panelName, onSave, saving }) {
             const val = e.target.value ? new Date(e.target.value).toISOString() : "";
             const next = { ...draft, last_tested_at: val };
             setDraft(next);
+            onDraftChange?.(port.port, next, portDraftDirty(next, port));
             await onSave(panelName, port.port, next);
+            onDraftChange?.(port.port, next, false);
           }}
           disabled={saving}
         />
@@ -176,7 +231,7 @@ function PortRow({ port, panelName, onSave, saving }) {
         <input
           className={INPUT}
           value={draft.notes}
-          onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+          onChange={(e) => setField("notes", e.target.value)}
           onBlur={() => handleBlur("notes")}
           disabled={saving}
         />
@@ -190,11 +245,55 @@ function PortRow({ port, panelName, onSave, saving }) {
   );
 }
 
-function PanelCard({ panel, onSavePort, onUpdatePanel, saving }) {
+function PanelCard({ panel, onSavePort, onUpdatePanel, onReload, saving }) {
   const [open, setOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState("ports");
   const [editMeta, setEditMeta] = useState(false);
   const [portCount, setPortCount] = useState(panel.port_count);
   const [rackName, setRackName] = useState(panel.rack_name);
+  const [panelNotes, setPanelNotes] = useState(panel.notes || "");
+  const [notesDirty, setNotesDirty] = useState(false);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [dirtyPorts, setDirtyPorts] = useState(() => new Map());
+  const [savingAll, setSavingAll] = useState(false);
+  const [eventLogs, setEventLogs] = useState([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+
+  useEffect(() => {
+    setPortCount(panel.port_count);
+    setRackName(panel.rack_name);
+    setPanelNotes(panel.notes || "");
+    setNotesDirty(false);
+    setDirtyPorts(new Map());
+  }, [panel.id, panel.name, panel.port_count, panel.rack_name, panel.notes, panel.ports]);
+
+  const dirtyCount = dirtyPorts.size;
+
+  const refreshLogs = useCallback(async () => {
+    setLoadingLogs(true);
+    try {
+      const rows = await listPatchPanelEventLogs({ panel: panel.name, limit: 80 });
+      setEventLogs(rows);
+    } catch {
+      setEventLogs([]);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }, [panel.name]);
+
+  useEffect(() => {
+    if (activeTab === "log") refreshLogs();
+  }, [activeTab, refreshLogs]);
+
+  const handleDraftChange = useCallback((portNum, draft, dirty) => {
+    setDirtyPorts((prev) => {
+      const next = new Map(prev);
+      if (dirty) next.set(portNum, draft);
+      else next.delete(portNum);
+      return next;
+    });
+  }, []);
 
   const saveMeta = async () => {
     if (!panel.id) {
@@ -206,8 +305,81 @@ function PanelCard({ panel, onSavePort, onUpdatePanel, saving }) {
       rack_name: rackName.trim() || panel.rack_name,
     });
     setEditMeta(false);
+    schedulePatchPanelBackup("patch_panel_settings");
     toast.success("Panel settings updated");
   };
+
+  const savePanelNotes = async () => {
+    if (!notesDirty) return;
+    if (!panel.id) {
+      toast.error("Panel equipment record missing — re-import spreadsheet");
+      return;
+    }
+    setSavingNotes(true);
+    try {
+      await onUpdatePanel(panel.id, { notes: panelNotes.trim() });
+      await recordPatchPanelEvent({
+        action: "notes_update",
+        panel: panel.name,
+        summary: `Updated notes on ${panel.name}`,
+        details: panelNotes.trim().slice(0, 240) || "(cleared)",
+      });
+      schedulePatchPanelBackup("patch_panel_notes");
+      setNotesDirty(false);
+      toast.success("Panel notes saved");
+      if (activeTab === "log") refreshLogs();
+    } catch (err) {
+      toast.error(err?.message || "Failed to save panel notes");
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
+  const saveAllDirty = async () => {
+    if (!dirtyPorts.size) return;
+    setSavingAll(true);
+    let ok = 0;
+    let fail = 0;
+    for (const [portNum, draft] of dirtyPorts.entries()) {
+      try {
+        await onSavePort(panel.name, portNum, draft, { reload: false });
+        ok += 1;
+      } catch {
+        fail += 1;
+      }
+    }
+    setDirtyPorts(new Map());
+    setSavingAll(false);
+    await onReload?.();
+    if (fail === 0) toast.success(`Saved ${ok} port${ok === 1 ? "" : "s"}`);
+    else toast.error(`Saved ${ok}, failed ${fail}`);
+    if (activeTab === "log") refreshLogs();
+  };
+
+  const runManualBackup = async () => {
+    setBackingUp(true);
+    try {
+      await createPatchPanelBackupNow(`patch_panel:${panel.name}`);
+      await recordPatchPanelEvent({
+        action: "backup",
+        panel: panel.name,
+        summary: `Server backup created for ${panel.name}`,
+        details: "Cables, equipment, and logs included in server backup snapshot",
+      });
+      toast.success("Server backup created");
+      refreshLogs();
+    } catch (err) {
+      toast.error(err?.message || "Backup failed");
+    } finally {
+      setBackingUp(false);
+    }
+  };
+
+  const tabs = [
+    { id: "ports", label: "Ports", icon: LayoutGrid },
+    { id: "notes", label: "Notes", icon: StickyNote },
+    { id: "log", label: "Log", icon: ScrollText },
+  ];
 
   return (
     <div className="border border-border rounded-xl overflow-hidden bg-card/50">
@@ -219,6 +391,16 @@ function PanelCard({ panel, onSavePort, onUpdatePanel, saving }) {
             {panel.port_count} ports
             {panel.rack_u != null ? ` · U${panel.rack_u}` : ""}
           </span>
+          {dirtyCount > 0 && (
+            <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
+              {dirtyCount} unsaved
+            </span>
+          )}
+          {notesDirty && (
+            <span className="text-[10px] font-medium text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-full px-2 py-0.5">
+              notes unsaved
+            </span>
+          )}
         </button>
         <button
           type="button"
@@ -245,32 +427,176 @@ function PanelCard({ panel, onSavePort, onUpdatePanel, saving }) {
         </div>
       )}
       {open && (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left min-w-[1280px]">
-            <thead>
-              <tr className="text-[10px] uppercase text-muted-foreground border-b border-border/50">
-                <th className="px-2 py-2 w-12">Port</th>
-                <th className="px-1 py-2">Cable No.</th>
-                <th className="px-1 py-2">Type</th>
-                <th className="px-1 py-2">System</th>
-                <th className="px-1 py-2">Deck</th>
-                <th className="px-1 py-2">Room</th>
-                <th className="px-1 py-2">Location</th>
-                <th className="px-1 py-2">End Device</th>
-                <th className="px-1 py-2">End Device Port</th>
-                <th className="px-1 py-2">Tested/Length</th>
-                <th className="px-1 py-2">Test</th>
-                <th className="px-1 py-2">Last tested</th>
-                <th className="px-1 py-2">Notes</th>
-                <th className="px-2 py-2">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {panel.ports.map((port) => (
-                <PortRow key={port.port} port={port} panelName={panel.name} onSave={onSavePort} saving={saving} />
-              ))}
-            </tbody>
-          </table>
+        <div>
+          <div className="flex items-center gap-1 px-3 pt-2 pb-1 border-b border-border/50 bg-secondary/20">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-colors ${
+                    active
+                      ? "bg-card text-cyan-300 border border-border shadow-sm"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/40"
+                  }`}
+                >
+                  <Icon size={12} />
+                  {tab.label}
+                </button>
+              );
+            })}
+            <div className="ml-auto flex items-center gap-1.5">
+              {activeTab === "ports" && dirtyCount > 0 && (
+                <button
+                  type="button"
+                  onClick={saveAllDirty}
+                  disabled={savingAll || saving}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-primary text-primary-foreground disabled:opacity-50"
+                >
+                  {savingAll ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Save all ({dirtyCount})
+                </button>
+              )}
+              {activeTab === "notes" && notesDirty && (
+                <button
+                  type="button"
+                  onClick={savePanelNotes}
+                  disabled={savingNotes}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium bg-primary text-primary-foreground disabled:opacity-50"
+                >
+                  {savingNotes ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Save notes
+                </button>
+              )}
+            </div>
+          </div>
+
+          {activeTab === "ports" && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left min-w-[1280px]">
+                <thead>
+                  <tr className="text-[10px] uppercase text-muted-foreground border-b border-border/50">
+                    <th className="px-2 py-2 w-12">Port</th>
+                    <th className="px-1 py-2">Cable No.</th>
+                    <th className="px-1 py-2">Type</th>
+                    <th className="px-1 py-2">System</th>
+                    <th className="px-1 py-2">Deck</th>
+                    <th className="px-1 py-2">Room</th>
+                    <th className="px-1 py-2">Location</th>
+                    <th className="px-1 py-2">End Device</th>
+                    <th className="px-1 py-2">End Device Port</th>
+                    <th className="px-1 py-2">Tested/Length</th>
+                    <th className="px-1 py-2">Test</th>
+                    <th className="px-1 py-2">Last tested</th>
+                    <th className="px-1 py-2">Notes</th>
+                    <th className="px-2 py-2">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {panel.ports.map((port) => (
+                    <PortRow
+                      key={port.port}
+                      port={port}
+                      panelName={panel.name}
+                      onSave={onSavePort}
+                      saving={saving || savingAll}
+                      onDraftChange={handleDraftChange}
+                    />
+                  ))}
+                </tbody>
+              </table>
+              <p className="px-3 py-2 text-[10px] text-muted-foreground border-t border-border/40">
+                Edit any cell, then blur or use Save all. Changes are stored on the server, written to the activity log, and backed up automatically.
+              </p>
+            </div>
+          )}
+
+          {activeTab === "notes" && (
+            <div className="p-3 space-y-2">
+              <label className="block text-xs font-medium text-muted-foreground">
+                Panel notes
+                <textarea
+                  value={panelNotes}
+                  onChange={(e) => {
+                    setPanelNotes(e.target.value);
+                    setNotesDirty(e.target.value !== (panel.notes || ""));
+                  }}
+                  rows={6}
+                  placeholder="Free-form notes for this patch panel (rack position, feed, VLAN, service labels…)"
+                  className={`${INPUT} mt-1.5 min-h-[120px] resize-y py-2`}
+                />
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={savePanelNotes}
+                  disabled={!notesDirty || savingNotes}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground disabled:opacity-40"
+                >
+                  {savingNotes ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Save notes
+                </button>
+                {notesDirty && <span className="text-[10px] text-amber-400">Unsaved changes</span>}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "log" && (
+            <div className="p-3 space-y-3">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={refreshLogs}
+                  disabled={loadingLogs}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  {loadingLogs ? <Loader2 size={12} className="animate-spin" /> : null}
+                  Refresh
+                </button>
+                <button
+                  type="button"
+                  onClick={runManualBackup}
+                  disabled={backingUp}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-border text-muted-foreground hover:text-foreground disabled:opacity-50"
+                >
+                  {backingUp ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                  Backup now
+                </button>
+              </div>
+              {loadingLogs ? (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground py-4">
+                  <Loader2 size={12} className="animate-spin" /> Loading activity…
+                </div>
+              ) : eventLogs.length === 0 ? (
+                <p className="text-xs text-muted-foreground py-4">No patch panel activity logged yet for this panel.</p>
+              ) : (
+                <ul className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {eventLogs.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className="rounded-lg border border-border/50 bg-secondary/30 px-2.5 py-2 text-[11px]"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <span className="font-medium text-foreground">{entry.summary || entry.action}</span>
+                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                          {entry.at ? new Date(entry.at).toLocaleString() : "—"}
+                        </span>
+                      </div>
+                      {entry.port && (
+                        <p className="text-muted-foreground mt-0.5">Port {entry.port}</p>
+                      )}
+                      {entry.details && (
+                        <p className="text-muted-foreground mt-0.5 truncate">{entry.details}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -349,14 +675,17 @@ export default function PatchPanelSchedulePanel({ onRefresh }) {
 
   const filterOptions = useMemo(() => collectFilterOptions(schedule), [schedule]);
 
-  const handleSavePort = async (panelName, port, data) => {
+  const handleSavePort = async (panelName, port, data, options = {}) => {
+    const { reload = true } = options;
     setSaving(true);
     try {
       const status =
         data.label || data.to_equipment ? data.status === "spare" ? "installed" : data.status || "installed" : "spare";
       await upsertPatchPortCable(panelName, port, { ...data, status });
-      await load();
-      onRefresh?.();
+      if (reload) {
+        await load();
+        onRefresh?.();
+      }
     } catch (err) {
       toast.error(err.message || "Save failed");
       throw err;
@@ -571,6 +900,10 @@ export default function PatchPanelSchedulePanel({ onRefresh }) {
                       panel={panel}
                       onSavePort={handleSavePort}
                       onUpdatePanel={handleUpdatePanel}
+                      onReload={async () => {
+                        await load();
+                        onRefresh?.();
+                      }}
                       saving={saving}
                     />
                   ))}

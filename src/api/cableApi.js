@@ -2,6 +2,8 @@ import { base44, isMockServer } from "@/api/base44Client";
 import { mockEntityApi } from "@/api/equipmentApi";
 import { isDemoModeActive } from "@/lib/platformMode";
 import { backfillPatchPanelFields } from "@/lib/patchPanelSchedule/buildSchedule.js";
+import { recordPatchPanelEvent } from "@/lib/patchPanelSchedule/patchPanelEventLog.js";
+import { createBackup } from "@/api/settingsApi.js";
 
 function guardDemoWrite() {
   if (isDemoModeActive()) {
@@ -68,8 +70,44 @@ export async function findPatchPortCable(cables, panelName, port) {
   });
 }
 
-export async function upsertPatchPortCable(panelName, port, data) {
+let backupTimer = null;
+let backupPending = false;
+let backupPendingLabel = "Patch panel editor";
+
+/** Debounced server backup so rapid port edits share one snapshot. */
+export function schedulePatchPanelBackup(createdBy = "Patch panel editor") {
+  backupPending = true;
+  backupPendingLabel = createdBy || "Patch panel editor";
+  if (backupTimer) clearTimeout(backupTimer);
+  backupTimer = setTimeout(async () => {
+    backupTimer = null;
+    if (!backupPending) return;
+    backupPending = false;
+    try {
+      if (isDemoModeActive()) return;
+      await createBackup(backupPendingLabel);
+    } catch (err) {
+      console.warn("[cableApi] autosave backup failed:", err);
+    }
+  }, 4000);
+}
+
+/** Create a server backup immediately (also clears any pending debounce). */
+export async function createPatchPanelBackupNow(createdBy = "manual_patch_panel") {
+  if (backupTimer) {
+    clearTimeout(backupTimer);
+    backupTimer = null;
+  }
+  backupPending = false;
+  if (isDemoModeActive()) {
+    throw new Error("Demo mode is read-only. Switch to Live to create backups.");
+  }
+  return createBackup(createdBy || "manual_patch_panel");
+}
+
+export async function upsertPatchPortCable(panelName, port, data, options = {}) {
   guardDemoWrite();
+  const { log = true, backup = true } = options;
   const all = await listCables();
   const existing = await findPatchPortCable(all, panelName, port);
   const portStr = String(port);
@@ -94,10 +132,46 @@ export async function upsertPatchPortCable(panelName, port, data) {
     schedule_source: data.schedule_source || "manual",
   };
 
-  if (existing?.id) {
-    return updateCable(existing.id, { ...existing, ...payload });
+  const saved = existing?.id
+    ? await updateCable(existing.id, { ...existing, ...payload })
+    : await createCable(payload);
+
+  if (log) {
+    const changed = [];
+    if (existing) {
+      for (const key of [
+        "label",
+        "type",
+        "system_category",
+        "deck",
+        "room",
+        "location",
+        "to_equipment",
+        "end_device_port",
+        "length",
+        "notes",
+        "test_result",
+        "status",
+      ]) {
+        if (String(existing[key] ?? "") !== String(payload[key] ?? "")) {
+          changed.push(`${key}: "${existing[key] ?? ""}" → "${payload[key] ?? ""}"`);
+        }
+      }
+    }
+    await recordPatchPanelEvent({
+      action: existing?.id ? "port_update" : "port_create",
+      panel,
+      port: portStr,
+      summary: existing?.id
+        ? `Updated ${panel} port ${portStr}${payload.label ? ` (${payload.label})` : ""}`
+        : `Created ${panel} port ${portStr}${payload.label ? ` (${payload.label})` : ""}`,
+      details: changed.length ? changed.join("; ") : `Saved port ${portStr} on ${panel}`,
+    });
   }
-  return createCable(payload);
+
+  if (backup) schedulePatchPanelBackup();
+
+  return saved;
 }
 
 export async function backfillCablesBatch(cables) {

@@ -21,6 +21,7 @@ export function extractPersistentState(db) {
     deviceGroups: db.deviceGroups || [],
     speedTests: db.speedTests || [],
     documents: db.documents || [],
+    backups: db.backups || [],
   };
 }
 
