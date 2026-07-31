@@ -3506,6 +3506,44 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
 
     const result = await commitVesselImport(deps, payload, options);
 
+    // Collapse any leftover port-suffixed panel chassis names (MEC552-R2-PP5-1 → MEC552-R2-PP5)
+    // left behind by older imports when this run did not use replace:true.
+    try {
+      const { normalizePatchPanelId, isCanonicalPatchPanelName } = await import(
+        "../src/lib/spreadsheet/normalize.js"
+      );
+      const removed = [];
+      db.equipment = db.equipment.filter((eq) => {
+        if (eq.equipment_subtype !== "patch_panel") return true;
+        const name = String(eq.name || "").trim();
+        if (isCanonicalPatchPanelName(name)) return true;
+        const portGuess = name.match(/-(\d+)$/)?.[1] || "";
+        const parent = normalizePatchPanelId(name, portGuess);
+        if (parent && parent !== name && isCanonicalPatchPanelName(parent)) {
+          removed.push(name);
+          return false;
+        }
+        return true;
+      });
+      for (const cable of db.cables) {
+        if (!cable.patch_panel) continue;
+        const fixed = normalizePatchPanelId(cable.patch_panel, cable.port);
+        if (fixed && fixed !== cable.patch_panel) {
+          cable.patch_panel = fixed;
+          if (cable.from_equipment && cable.port) {
+            cable.from_equipment = `${fixed} P${cable.port}`;
+          }
+        }
+      }
+      if (removed.length) {
+        console.log(
+          `[importVesselSpreadsheet] pruned ${removed.length} non-canonical patch panel records`
+        );
+      }
+    } catch (cleanupErr) {
+      console.warn("[importVesselSpreadsheet] panel cleanup skipped:", cleanupErr.message);
+    }
+
     let credentialsImported = 0;
     if (payload.credentials?.length) {
       const {
