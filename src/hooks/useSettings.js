@@ -7,6 +7,7 @@ import {
   loadSiteLocationsLocal,
   saveSiteLocationsLocal,
   SITE_LOCATIONS_SETTINGS_KEY,
+  SITE_LOCATIONS_CHANGED_EVENT,
   normalizeSiteLocations,
 } from "@/lib/siteLocations";
 import {
@@ -107,6 +108,15 @@ export function useSettings(key, defaults, options = {}) {
     };
     window.addEventListener(DISCOVERY_CHANGED_EVENT, onDiscoveryChange);
     return () => window.removeEventListener(DISCOVERY_CHANGED_EVENT, onDiscoveryChange);
+  }, [key]);
+
+  useEffect(() => {
+    if (key !== SITE_LOCATIONS_SETTINGS_KEY) return;
+    const onSiteLocationsChange = (e) => {
+      if (e.detail) setValue(normalizeSiteLocations(e.detail));
+    };
+    window.addEventListener(SITE_LOCATIONS_CHANGED_EVENT, onSiteLocationsChange);
+    return () => window.removeEventListener(SITE_LOCATIONS_CHANGED_EVENT, onSiteLocationsChange);
   }, [key]);
 
   const save = useCallback(

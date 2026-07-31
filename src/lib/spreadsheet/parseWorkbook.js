@@ -17,7 +17,6 @@ import {
 const EXPLICIT_SKIP_NAMES = new Set([
   "search",
   "data",
-  "ip scheme",
   "instructions",
   "readme",
   "legend",
@@ -252,33 +251,34 @@ function parseIpScheme(rows) {
   for (let c = 0; c < Math.max(vlanRow.length, rangeRow.length); c++) {
     const vlanCell = cellStr(vlanRow[c]);
     const rangeAt = cellStr(rangeRow[c]);
-    const rangeNext = cellStr(rangeRow[c + 1]);
-    const rangeCell =
-      rangeAt && /^\d+\.\d+/.test(rangeAt)
-        ? rangeAt
-        : rangeNext && /^\d+\.\d+/.test(rangeNext)
-          ? rangeNext
-          : "";
+    // Prefer the range in THIS column. Do not steal the next column's range
+    // when the current cell is an "IP Range" label — that mis-labels VLANs.
+    const rangeCell = rangeAt && /^\d+\.\d+/.test(rangeAt) ? rangeAt : "";
     if (!rangeCell) continue;
 
     const vlanName =
-      (vlanCell && !/^ip range$/i.test(vlanCell) ? vlanCell : "") ||
+      (vlanCell && !/^ip range$/i.test(vlanCell) && !/^vlan$/i.test(vlanCell)
+        ? vlanCell
+        : "") ||
       cellStr(vlanRow[c - 1]) ||
       cellStr(vlanRow[c - 2]) ||
       "";
-    if (!vlanName || /^ip range$/i.test(vlanName)) continue;
+    if (!vlanName || /^ip range$/i.test(vlanName) || /^vlan$/i.test(vlanName)) continue;
 
     const rangeKey = `${vlanName}|${rangeCell}`;
     if (seenRanges.has(rangeKey)) continue;
     seenRanges.add(rangeKey);
 
-    const rangeCol = rangeAt && /^\d+\.\d+/.test(rangeAt) ? c : c + 1;
+    const rangeCol = c;
+    // Albatros IP Scheme: VLAN title + Device Name sit on the range column;
+    // "Address Used" (IPs) is typically one column to the left.
+    const addressCol = c > 0 ? c - 1 : c;
     vlans.push({
       vlan: vlanName,
       ipRange: rangeCell,
       gateway: isIpv4Cell(gatewayRow[rangeCol]) ? cellStr(gatewayRow[rangeCol]) : "",
       mask: cellStr(maskRow[rangeCol]) || "",
-      column: c,
+      column: addressCol,
       rangeColumn: rangeCol,
     });
   }
@@ -357,6 +357,7 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
         poeW: obj["poe (w)"] || "",
         mac: obj.mac || "",
         serial: obj["serial #"] || obj.serial || "",
+        ip: obj.ip || obj["ip address"] || obj["management ip"] || "",
         notes: obj.notes || "",
         rawObj: obj,
         consumedKeys: [
@@ -371,6 +372,9 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
           "mac",
           "serial #",
           "serial",
+          "ip",
+          "ip address",
+          "management ip",
           "notes",
         ],
         kind: "endpoint",

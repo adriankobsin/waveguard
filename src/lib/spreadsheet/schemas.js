@@ -59,6 +59,9 @@ export const DEVICE_LIST_HEADERS = [
   "mac",
   "serial #",
   "serial",
+  "ip",
+  "ip address",
+  "management ip",
   "notes",
 ];
 

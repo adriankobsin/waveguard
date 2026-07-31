@@ -35,6 +35,79 @@ function fuzzyMatch(a, b) {
   return x === y || x.includes(y) || y.includes(x);
 }
 
+/** Cable/media / generic type strings that should not replace a real device model. */
+const WEAK_MODEL =
+  /^(cat\s*\d+|os\d*|patch|fiber|copper|utm|it|av|sec|cctv|tel|ant|lut|hvac|switch|access\s*point|display|router|camera|server|firewall|wlc|nas|pbx)$/i;
+
+function looksLikePartNumber(value) {
+  const s = String(value || "").trim();
+  return /\d/.test(s) && s.length >= 3;
+}
+
+function appendMergedNote(existing, addition) {
+  if (!addition) return existing || "";
+  if (!existing) return addition;
+  if (String(existing).includes(String(addition))) return existing;
+  return `${existing} | ${addition}`;
+}
+
+/**
+ * Merge equipment rows from multiple sheets without letting blank / weaker
+ * fields from Patch Panels wipe Device List / switch / appliance data (IP,
+ * room, serial, model, etc.).
+ */
+export function mergeEquipmentRecords(existing, incoming) {
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+
+  const out = { ...existing, name: existing.name || incoming.name };
+  for (const [key, value] of Object.entries(incoming)) {
+    if (key === "name") continue;
+    if (value == null || value === "") continue;
+
+    const current = out[key];
+    if (current == null || current === "") {
+      out[key] = value;
+      continue;
+    }
+
+    if (key === "port_count") {
+      out[key] = Math.max(Number(current) || 0, Number(value) || 0);
+      continue;
+    }
+    if (key === "notes") {
+      out[key] = appendMergedNote(current, value);
+      continue;
+    }
+    if (key === "model") {
+      if (WEAK_MODEL.test(String(current)) && !WEAK_MODEL.test(String(value))) {
+        out[key] = value;
+      } else if (
+        !WEAK_MODEL.test(String(value)) &&
+        !looksLikePartNumber(current) &&
+        looksLikePartNumber(value)
+      ) {
+        out[key] = value;
+      }
+      continue;
+    }
+    if (key === "location" && /room\s*\d+/i.test(String(current)) && !/room\s*\d+/i.test(String(value))) {
+      // Keep structured deck/room location from Device List over patch destination text.
+      continue;
+    }
+    if (key === "importSource") {
+      // Keep the first (usually Device List / chassis) provenance.
+      continue;
+    }
+    // First non-empty value wins for identity / location fields.
+  }
+
+  if (incoming.equipment_subtype && !out.equipment_subtype) {
+    out.equipment_subtype = incoming.equipment_subtype;
+  }
+  return out;
+}
+
 function applyRackLayoutToEquipment(equipmentList, layoutData) {
   if (!layoutData?.placements || !layoutData?.racks?.length) return equipmentList;
   const rackById = new Map(layoutData.racks.map((r) => [r.id, r]));
@@ -71,7 +144,7 @@ export function buildImportPayload(parsed, options = {}) {
     const key = equipmentKey(eq);
     const existing = equipmentByName.get(key);
     if (existing) {
-      equipmentByName.set(key, { ...existing, ...eq, name: existing.name || eq.name });
+      equipmentByName.set(key, mergeEquipmentRecords(existing, eq));
       warnings.push(`Duplicate equipment name merged: ${eq.name}`);
     } else {
       equipmentByName.set(key, eq);
@@ -130,12 +203,10 @@ export function buildImportPayload(parsed, options = {}) {
         if (panelEq) {
           const key = equipmentKey(panelEq);
           if (equipmentByName.has(key)) {
-            const existing = equipmentByName.get(key);
-            equipmentByName.set(key, {
-              ...existing,
-              ...panelEq,
-              port_count: Math.max(existing.port_count || 24, panelEq.port_count || 24),
-            });
+            equipmentByName.set(
+              key,
+              mergeEquipmentRecords(equipmentByName.get(key), panelEq)
+            );
           } else {
             addEquipment(panelEq);
           }
@@ -164,7 +235,7 @@ export function buildImportPayload(parsed, options = {}) {
   }
 
   const layoutData = enabled.has(SHEET_GROUPS.rack) ? racksToLayout(parsed.sheets) : null;
-  const equipment = applyRackLayoutToEquipment([...equipmentByName.values()], layoutData);
+  let equipment = applyRackLayoutToEquipment([...equipmentByName.values()], layoutData);
   const siteLocations = collectSiteLocations(equipment, floorMap);
 
   // Discovery targets = IP Scheme VLANs + /24s inferred from IT/management IPs.
@@ -191,6 +262,18 @@ export function buildImportPayload(parsed, options = {}) {
         source: "ipScheme",
       })),
   ]);
+
+  // Backfill equipment IPs from IP Scheme host table when Device List omitted them.
+  const hostIpByName = new Map(
+    knownHosts
+      .filter((h) => h.name && h.ip)
+      .map((h) => [String(h.name).trim().toLowerCase(), h.ip])
+  );
+  equipment = equipment.map((eq) => {
+    if (eq.ip) return eq;
+    const fromScheme = hostIpByName.get(equipmentKey(eq));
+    return fromScheme ? { ...eq, ip: fromScheme } : eq;
+  });
 
   const cableLabels = new Set();
   const cablePorts = new Set();

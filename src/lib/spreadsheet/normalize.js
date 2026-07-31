@@ -98,10 +98,22 @@ function baseEquipment(fields) {
 }
 
 export function endpointToEquipment(row, floorMap) {
+  const extras = row.rawObj
+    ? extractExtraFieldsFromObject(row.rawObj, new Set(row.consumedKeys || []))
+    : {};
+  const ip =
+    extras.ip ||
+    row.ip ||
+    row.managementIp ||
+    row.rawObj?.ip ||
+    row.rawObj?.["ip address"] ||
+    row.rawObj?.["management ip"] ||
+    "";
   const base = baseEquipment({
     name: row.endDevice,
     model: row.type || "",
     category: mapSystemToCategory(row.system, row.type),
+    ip,
     mac: row.mac || "",
     location: buildLocation(row.floor, row.room, floorMap),
     floor: row.floor || "",
