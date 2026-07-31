@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import {
   Globe,
   Plus,
@@ -189,11 +189,15 @@ export default function SnmpWanManagementPanel({
     });
   };
 
+  const mountedRef = useRef(true);
   useEffect(() => {
+    mountedRef.current = true;
     loadWanSpeedTestsWithServer().then(tests => {
+      if (!mountedRef.current) return;
       const sorted = (tests || []).sort((a, b) => new Date(b.testedAt) - new Date(a.testedAt));
       setLatestTest(sorted[0] || null);
     });
+    return () => { mountedRef.current = false; };
   }, [testUpdated]);
 
   const primaryLink = useMemo(() => {

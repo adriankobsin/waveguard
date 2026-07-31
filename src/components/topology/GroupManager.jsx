@@ -255,7 +255,7 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
             <Label className="text-secondary-foreground">Group Name</Label>
             <Input
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="e.g., Bridge Devices"
               className="bg-secondary border-border text-foreground"
             />
@@ -264,7 +264,7 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
             <Label className="text-secondary-foreground">Description</Label>
             <Input
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               placeholder="Optional description"
               className="bg-secondary border-border text-foreground"
             />
@@ -275,7 +275,7 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
               {COLORS.map(color => (
                 <button
                   key={color.value}
-                  onClick={() => setFormData({ ...formData, color: color.value })}
+                  onClick={() => setFormData(prev => ({ ...prev, color: color.value }))}
                   className={`w-6 h-6 rounded-full ${color.class} ${
                     formData.color === color.value ? "ring-2 ring-white" : ""
                   }`}
@@ -296,15 +296,15 @@ function CreateGroupButton({ devices, groups, onSubmit }) {
                     checked={formData.device_ids.includes(device.id)}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setFormData({
-                          ...formData,
-                          device_ids: [...formData.device_ids, device.id],
-                        });
+                        setFormData(prev => ({
+                          ...prev,
+                          device_ids: [...prev.device_ids, device.id],
+                        }));
                       } else {
-                        setFormData({
-                          ...formData,
-                          device_ids: formData.device_ids.filter(id => id !== device.id),
-                        });
+                        setFormData(prev => ({
+                          ...prev,
+                          device_ids: prev.device_ids.filter(id => id !== device.id),
+                        }));
                       }
                     }}
                     className="rounded border-border"
@@ -356,7 +356,7 @@ function EditGroupModal({ group, devices, groups: _groups, onSubmit, onClose }) 
             <Label className="text-secondary-foreground">Group Name</Label>
             <Input
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               className="bg-secondary border-border text-foreground"
             />
           </div>
@@ -364,7 +364,7 @@ function EditGroupModal({ group, devices, groups: _groups, onSubmit, onClose }) 
             <Label className="text-secondary-foreground">Description</Label>
             <Input
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
               className="bg-secondary border-border text-foreground"
             />
           </div>
@@ -374,7 +374,7 @@ function EditGroupModal({ group, devices, groups: _groups, onSubmit, onClose }) 
               {COLORS.map(color => (
                 <button
                   key={color.value}
-                  onClick={() => setFormData({ ...formData, color: color.value })}
+                  onClick={() => setFormData(prev => ({ ...prev, color: color.value }))}
                   className={`w-6 h-6 rounded-full ${color.class} ${
                     formData.color === color.value ? "ring-2 ring-white" : ""
                   }`}
@@ -395,15 +395,15 @@ function EditGroupModal({ group, devices, groups: _groups, onSubmit, onClose }) 
                     checked={formData.device_ids.includes(device.id)}
                     onChange={(e) => {
                       if (e.target.checked) {
-                        setFormData({
-                          ...formData,
-                          device_ids: [...formData.device_ids, device.id],
-                        });
+                        setFormData(prev => ({
+                          ...prev,
+                          device_ids: [...prev.device_ids, device.id],
+                        }));
                       } else {
-                        setFormData({
-                          ...formData,
-                          device_ids: formData.device_ids.filter(id => id !== device.id),
-                        });
+                        setFormData(prev => ({
+                          ...prev,
+                          device_ids: prev.device_ids.filter(id => id !== device.id),
+                        }));
                       }
                     }}
                     className="rounded border-border"

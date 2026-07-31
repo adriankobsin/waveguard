@@ -192,12 +192,14 @@ export function buildImportPayload(parsed, options = {}) {
     siteLocations,
     discoverySubnets,
     rackLayout: layoutData,
+    credentials: parsed.credentials || [],
     warnings,
     stats: {
       equipment: equipment.length,
       cables: dedupedCables.length,
       decks: siteLocations.decks?.length || 0,
       vlans: discoverySubnets.length,
+      credentials: (parsed.credentials || []).length,
     },
   };
 }

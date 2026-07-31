@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import { LayoutGrid, Trash2, Star, Check } from "lucide-react";
@@ -14,19 +14,22 @@ import {
 export default function LayoutSelector({ currentLayout, onLoadLayout, onSaveLayout, canSave = true }) {
   const [layouts, setLayouts] = useState([]);
   const [open, setOpen] = useState(false);
+  const cancelledRef = useRef(false);
 
   useEffect(() => {
+    cancelledRef.current = false;
     if (open) {
       loadLayouts();
     }
+    return () => { cancelledRef.current = true; };
   }, [open]);
 
   const loadLayouts = async () => {
     try {
       const response = await base44.entities.LayoutTopology.list();
-      setLayouts(response);
+      if (!cancelledRef.current) setLayouts(response);
     } catch (error) {
-      console.error('Failed to load layouts:', error);
+      if (!cancelledRef.current) console.error('Failed to load layouts:', error);
     }
   };
 

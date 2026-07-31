@@ -141,7 +141,7 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
           <DialogDescription>
             Upload any equipment workbook (.xlsx). Albatros-style sheets are parsed with their native
             templates; other sheets are auto-detected from their column headers (Name, Model, IP, MAC,
-            Serial, etc.) so every recognized cell is imported. Usernames and passwords are never imported.
+            Serial, etc.). Rows with Username / Password columns are also added to Settings → Login credentials.
           </DialogDescription>
         </DialogHeader>
 
@@ -193,7 +193,7 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
 
         {parsed && payload && !result && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
               <div className="rounded-lg bg-secondary p-3">
                 <p className="text-2xl font-bold text-foreground">{payload.stats.equipment}</p>
                 <p className="text-xs text-muted-foreground">Equipment</p>
@@ -205,6 +205,10 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
               <div className="rounded-lg bg-secondary p-3">
                 <p className="text-2xl font-bold text-foreground">{payload.stats.decks}</p>
                 <p className="text-xs text-muted-foreground">Decks</p>
+              </div>
+              <div className="rounded-lg bg-secondary p-3">
+                <p className="text-2xl font-bold text-foreground">{payload.stats.credentials ?? 0}</p>
+                <p className="text-xs text-muted-foreground">Logins</p>
               </div>
             </div>
 
@@ -270,6 +274,9 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
               <li>Equipment created: {result.equipmentCreated ?? 0}</li>
               <li>Equipment updated: {result.equipmentUpdated ?? 0}</li>
               <li>Cables created: {result.cablesCreated ?? 0}</li>
+              {(result.credentialsImported ?? 0) > 0 && (
+                <li>Login credentials added: {result.credentialsImported}</li>
+              )}
               {result.cablesSkipped > 0 && <li>Cables skipped (duplicates): {result.cablesSkipped}</li>}
             </ul>
             {result.errors?.length > 0 && (

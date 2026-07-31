@@ -14,6 +14,7 @@ import {
   Trash2,
   Globe,
   Cpu,
+  Wifi,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -60,6 +61,7 @@ import SnmpWanManagementPanel from "@/components/snmp/SnmpWanManagementPanel";
 import { loadWanManagement, saveWanManagement } from "@/api/wanManagementApi";
 import { DEFAULT_WAN_MANAGEMENT } from "@/lib/wan/wanManagementSettings";
 import CiscoSwitchesPage from "@/pages/CiscoSwitchesPage";
+import CiscoWirelessPage from "@/pages/CiscoWirelessPage";
 
 const HEALTH_BORDER = {
   healthy: "border-l-emerald-500",
@@ -89,7 +91,7 @@ function EmptyFleetPrompt({ onRegister }) {
   );
 }
 
-const VALID_TABS = new Set(["overview", "switches", "cisco", "wan", "alerts", "settings"]);
+const VALID_TABS = new Set(["overview", "switches", "cisco", "wireless", "wan", "alerts", "settings"]);
 
 export default function SnmpPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -148,9 +150,23 @@ export default function SnmpPage() {
     </TabsContent>
   );
 
+  const wirelessTabPanel = (
+    <TabsContent value="wireless" className="mt-0">
+      <div className="rounded-2xl border border-border overflow-hidden min-h-[calc(100vh-14rem)]">
+        <CiscoWirelessPage embedded />
+      </div>
+    </TabsContent>
+  );
+
   const ciscoTabTrigger = (
     <TabsTrigger value="cisco" className="gap-1.5">
       <Cpu size={14} /> Cisco Switches
+    </TabsTrigger>
+  );
+
+  const wirelessTabTrigger = (
+    <TabsTrigger value="wireless" className="gap-1.5">
+      <Wifi size={14} /> Wireless
     </TabsTrigger>
   );
 
@@ -540,6 +556,7 @@ export default function SnmpPage() {
               <Server size={14} /> Fleet
             </TabsTrigger>
             {ciscoTabTrigger}
+            {wirelessTabTrigger}
             <TabsTrigger value="wan" className="gap-1.5">
               <Globe size={14} /> WAN Management
             </TabsTrigger>
@@ -560,6 +577,7 @@ export default function SnmpPage() {
           </TabsContent>
 
           {ciscoTabPanel}
+          {wirelessTabPanel}
 
           <TabsContent value="wan" className="mt-0">
             <SnmpWanManagementPanel
@@ -599,6 +617,7 @@ export default function SnmpPage() {
               <Server size={14} /> Fleet
             </TabsTrigger>
             {ciscoTabTrigger}
+            {wirelessTabTrigger}
             <TabsTrigger value="wan" className="gap-1.5">
               <Globe size={14} /> WAN Management
             </TabsTrigger>
@@ -718,6 +737,7 @@ export default function SnmpPage() {
           </TabsContent>
 
           {ciscoTabPanel}
+          {wirelessTabPanel}
 
           <TabsContent value="wan" className="mt-0">
             <SnmpWanManagementPanel

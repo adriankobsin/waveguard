@@ -89,7 +89,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Device Name *</Label>
               <Input
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 className="bg-secondary border-border text-foreground"
                 placeholder="e.g., SW-Bridge"
               />
@@ -98,7 +98,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Category</Label>
               <Select
                 value={formData.category}
-                onValueChange={(value) => setFormData({ ...formData, category: value })}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, category: value }))}
               >
                 <SelectTrigger className="bg-secondary border-border text-foreground">
                   <SelectValue />
@@ -119,7 +119,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">IP Address</Label>
               <Input
                 value={formData.ip}
-                onChange={(e) => setFormData({ ...formData, ip: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, ip: e.target.value }))}
                 className="bg-secondary border-border text-foreground font-mono"
                 placeholder="192.168.1.1"
               />
@@ -128,7 +128,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">MAC Address</Label>
               <Input
                 value={formData.mac}
-                onChange={(e) => setFormData({ ...formData, mac: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, mac: e.target.value }))}
                 className="bg-secondary border-border text-foreground font-mono"
                 placeholder="00:1A:2B:3C:4D:5E"
               />
@@ -140,7 +140,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Make</Label>
               <Input
                 value={formData.make}
-                onChange={(e) => setFormData({ ...formData, make: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, make: e.target.value }))}
                 className="bg-secondary border-border text-foreground"
                 placeholder="e.g., Cisco, Crestron, Axis"
               />
@@ -149,7 +149,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Model</Label>
               <Input
                 value={formData.model}
-                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, model: e.target.value }))}
                 className="bg-secondary border-border text-foreground"
                 placeholder="e.g., CBS350-24P"
               />
@@ -161,7 +161,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Firmware Version</Label>
               <Input
                 value={formData.firmware}
-                onChange={(e) => setFormData({ ...formData, firmware: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, firmware: e.target.value }))}
                 className="bg-secondary border-border text-foreground"
                 placeholder="e.g., 1.0.5.3"
               />
@@ -170,7 +170,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Serial Number</Label>
               <Input
                 value={formData.serial}
-                onChange={(e) => setFormData({ ...formData, serial: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, serial: e.target.value }))}
                 className="bg-secondary border-border text-foreground font-mono"
                 placeholder="e.g., FOC2241X0AB"
               />
@@ -193,7 +193,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Status</Label>
               <Select
                 value={formData.status}
-                onValueChange={(value) => setFormData({ ...formData, status: value })}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}
               >
                 <SelectTrigger className="bg-secondary border-border text-foreground">
                   <SelectValue />
@@ -211,7 +211,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
               <Label className="text-secondary-foreground">Control type</Label>
               <Select
                 value={formData.controlType}
-                onValueChange={(value) => setFormData({ ...formData, controlType: value })}
+                onValueChange={(value) => setFormData(prev => ({ ...prev, controlType: value }))}
               >
                 <SelectTrigger className="bg-secondary border-border text-foreground">
                   <SelectValue />
@@ -231,7 +231,7 @@ export function DeviceEditModal({ device, onSubmit, onClose }) {
             <Label className="text-secondary-foreground">Notes</Label>
             <textarea
               value={formData.notes}
-              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
               className="w-full min-h-[80px] bg-secondary border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-cyan-500/50"
               placeholder="Additional notes about this device..."
             />

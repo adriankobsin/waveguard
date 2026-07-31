@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
-import { Plus, Trash2, Key, ExternalLink } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Plus, Trash2, Key, ExternalLink, FileSpreadsheet, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   listCredentials,
   saveCredentials,
+  importCredentialsBatch,
 } from "@/api/credentialsApi";
 import { CREDENTIAL_PLATFORMS } from "@/lib/credentials/credentialsVault";
+import { parseCredentialsDocument } from "@/lib/credentials/importCredentialsDocument";
+import { readSpreadsheetToBuffer } from "@/lib/spreadsheet/readSpreadsheet.js";
 import { Link } from "react-router-dom";
 
 const INPUT =
@@ -30,6 +33,8 @@ export default function CredentialsVaultPanel() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -67,6 +72,39 @@ export default function CredentialsVaultPanel() {
     }
   };
 
+  const handleImportFile = async (file) => {
+    if (!file) return;
+    setImporting(true);
+    try {
+      let parsed;
+      const name = String(file.name || "").toLowerCase();
+      if (name.endsWith(".json")) {
+        const text = await file.text();
+        parsed = parseCredentialsDocument(text, file.name);
+      } else if (name.endsWith(".csv")) {
+        const text = await file.text();
+        parsed = parseCredentialsDocument(text, file.name);
+      } else {
+        const buffer = await readSpreadsheetToBuffer(file);
+        parsed = parseCredentialsDocument(buffer, file.name);
+      }
+
+      if (!parsed.length) {
+        toast.error("No login rows found. Include columns such as Username, Password, IP, or Hostname.");
+        return;
+      }
+
+      const { credentialsImported } = await importCredentialsBatch(parsed);
+      toast.success(`Imported ${credentialsImported} credential${credentialsImported === 1 ? "" : "s"} into the vault`);
+      await load();
+    } catch (e) {
+      toast.error(e.message || "Import failed");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Loading credentials…</p>;
   }
@@ -75,12 +113,38 @@ export default function CredentialsVaultPanel() {
     <div className="space-y-4 max-w-3xl">
       <p className="text-xs text-muted-foreground">
         Central store for device and platform logins (web UI, SSH, API). Linked entries sync when you
-        save a device in Core Network → Configure.
+        save a device in Core Network → Configure. Import a spreadsheet or CSV with Username / Password
+        columns, or credentials are added automatically when vessel spreadsheets contain login columns.
       </p>
+
+      <div className="rounded-xl border border-border bg-card/30 p-4 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-medium text-foreground">
+          <FileSpreadsheet size={15} className="text-primary" />
+          Import credentials document
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Upload .xlsx, .csv, or .json with columns such as Hostname, IP, Username, Password, Platform, and Login URL.
+          Existing entries with the same host and username are updated.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.csv,.json"
+            onChange={(e) => handleImportFile(e.target.files?.[0])}
+            className="text-xs text-muted-foreground file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:bg-primary/15 file:text-primary"
+          />
+          {importing && (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <Loader2 size={12} className="animate-spin" /> Importing…
+            </span>
+          )}
+        </div>
+      </div>
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-          No credentials yet. Add one below or configure browser login on a Core Network device.
+          No credentials yet. Import a document above, add one below, or configure browser login on a Core Network device.
         </div>
       ) : (
         <div className="space-y-3">

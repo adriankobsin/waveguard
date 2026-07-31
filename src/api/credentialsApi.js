@@ -5,6 +5,8 @@ import {
   normalizeCredentialsVault,
   saveCredentialsLocal,
   loadCredentialsLocal,
+  mergeCredentialsIntoVault,
+  linkCredentialsToEquipment,
 } from "@/lib/credentials/credentialsVault";
 
 const MOCK_APP = "mock-app";
@@ -76,4 +78,14 @@ export async function upsertCredential(credential) {
 export async function deleteCredential(id) {
   const list = (await loadFromSettings()).filter((c) => c.id !== id);
   return persistToSettings(list);
+}
+
+/** Merge spreadsheet/document credentials into the vault, linking to equipment when possible. */
+export async function importCredentialsBatch(credentials, equipmentList = []) {
+  if (!credentials?.length) return { credentialsImported: 0 };
+  const linked = linkCredentialsToEquipment(credentials, equipmentList);
+  const existing = await loadFromSettings();
+  const merged = mergeCredentialsIntoVault(existing, linked);
+  await persistToSettings(merged);
+  return { credentialsImported: linked.length };
 }

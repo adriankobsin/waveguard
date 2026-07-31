@@ -13,10 +13,12 @@ import {
 import { generateSnmpDiagnoses } from "@/lib/snmp/generateSnmpDiagnoses";
 import { generateLightingDiagnoses } from "@/lib/lighting/lightingDiagnoses";
 import { generateCiscoDiagnoses } from "@/lib/integrations/cisco/ciscoDiagnoses";
+import { generateWlcDiagnoses } from "@/lib/integrations/cisco/wlcDiagnoses";
 import { loadLightingEvents } from "@/lib/lighting/lightingEventLog";
 import { loadCiscoEvents } from "@/lib/integrations/cisco/ciscoEventLog";
 import { loadLutronConnection, testLutronProcessor, loadLightingHouse, loadZoneState } from "@/api/lightingApi";
 import { listCiscoSwitches, testCiscoSwitch } from "@/api/ciscoApi";
+import { listCiscoWlcControllers, testCiscoWlcController, pollAllCiscoWlcControllers } from "@/api/ciscoWlcApi";
 import {
   LIGHTING_EVENT_LOG_CHANGED_EVENT,
   LIGHTING_LUTRON_CONNECTION_CHANGED_EVENT,
@@ -28,6 +30,7 @@ import {
   NETWORK_CISCO_EVENT_LOG_CHANGED_EVENT,
   NETWORK_CISCO_SWITCHES_CHANGED_EVENT,
 } from "@/lib/network/ciscoSwitchSettings";
+import { NETWORK_CISCO_WLC_CHANGED_EVENT } from "@/lib/network/ciscoWlcSettings";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
 import { SNMP_SWITCHES_CHANGED_EVENT } from "@/lib/snmp/snmpSwitchProfiles";
 import { WAN_MANAGEMENT_CHANGED_EVENT } from "@/lib/wan/wanManagementSettings";
@@ -40,6 +43,7 @@ import { connectServerEvents, disconnectServerEvents } from "@/lib/serverEvents"
 // trade-off between freshness and processor load.
 const LIGHTING_PROBE_INTERVAL_MS = 60_000;
 const CISCO_PROBE_INTERVAL_MS = 60_000;
+const WLC_PROBE_INTERVAL_MS = 120_000;
 
 // Fallback background refresh so all connected browsers stay roughly in
 // sync even when the SSE bridge is unavailable (e.g. network partitions).
@@ -68,6 +72,10 @@ export function SystemDataProvider({ children }) {
   const [ciscoSwitches, setCiscoSwitches] = useState([]);
   const [ciscoProbes, setCiscoProbes] = useState({}); // { [host]: probeResult }
   const ciscoProbeAbortRef = useRef(false);
+
+  const [ciscoWlcControllers, setCiscoWlcControllers] = useState([]);
+  const [ciscoWlcProbes, setCiscoWlcProbes] = useState({});
+  const wlcProbeAbortRef = useRef(false);
 
   const load = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
@@ -312,6 +320,92 @@ export function SystemDataProvider({ children }) {
     };
   }, [refreshCiscoState, probeCiscoSwitches]);
 
+  // ── WLC diagnosis pipeline ────────────────────────────────────────────
+  const refreshWlcState = useCallback(async () => {
+    try {
+      const list = await listCiscoWlcControllers();
+      setCiscoWlcControllers(list?.controllers || []);
+    } catch (err) {
+      console.warn("[SystemData] WLC state load failed:", err);
+    }
+  }, []);
+
+  const probeWlcControllers = useCallback(async () => {
+    let list = ciscoWlcControllers;
+    if (!list || list.length === 0) {
+      try {
+        const payload = await listCiscoWlcControllers();
+        list = payload?.controllers || [];
+        setCiscoWlcControllers(list);
+      } catch (_err) {
+        return;
+      }
+    }
+    if (!list || list.length === 0) {
+      setCiscoWlcProbes({});
+      return;
+    }
+    const next = {};
+    for (const ctrl of list) {
+      if (!ctrl.enabled || !ctrl.host) continue;
+      try {
+        const result = await testCiscoWlcController(ctrl);
+        if (wlcProbeAbortRef.current) return;
+        next[ctrl.host] = {
+          ...result,
+          checkedAt: new Date().toISOString(),
+        };
+      } catch (err) {
+        if (wlcProbeAbortRef.current) return;
+        next[ctrl.host] = {
+          success: false,
+          message: err?.message || String(err),
+          checkedAt: new Date().toISOString(),
+        };
+      }
+    }
+    if (wlcProbeAbortRef.current) return;
+    setCiscoWlcProbes(next);
+  }, [ciscoWlcControllers]);
+
+  useEffect(() => {
+    refreshWlcState();
+  }, [refreshWlcState]);
+
+  useEffect(() => {
+    wlcProbeAbortRef.current = false;
+    probeWlcControllers();
+    const id = setInterval(probeWlcControllers, WLC_PROBE_INTERVAL_MS);
+    return () => {
+      wlcProbeAbortRef.current = true;
+      clearInterval(id);
+    };
+  }, [probeWlcControllers]);
+
+  useEffect(() => {
+    wlcProbeAbortRef.current = false;
+    pollAllCiscoWlcControllers().catch((err) => {
+      console.warn("[SystemData] WLC background poll failed:", err);
+    });
+    const id = setInterval(() => {
+      pollAllCiscoWlcControllers().catch(() => {});
+    }, WLC_PROBE_INTERVAL_MS);
+    return () => {
+      wlcProbeAbortRef.current = true;
+      clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
+    const onWlcChange = (e) => {
+      if (e?.detail?.controllers) setCiscoWlcControllers(e.detail.controllers);
+      else refreshWlcState();
+      probeWlcControllers();
+    };
+    window.addEventListener(NETWORK_CISCO_WLC_CHANGED_EVENT, onWlcChange);
+    return () => window.removeEventListener(NETWORK_CISCO_WLC_CHANGED_EVENT, onWlcChange);
+  }, [refreshWlcState, probeWlcControllers]);
+
   const snapshot = useMemo(
     () =>
       sources
@@ -350,6 +444,10 @@ export function SystemDataProvider({ children }) {
       })),
       events: ciscoEvents,
     }).filter((d) => !dismissed.has(d.id));
+    const wlc = generateWlcDiagnoses({
+      controllers: ciscoWlcControllers,
+      probes: ciscoWlcProbes,
+    }).filter((d) => !dismissed.has(d.id));
 
     const order = { critical: 0, warning: 1, info: 2 };
     const merged = applyAcknowledgements([
@@ -357,6 +455,7 @@ export function SystemDataProvider({ children }) {
       ...snmp,
       ...lighting,
       ...cisco,
+      ...wlc,
     ]).sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
     return merged;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -370,6 +469,8 @@ export function SystemDataProvider({ children }) {
     ciscoEvents,
     ciscoSwitches,
     ciscoProbes,
+    ciscoWlcControllers,
+    ciscoWlcProbes,
   ]);
 
   const dismissDiagnosis = useCallback((id) => {
@@ -399,6 +500,17 @@ export function SystemDataProvider({ children }) {
     return { total: enabled.length, online, offline: Math.max(0, enabled.length - online) };
   }, [ciscoSwitches, ciscoProbes]);
 
+  const wlcStats = useMemo(() => {
+    const enabled = ciscoWlcControllers.filter((c) => c.enabled !== false);
+    const snap = enabled[0]?.lastSnapshot?.summary;
+    return {
+      controllers: enabled.length,
+      apOnline: snap?.apOnline ?? 0,
+      apOffline: snap?.apOffline ?? 0,
+      wlanCount: snap?.wlanCount ?? 0,
+    };
+  }, [ciscoWlcControllers]);
+
   const value = useMemo(
     () => ({
       snapshot,
@@ -418,6 +530,9 @@ export function SystemDataProvider({ children }) {
       ciscoSwitches,
       ciscoProbes,
       ciscoStats,
+      ciscoWlcControllers,
+      ciscoWlcProbes,
+      wlcStats,
     }),
     [
       snapshot,
@@ -437,6 +552,9 @@ export function SystemDataProvider({ children }) {
       ciscoSwitches,
       ciscoProbes,
       ciscoStats,
+      ciscoWlcControllers,
+      ciscoWlcProbes,
+      wlcStats,
     ]
   );
 

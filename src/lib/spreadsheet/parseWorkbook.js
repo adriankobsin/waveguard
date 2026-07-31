@@ -8,6 +8,10 @@ import {
 } from "./parseCompactPatchPanel.js";
 import { detectGenericHeaderRow, rowToGenericEquipment } from "./headerMapping.js";
 import { extractCableTagFromText } from "./cableTag.js";
+import {
+  extractCredentialsFromSheetRows,
+  dedupeExtractedCredentials,
+} from "@/lib/credentials/extractCredentials.js";
 
 /** Sheet names we should never auto-import even via the generic fallback. */
 const EXPLICIT_SKIP_NAMES = new Set([
@@ -368,6 +372,7 @@ export function parseWorkbook(buffer) {
   const wb = XLSX.read(buffer, { type: "array", cellDates: false });
   const sheets = [];
   const summary = { byGroup: {}, totalRows: 0, warnings: [] };
+  const extractedCredentials = [];
 
   for (const sheetName of wb.SheetNames) {
     let sheetType = detectSheetType(sheetName);
@@ -380,6 +385,7 @@ export function parseWorkbook(buffer) {
 
     const ws = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false });
+    extractedCredentials.push(...extractCredentialsFromSheetRows(sheetName, rows));
 
     // Unknown sheet → try compact patch rows first, then header-based patch, then generic equipment.
     if (sheetType === SHEET_GROUPS.skip) {
@@ -480,5 +486,9 @@ export function parseWorkbook(buffer) {
     });
   }
 
-  return { sheets, summary };
+  return {
+    sheets,
+    summary,
+    credentials: dedupeExtractedCredentials(extractedCredentials),
+  };
 }

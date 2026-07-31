@@ -56,12 +56,14 @@ const ChartStyle = ({
     return null
   }
 
+  const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, "")
+
   return (
     (<style
       dangerouslySetInnerHTML={{
         __html: Object.entries(THEMES)
           .map(([theme, prefix]) => `
-${prefix} [data-chart=${id}] {
+${prefix} [data-chart=${safeId}] {
 ${colorConfig
 .map(([key, itemConfig]) => {
 const color =

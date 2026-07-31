@@ -90,6 +90,10 @@ import {
   probeCiscoPorts,
   recommendationFromPorts as ciscoRecommendation,
 } from "../scanner/integrations/cisco/ciscoSwitchClient.js";
+import {
+  getWlcRestconfClient,
+  closeWlcRestconfClient,
+} from "../scanner/integrations/cisco/wlcRestconfClient.js";
 import { mergeCiscoIntoPoll } from "../src/lib/integrations/cisco/ciscoAdapter.js";
 import { LIGHTING_LUTRON_CONNECTION_KEY, LIGHTING_CONNECTION_KEY, LIGHTING_SYSTEMS_CONFIG_KEY, defaultPortForProtocol } from "../src/lib/lighting/lightingSettings.js";
 import {
@@ -99,6 +103,11 @@ import {
   CISCO_LIVE_POLL_INTERVAL_MS,
   CISCO_BACKGROUND_POLL_INTERVAL_MS,
 } from "../src/lib/network/ciscoSwitchSettings.js";
+import {
+  NETWORK_CISCO_WLC_KEY,
+  normalizeCiscoWlcControllers,
+  normalizeCiscoWlcController,
+} from "../src/lib/network/ciscoWlcSettings.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 import { loadPersistedDb, queueSave, pingAllOnStartup } from "./persistence.js";
 import { addClient, broadcast, clientCount } from "./events.js";
@@ -143,8 +152,15 @@ app.use((req, res, next) => {
 
 app.use("/uploads", express.static(uploadsDir));
 
+function sanitizeObject(obj) {
+  if (!obj || typeof obj !== "object") return obj;
+  return Object.fromEntries(
+    Object.entries(obj).filter(([key]) => !["__proto__", "constructor", "prototype"].includes(key))
+  );
+}
+
 // ---- In-memory data store ----
-const WAVE_ADMIN_PASSWORD = "Wave-avi23!";
+const WAVE_ADMIN_PASSWORD = process.env.WAVE_ADMIN_PASSWORD || "Wave-avi23!";
 
 const db = {
   users: [
@@ -165,7 +181,7 @@ const db = {
       name: "Tech User",
       full_name: "Tech User",
       role: "user",
-      password: "password123",
+      password: process.env.WAVE_TECH_PASSWORD || "password123",
       created_date: new Date().toISOString(),
     },
   ],
@@ -1397,7 +1413,7 @@ app.get("/api/apps/:appId/speedTests", (req, res) => {
 });
 app.post("/api/apps/:appId/speedTests", (req, res) => {
   const entry = {
-    ...req.body,
+    ...sanitizeObject(req.body),
     id: crypto.randomUUID(),
     savedAt: new Date().toISOString(),
   };
@@ -2396,6 +2412,89 @@ app.post("/api/apps/:appId/functions/ciscoCommand", async (req, res) => {
   }
 });
 
+function getStoredCiscoWlcControllers() {
+  const row = db.systemSettings.find((s) => s.key === NETWORK_CISCO_WLC_KEY);
+  let raw = row?.value;
+  if (typeof raw === "string") {
+    try {
+      raw = JSON.parse(raw);
+    } catch {
+      raw = null;
+    }
+  }
+  return normalizeCiscoWlcControllers(raw || { controllers: [] });
+}
+
+function findStoredCiscoWlc(hostOrId) {
+  if (!hostOrId) return null;
+  const stored = getStoredCiscoWlcControllers();
+  const needle = String(hostOrId).toLowerCase().trim();
+  return (
+    stored.controllers.find(
+      (c) =>
+        c.host.toLowerCase() === needle ||
+        c.id === hostOrId
+    ) || null
+  );
+}
+
+function resolveWlcConnection(reqBody = {}) {
+  if (reqBody.host && (reqBody.password || reqBody.sshPassword)) {
+    return normalizeCiscoWlcController({
+      host: reqBody.host,
+      httpsPort: reqBody.httpsPort || reqBody.port,
+      username: reqBody.username || reqBody.sshUsername || "admin",
+      password: reqBody.password || reqBody.sshPassword,
+      allowInsecure: reqBody.allowInsecure !== false,
+      label: reqBody.label,
+      id: reqBody.wlcId || reqBody.id,
+    });
+  }
+  const stored = findStoredCiscoWlc(reqBody.wlcId || reqBody.host);
+  if (!stored) return null;
+  return normalizeCiscoWlcController(stored);
+}
+
+app.post("/api/apps/:appId/functions/ciscoWlcCommand", async (req, res) => {
+  try {
+    const { op } = req.body || {};
+    const conn = resolveWlcConnection(req.body);
+    if (!conn) {
+      return res.status(400).json({
+        success: false,
+        error: "host + password required (or save the WLC first)",
+      });
+    }
+    const client = getWlcRestconfClient(conn);
+    if (!client) {
+      return res.status(500).json({ success: false, error: "WLC client unavailable" });
+    }
+    switch (op) {
+      case "testConnection": {
+        const result = await client.testConnection();
+        return res.json(result);
+      }
+      case "pollSnapshot": {
+        const snapshot = await client.pollSnapshot();
+        return res.json({ success: true, host: conn.host, snapshot });
+      }
+      case "getApDetail": {
+        const ap = await client.getApDetail(req.body.wtpMac || req.body.mac);
+        return res.json({ success: true, host: conn.host, ap });
+      }
+      case "disconnect": {
+        closeWlcRestconfClient(conn.host);
+        return res.json({ success: true, host: conn.host });
+      }
+      default:
+        return res.status(400).json({ success: false, error: `unknown op ${op}` });
+    }
+  } catch (err) {
+    console.error("[ciscoWlcCommand]", err);
+    return res.status(500).json({ success: false, error: err.message || String(err) });
+  }
+});
+
 // SSE for live Cisco switch updates — initial `snapshot`, then `portChange`
 // events whenever the poller observes a change in interface status.
 //
@@ -2878,7 +2977,7 @@ function simulatePing(ip, count = 5) {
     target: ip,
     transmitted: count,
     received: received.length,
-    packetLossPct: parseFloat(((count - received.length) / count * 100).toFixed(1)),
+    packetLossPct: parseFloat((count > 0 ? (count - received.length) / count * 100 : 0).toFixed(1)),
     minMs: latencies.length ? Math.min(...latencies) : null,
     maxMs: latencies.length ? Math.max(...latencies) : null,
     avgMs: latencies.length ? parseFloat((latencies.reduce((a, b) => a + b, 0) / latencies.length).toFixed(2)) : null,
@@ -3233,7 +3332,7 @@ app.all("/api/apps/:appId/entities/:entityName/:id?", (req, res) => {
       result = handler.filter ? handler.filter(q) : handler.list();
     } else if (method === "POST" && !id) {
       result = handler.create(req.body);
-      if (entityName === "Cable") result = { ...result, ...req.body };
+      if (entityName === "Cable") result = { ...result, ...sanitizeObject(req.body) };
     } else if (method === "PUT" && id) {
       result = handler.update(id, req.body);
     } else if (method === "DELETE" && id) {
@@ -3371,8 +3470,21 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
     };
 
     const result = await commitVesselImport(deps, payload, options);
+
+    let credentialsImported = 0;
+    if (payload.credentials?.length) {
+      const {
+        mergeCredentialsIntoVault,
+        linkCredentialsToEquipment,
+      } = await import("../src/lib/credentials/credentialsVault.js");
+      const linked = linkCredentialsToEquipment(payload.credentials, db.equipment);
+      const merged = mergeCredentialsIntoVault(getCredentialsVault(), linked);
+      saveCredentialsVault(merged);
+      credentialsImported = linked.length;
+    }
+
     queueSave(db);
-    res.json({ success: true, ...result });
+    res.json({ success: true, ...result, credentialsImported });
   } catch (err) {
     console.error("[importVesselSpreadsheet]", err);
     res.status(500).json({ success: false, error: err.message });
@@ -3495,18 +3607,29 @@ app.get("/ws-user-apps/socket.io/", (req, res) => res.json({}));
 // ============================================================
 // OAUTH REDIRECTS (local dev stubs)
 // ============================================================
+function safeRedirectUrl(url) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(parsed.hostname) || parsed.hostname.endsWith(".local")) {
+      return url;
+    }
+  } catch { /* invalid URL */ }
+  return null;
+}
+
 app.get("/api/apps/auth/login", (req, res) => {
-  const fromUrl = req.query.from_url || "http://localhost:5174";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
   res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
 });
 
 app.get("/api/apps/auth/logout", (req, res) => {
-  const fromUrl = req.query.from_url || "http://localhost:5174/login";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174/login";
   res.redirect(`${fromUrl}`);
 });
 
 app.get("/api/apps/auth/:provider/login", (req, res) => {
-  const fromUrl = req.query.from_url || "http://localhost:5174";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
   res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
 });
 

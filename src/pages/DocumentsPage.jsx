@@ -56,8 +56,8 @@ export default function DocumentsPage() {
         const data = await res.json();
         setDocs(Array.isArray(data) ? data : []);
       }
-    } catch {
-      /* offline */
+    } catch (err) {
+      console.error("Failed to load documents:", err);
     } finally {
       setLoading(false);
     }
@@ -126,8 +126,8 @@ export default function DocumentsPage() {
         }
       }
       setUploadMeta(null);
-    } catch {
-      /* upload failed */
+    } catch (err) {
+      console.error("Upload failed:", err);
     } finally {
       setUploading(false);
     }
@@ -137,13 +137,14 @@ export default function DocumentsPage() {
     setSaving(id);
     setDocs(prev => prev.map(d => d.id === id ? { ...d, ...updates } : d));
     try {
-      await fetch(`${API_BASE}/entities/Document/${id}`, {
+      const res = await fetch(`${API_BASE}/entities/Document/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
-    } catch {
-      /* revert on error */
+      if (!res.ok) throw new Error(`Update failed: ${res.status}`);
+    } catch (err) {
+      console.error("Failed to update document:", err);
       loadDocuments();
     } finally {
       setSaving(null);
@@ -153,8 +154,10 @@ export default function DocumentsPage() {
   const deleteDoc = async (id) => {
     setDocs(prev => prev.filter(d => d.id !== id));
     try {
-      await fetch(`${API_BASE}/entities/Document/${id}`, { method: "DELETE" });
-    } catch {
+      const res = await fetch(`${API_BASE}/entities/Document/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error(`Delete failed: ${res.status}`);
+    } catch (err) {
+      console.error("Failed to delete document:", err);
       loadDocuments();
     }
   };

@@ -23,6 +23,7 @@ import {
   DISCOVERY_SETTINGS_KEY,
 } from "@/lib/discoverySettings";
 import { saveRackLayoutLocal } from "@/lib/rackLayoutStorage";
+import { importCredentialsBatch } from "@/api/credentialsApi";
 
 async function listCables() {
   if (isMockServer) {
@@ -211,6 +212,12 @@ export async function invokeVesselSpreadsheetImport(payload, options = {}) {
   return res?.data ?? res;
 }
 
+async function persistSpreadsheetCredentials(payload) {
+  if (!payload?.credentials?.length) return { credentialsImported: 0 };
+  const equipment = await listEquipment();
+  return importCredentialsBatch(payload.credentials, equipment);
+}
+
 export async function commitVesselSpreadsheetImport(payload, options = {}) {
   if (isDemoModeActive()) {
     throw new Error(
@@ -225,10 +232,12 @@ export async function commitVesselSpreadsheetImport(payload, options = {}) {
       throw new Error(result.error || "Import failed");
     }
     syncImportSideEffects(payload);
-    return result;
+    const credResult = await persistSpreadsheetCredentials(payload);
+    return { ...result, ...credResult };
   }
 
   const result = await commitVesselImport(buildDeps(), payload, options);
   syncImportSideEffects(payload);
-  return result;
+  const credResult = await persistSpreadsheetCredentials(payload);
+  return { ...result, ...credResult };
 }
