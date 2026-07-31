@@ -4,6 +4,7 @@
  */
 
 import { extractCableTagFromText } from "./cableTag.js";
+import { normalizePatchPanelId } from "./normalize.js";
 
 const PATCH_PANEL_RE = /-PP\d|PP\d/i;
 const PORT_RE = /^\d+$/;
@@ -61,8 +62,9 @@ export function compactCellsToPatchRow(cells, sheetName, rowIndex) {
     classifyTrailingCell(cells[i], state);
   }
 
-  const patchPanel = cells[0];
   const port = cells[1];
+  const patchPanel = normalizePatchPanelId(cells[0], port);
+  if (!patchPanel) return null;
   const apNote = [state.notes, state.destination].find((s) => s && /^AP\s/i.test(s)) || "";
   const locationText =
     [state.destination, state.notes].find((s) => s && s !== apNote && !/^AP\s/i.test(s)) || "";

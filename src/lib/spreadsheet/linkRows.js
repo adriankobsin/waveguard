@@ -14,6 +14,8 @@ import {
   mergeDiscoverySubnetLists,
   normalizeDiscoveryKnownHosts,
   racksToLayout,
+  normalizePatchPanelId,
+  isCanonicalPatchPanelName,
 } from "./normalize.js";
 import { stripVesselEquipmentName } from "./equipmentName.js";
 
@@ -241,6 +243,58 @@ export function buildImportPayload(parsed, options = {}) {
 
   const layoutData = enabled.has(SHEET_GROUPS.rack) ? racksToLayout(parsed.sheets) : null;
   let equipment = applyRackLayoutToEquipment([...equipmentByName.values()], layoutData);
+
+  // Finalise patch-panel chassis records: port_count from observed ports, drop
+  // accidental port-row names (MEC552-R2-PP5-1) if a canonical parent exists.
+  const maxPortByPanel = new Map();
+  for (const c of cables) {
+    if (!c.patch_panel || c.port == null || c.port === "") continue;
+    const key = String(c.patch_panel).trim().toLowerCase();
+    const n = parseInt(String(c.port).trim(), 10);
+    if (!Number.isFinite(n)) continue;
+    maxPortByPanel.set(key, Math.max(maxPortByPanel.get(key) || 0, n));
+  }
+
+  equipment = equipment.filter((eq) => {
+    if (eq.equipment_subtype !== "patch_panel") return true;
+    const name = String(eq.name || "").trim();
+    if (isCanonicalPatchPanelName(name)) return true;
+    // Port-suffixed leftovers should not survive when normalization worked.
+    const parent = normalizePatchPanelId(name, name.match(/-(\d+)$/)?.[1] || "");
+    if (parent && parent !== name && equipmentByName.has(parent.toLowerCase())) {
+      warnings.push(`Dropped non-canonical patch panel row "${name}" (merged into ${parent})`);
+      return false;
+    }
+    // If we can canonicalize the name in place, rename it.
+    if (parent && parent !== name && isCanonicalPatchPanelName(parent)) {
+      eq.name = parent;
+      return true;
+    }
+    return isCanonicalPatchPanelName(name) || Boolean(maxPortByPanel.get(name.toLowerCase()));
+  });
+
+  // Deduplicate after possible renames.
+  const dedupedEquipment = [];
+  const seenEq = new Map();
+  for (const eq of equipment) {
+    const key = equipmentKey(eq);
+    if (seenEq.has(key)) {
+      seenEq.set(key, mergeEquipmentRecords(seenEq.get(key), eq));
+    } else {
+      seenEq.set(key, eq);
+    }
+  }
+  for (const eq of seenEq.values()) {
+    if (eq.equipment_subtype === "patch_panel") {
+      const key = equipmentKey(eq);
+      const maxPort = maxPortByPanel.get(key) || 0;
+      eq.port_count = Math.max(Number(eq.port_count) || 0, maxPort, maxPort > 0 ? maxPort : 24);
+      eq.model = eq.model && !/^access\s*point$/i.test(eq.model) ? eq.model : "Patch Panel";
+    }
+    dedupedEquipment.push(eq);
+  }
+  equipment = dedupedEquipment;
+
   const siteLocations = collectSiteLocations(equipment, floorMap);
 
   // Discovery targets = IP Scheme VLANs + /24s inferred from IT/management IPs.

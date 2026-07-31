@@ -633,8 +633,7 @@ export default function PatchPanelSchedulePanel({ onRefresh }) {
         equipRows.filter(
           (e) =>
             e.equipment_subtype === "patch_panel" ||
-            /patch/i.test(e.model || "") ||
-            /-PP\d/i.test(e.name || "")
+            /.-PP\d+$/i.test(String(e.name || "").trim())
         )
       );
       let layout = loadRackLayoutLocal();

@@ -12,6 +12,7 @@ import {
   extractCredentialsFromSheetRows,
   dedupeExtractedCredentials,
 } from "../credentials/extractCredentials.js";
+import { normalizePatchPanelId } from "./normalize.js";
 
 /** Sheet names we should never auto-import even via the generic fallback. */
 const EXPLICIT_SKIP_NAMES = new Set([
@@ -441,11 +442,8 @@ function parseGenericRows(sheetName, sheetType, rows, headerIdx) {
       if (!obj["patch panel"]) continue;
       const port = obj.port || "";
       const rawPanel = obj["patch panel"] || "";
-      // Albatros lists panel IDs as MEC552-R1-PP1-P1 with a separate Port column.
-      const panel =
-        port && new RegExp(`-P${String(port).trim()}$`, "i").test(rawPanel)
-          ? rawPanel.replace(new RegExp(`-P${String(port).trim()}$`, "i"), "")
-          : rawPanel;
+      // Albatros lists panel+port in one cell: MEC552-R1-PP1-P1 or MEC552-R2-PP5-1.
+      const panel = normalizePatchPanelId(rawPanel, port);
       parsed.push({
         sheet: sheetName,
         row: i + 1,

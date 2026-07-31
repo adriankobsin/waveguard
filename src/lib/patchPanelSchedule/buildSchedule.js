@@ -2,7 +2,7 @@ import { inferRackNameFromPanel } from "@/lib/spreadsheet/normalize.js";
 
 export const TEST_RESULTS = ["pass", "fail", "pending", "not_tested"];
 
-const FROM_EQUIPMENT_RE = /^(.+?)\s+P(\d+)$/i;
+const FROM_EQUIPMENT_RE = /^(.+?-PP\d+)\s+P(\d+)$/i;
 
 export function backfillPatchPanelFields(cable) {
   const c = { ...cable };
@@ -22,7 +22,16 @@ export function backfillPatchPanelFields(cable) {
 
 export function isPatchPanelCable(cable) {
   const c = backfillPatchPanelFields(cable);
-  return Boolean(c.patch_panel && c.port);
+  if (!c.patch_panel || !c.port) return false;
+  // Ignore non-panel patch_panel values that slipped in from loose backfill.
+  return /-PP\d+/i.test(c.patch_panel);
+}
+
+function isPatchPanelEquipment(p) {
+  if (!p) return false;
+  if (p.equipment_subtype === "patch_panel") return true;
+  // Canonical chassis names only (MEC552-R1-PP1), not port rows (…-PP5-1).
+  return /.-PP\d+$/i.test(String(p.name || "").trim());
 }
 
 function panelKey(name) {
@@ -47,9 +56,7 @@ export function buildSchedule({ cables = [], panels = [], rackLayout = null } = 
 
   const panelMap = new Map();
   for (const p of panels) {
-    if (p.equipment_subtype !== "patch_panel" && !/patch/i.test(p.model || "") && !/pp\d/i.test(p.name || "")) {
-      continue;
-    }
+    if (!isPatchPanelEquipment(p)) continue;
     const name = p.name || "";
     if (!name) continue;
     panelMap.set(panelKey(name), {

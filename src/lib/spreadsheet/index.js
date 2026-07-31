@@ -16,6 +16,7 @@ export {
   detectGenericHeaderRow,
 } from "./headerMapping.js";
 export { detectEnabledGroupsFromWorkbook } from "../patchPanelSchedule/patchImportPreview.js";
+export { normalizePatchPanelId, isCanonicalPatchPanelName } from "./normalize.js";
 
 import { parseWorkbook } from "./parseWorkbook.js";
 import { buildImportPayload } from "./linkRows.js";

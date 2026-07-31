@@ -204,12 +204,49 @@ export function inferRackNameFromPanel(panelName) {
   return name;
 }
 
+/**
+ * Albatros Patch Panels sheet stores panel+port in one cell:
+ *   MEC552-R1-PP1-P1  (port 1)  → MEC552-R1-PP1
+ *   MEC552-R2-PP5-1   (port 1)  → MEC552-R2-PP5  (no "P" before the port)
+ * Always prefer the Port column when present; fall back to embedded suffix.
+ */
+export function normalizePatchPanelId(rawPanel, port) {
+  const raw = String(rawPanel || "").trim();
+  if (!raw) return "";
+  const portStr = String(port ?? "").trim();
+
+  if (portStr) {
+    const withP = new RegExp(`-P${portStr}$`, "i");
+    if (withP.test(raw)) return raw.replace(withP, "");
+
+    const bare = new RegExp(`-${portStr}$`);
+    if (bare.test(raw)) {
+      const stripped = raw.replace(bare, "");
+      // Only treat bare "-N" as a port suffix when the remainder is a panel id (...-PPn).
+      if (/-PP\d+$/i.test(stripped)) return stripped;
+    }
+  }
+
+  const embeddedP = raw.match(/^(.*?-PP\d+)-P(\d+)$/i);
+  if (embeddedP) return embeddedP[1];
+  const embeddedBare = raw.match(/^(.*?-PP\d+)-(\d+)$/i);
+  if (embeddedBare) return embeddedBare[1];
+
+  return raw;
+}
+
+/** True when a name looks like a real chassis panel (…-PP1), not a port row (…-PP5-1). */
+export function isCanonicalPatchPanelName(name) {
+  return /^-?[A-Za-z0-9].*-PP\d+$/i.test(String(name || "").trim());
+}
+
 export function inferPortCountFromModel(modelOrType = "") {
   const text = String(modelOrType || "");
-  const match = text.match(/(\d+)\s*[pP]/);
-  if (match) return parseInt(match[1], 10) || 24;
-  if (/48/i.test(text)) return 48;
-  if (/24/i.test(text)) return 24;
+  // Prefer explicit "24P" / "48 Port" style tokens — avoid matching random digits.
+  const portToken = text.match(/\b(\d+)\s*[pP](?:ort)?s?\b/);
+  if (portToken) return parseInt(portToken[1], 10) || 24;
+  if (/\b48\b/.test(text) && /patch|panel/i.test(text)) return 48;
+  if (/\b24\b/.test(text) && /patch|panel/i.test(text)) return 24;
   return 24;
 }
 
@@ -311,20 +348,24 @@ export function patchPanelToEquipment(row, floorMap) {
   const panelName = stripVesselEquipmentName(row.patchPanel || "");
   if (!panelName) return null;
   const deck = resolvePatchDeck(row, floorMap);
+  const portNum = parseInt(String(row.port ?? "").trim(), 10);
   return baseEquipment({
     name: panelName,
-    model: row.type || "",
-    category: mapSystemToCategory(row.system, row.type),
-    location: row.location || buildLocation(row.floor || row.deck, row.room, floorMap),
+    // Type column on the Patch Panels sheet is the end-device / media type (e.g. Access Point),
+    // not the chassis model — keep a stable panel model for inventory + schedule filtering.
+    model: "Patch Panel",
+    category: mapSystemToCategory(row.system, row.type) || "Network",
+    location: buildLocation(row.floor || row.deck, row.room, floorMap),
     floor: row.floor || row.deck || "",
     room: row.room != null ? String(row.room) : "",
     systemCategory: row.system || "",
-    notes: row.notes || "",
+    // Per-port Notes belong on the cable row, not the panel chassis.
+    notes: "",
     inventoryOnly: true,
     waveguardClassification: "inventory",
     equipment_subtype: "patch_panel",
     rack_name: inferRackNameFromPanel(panelName),
-    port_count: inferPortCountFromModel(row.type),
+    port_count: Number.isFinite(portNum) && portNum > 0 ? portNum : 24,
     deck,
     importSource: { sheet: row.sheet, row: row.row },
   });
