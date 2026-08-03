@@ -16,6 +16,7 @@ import {
   racksToLayout,
   normalizePatchPanelId,
   isCanonicalPatchPanelName,
+  knownHostToEquipment,
 } from "./normalize.js";
 import { stripVesselEquipmentName } from "./equipmentName.js";
 
@@ -339,6 +340,18 @@ export function buildImportPayload(parsed, options = {}) {
       if (n.includes(key) && key.length >= 8) return ip;
       if (key.includes(n) && n.length >= 8) return ip;
     }
+    // Room / AP number match: "AP Ext. - 344 Aft" ↔ host containing "344"
+    const roomNum = key.match(/\b(\d{2,4})\b/);
+    if (roomNum) {
+      const token = roomNum[1];
+      const candidates = [];
+      for (const [n, ip] of hostIpByName) {
+        if (new RegExp(`(^|[^0-9])${token}([^0-9]|$)`).test(n)) {
+          candidates.push([n, ip]);
+        }
+      }
+      if (candidates.length === 1) return candidates[0][1];
+    }
     return "";
   }
   equipment = equipment.map((eq) => {
@@ -346,6 +359,45 @@ export function buildImportPayload(parsed, options = {}) {
     const fromScheme = resolveHostIp(eq.name);
     return fromScheme ? { ...eq, ip: fromScheme } : eq;
   });
+
+  // Keep the name map in sync with IP backfills so later merges see the IPs.
+  equipmentByName.clear();
+  for (const eq of equipment) {
+    equipmentByName.set(equipmentKey(eq), eq);
+  }
+
+  // Materialize every remaining IP Scheme host as inventory equipment so Topology
+  // shows all spreadsheet IP devices — not only rows that already had an IP.
+  const equipmentIps = new Set(
+    equipment.map((e) => String(e.ip || "").trim()).filter(Boolean)
+  );
+  let materializedHosts = 0;
+  for (const host of knownHosts) {
+    const ip = String(host.ip || "").trim();
+    if (!ip || equipmentIps.has(ip)) continue;
+    const eq = knownHostToEquipment(host);
+    if (!eq) continue;
+    addEquipment(eq);
+    const stored = equipmentByName.get(equipmentKey(eq));
+    if (stored) equipment.push(stored);
+    equipmentIps.add(ip);
+    materializedHosts += 1;
+  }
+  if (materializedHosts > 0) {
+    warnings.push(
+      `Materialized ${materializedHosts} IP Scheme host${materializedHosts === 1 ? "" : "s"} as inventory equipment for topology`
+    );
+  }
+
+  // Final dedupe by name after materialization merges.
+  {
+    const byName = new Map();
+    for (const eq of equipment) {
+      const key = equipmentKey(eq);
+      byName.set(key, byName.has(key) ? mergeEquipmentRecords(byName.get(key), eq) : eq);
+    }
+    equipment = [...byName.values()];
+  }
 
   const cableLabels = new Set();
   const cablePorts = new Set();

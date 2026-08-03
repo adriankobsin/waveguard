@@ -470,12 +470,13 @@ function getMockDevices() {
 }
 
 function equipmentToTopologyNode(e) {
+  const ip = String(e.ip || "").trim();
   return {
-    id: e.id,
+    id: e.id || (ip ? `ip-${ip}` : `name-${String(e.name || "device").trim()}`),
     name: e.name,
     category: e.category || "Unknown",
     model: e.model || e.vendor || "Unknown",
-    ip: e.ip,
+    ip,
     mac: e.mac || "",
     status: e.status || "online",
     location: e.location || "",
@@ -485,21 +486,21 @@ function equipmentToTopologyNode(e) {
     hostname: e.name,
     vendor: e.vendor || "",
     openPorts: e.openPorts || [],
+    waveguardClassification: e.waveguardClassification,
+    inventoryOnly: e.inventoryOnly,
   };
 }
 
-/** Merge registered monitored/inventory equipment into a topology scan result. */
+/** Merge registered equipment with an IP into a topology scan result. */
 function mergeRegisteredEquipmentIntoTopology(scanResult) {
   const registered = db.equipment.filter(
-    (e) =>
-      e.ip &&
-      (e.waveguardClassification === "monitored" || e.waveguardClassification === "inventory")
+    (e) => Boolean(e?.ip) && e.waveguardClassification !== "ignored"
   );
   const byIp = new Map((scanResult.devices || []).map((d) => [d.ip, d]));
   for (const eq of registered) {
     const node = equipmentToTopologyNode(eq);
     if (byIp.has(eq.ip)) {
-      byIp.set(eq.ip, { ...byIp.get(eq.ip), ...node, id: eq.id });
+      byIp.set(eq.ip, { ...byIp.get(eq.ip), ...node, id: eq.id || node.id });
     } else {
       byIp.set(eq.ip, node);
     }

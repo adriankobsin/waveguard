@@ -15,12 +15,15 @@ function computeStats(devices, connections) {
 }
 
 export function equipmentToTopologyNode(eq) {
+  const ip = String(eq.ip || "").trim();
   return {
-    id: eq.id,
+    // Imported rows always have an IP; fall back to a stable IP key when the
+    // equipment record has not been assigned a database id yet.
+    id: eq.id || (ip ? `ip-${ip}` : `name-${String(eq.name || "device").trim()}`),
     name: eq.name,
     category: eq.category || "Unknown",
     model: eq.model || eq.vendor || "Unknown",
-    ip: eq.ip || "",
+    ip,
     mac: eq.mac || "",
     make: eq.make || "",
     status: eq.status || "online",
@@ -40,16 +43,13 @@ export function equipmentToTopologyNode(eq) {
 
 /**
  * Merge inventory/monitored equipment into topology without a full SNMP rescan.
+ * Any equipment with an IP is included except explicitly ignored devices.
  * @param {object|null} topologyData - existing topology payload
  * @param {object[]} equipmentList - from listEquipment()
  */
 export function mergeEquipmentIntoTopology(topologyData, equipmentList) {
   const registered = (equipmentList || []).filter(
-    (e) =>
-      e.ip &&
-      (e.waveguardClassification === "monitored" ||
-        e.waveguardClassification === "inventory" ||
-        e.inventoryOnly === true)
+    (e) => Boolean(e?.ip) && e.waveguardClassification !== "ignored"
   );
 
   const byIp = new Map();
@@ -62,14 +62,17 @@ export function mergeEquipmentIntoTopology(topologyData, equipmentList) {
 
   for (const eq of registered) {
     const node = equipmentToTopologyNode(eq);
-    const existing = byId.get(eq.id) || (eq.ip ? byIp.get(eq.ip) : null);
+    const existing =
+      (eq.id ? byId.get(eq.id) : null) ||
+      (eq.ip ? byIp.get(eq.ip) : null) ||
+      byId.get(node.id);
     if (existing) {
-      const merged = { ...existing, ...node, id: eq.id };
-      byIp.set(eq.ip, merged);
-      byId.set(eq.id, merged);
+      const merged = { ...existing, ...node, id: eq.id || existing.id || node.id };
+      if (merged.ip) byIp.set(merged.ip, merged);
+      byId.set(merged.id, merged);
     } else {
-      byIp.set(eq.ip, node);
-      byId.set(eq.id, node);
+      if (node.ip) byIp.set(node.ip, node);
+      byId.set(node.id, node);
     }
   }
 

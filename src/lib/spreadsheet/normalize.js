@@ -615,6 +615,46 @@ export function normalizeDiscoveryKnownHosts(hosts = []) {
   return [...byIp.values()];
 }
 
+/**
+ * Turn an IP Scheme / discovery known-host row into inventory equipment so
+ * Topology can list every addressed device from the spreadsheet.
+ */
+export function knownHostToEquipment(host) {
+  const ip = String(host?.ip || "").trim();
+  if (!/^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) return null;
+  if (ip.split(".").some((o) => Number(o) > 255)) return null;
+
+  const name = String(host?.name || ip).trim() || ip;
+  const vlan = String(host?.vlan || "").trim();
+  const lower = `${name} ${vlan}`.toLowerCase();
+
+  let category = "Network";
+  if (/pbx|phone|voice|asterisk/.test(lower)) category = "Server";
+  else if (/camera|cctv|nvr/.test(lower)) category = "Camera";
+  else if (/av\b|video|crestron|nvx|dsp|matrix|encoder/.test(lower)) category = "AV";
+  else if (/ups|pdu|power/.test(lower)) category = "Power";
+  else if (/server|nas|storage/.test(lower)) category = "Server";
+  else if (/firewall|router|gateway|forti|wan/.test(lower)) category = "Router";
+
+  return {
+    ...baseEquipment({
+      name,
+      model: "",
+      category,
+      ip,
+      systemCategory: vlan || "IT",
+      notes: vlan ? `IP Scheme · ${vlan}` : "Imported from IP Scheme",
+      status: "unknown",
+      inventoryOnly: true,
+      waveguardClassification: "inventory",
+      importSource: { sheet: "IP Scheme", row: 0 },
+    }),
+    // Keep the spreadsheet host label as-is (do not strip vessel-style prefixes
+    // from names like "Printer-Galley" or "Crew-GW").
+    name,
+  };
+}
+
 export function racksToLayout(sheets) {
   const racks = [];
   const placements = {};
