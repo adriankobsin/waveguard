@@ -46,3 +46,9 @@ leap-certs/
 
 # OS
 Thumbs.db
+
+# Runtime persistence (may contain imported vessel credentials)
+mock-server/data/waveguard-data.json
+mock-server/data/*.db
+mock-server/data/*.db-shm
+mock-server/data/*.db-wal

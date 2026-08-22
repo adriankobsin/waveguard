@@ -15,6 +15,8 @@ import { readSpreadsheetToBuffer } from "@/lib/spreadsheet/readSpreadsheet";
 import { buildPatchImportPreview } from "@/lib/patchPanelSchedule/patchImportPreview";
 import { commitVesselSpreadsheetImport } from "@/api/vesselSpreadsheetImportApi";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
+import { DISCOVERY_CHANGED_EVENT } from "@/lib/discoverySettings";
+import { SITE_LOCATIONS_CHANGED_EVENT } from "@/lib/siteLocations";
 
 const SHEET_TYPE_LABELS = {
   patchPanels: "Patch Panels",
@@ -86,6 +88,8 @@ export default function PatchPanelImportModal({ isOpen, onClose, onComplete }) {
       const commitResult = await commitVesselSpreadsheetImport(preview, { replace: false });
       setResult(commitResult);
       window.dispatchEvent(new CustomEvent(EQUIPMENT_CHANGED_EVENT));
+      window.dispatchEvent(new CustomEvent(DISCOVERY_CHANGED_EVENT));
+      window.dispatchEvent(new CustomEvent(SITE_LOCATIONS_CHANGED_EVENT));
       toast.success(
         `Imported ${commitResult.equipmentCreated} equipment, ${commitResult.cablesCreated} cables/port rows`
       );

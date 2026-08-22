@@ -42,7 +42,6 @@ export default function SnmpWanManagementPanel({
   onUnassignRouter,
   onPollRouter,
   pollingRouterId,
-  onSelectRouter,
 }) {
   const [editLink, setEditLink] = useState(null);
   const [testingKey, setTestingKey] = useState(null);
@@ -168,6 +167,8 @@ export default function SnmpWanManagementPanel({
       });
       saveWanSpeedTestResult({ ...result, profileId: link.profileId, portIndex: link.portIndex });
       setSpeedTests((prev) => ({ ...prev, [link.key]: result }));
+      setLatestTest({ ...result, profileId: link.profileId, portIndex: link.portIndex });
+      setTestUpdated((n) => n + 1);
       toast.success(`Speed test: ↓${result.downloadMbps} ↑${result.uploadMbps} Mbps`);
     } catch (err) {
       toast.error(err.message || "Speed test failed");
@@ -254,8 +255,12 @@ export default function SnmpWanManagementPanel({
     }
   };
 
+  const speedTestSub = latestTest
+    ? `↓ ${formatSpeedMbps(latestTest.downloadMbps)} · ↑ ${formatSpeedMbps(latestTest.uploadMbps)}`
+    : "Run a speed test to measure";
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -263,7 +268,7 @@ export default function SnmpWanManagementPanel({
             WAN management
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Assign routers from Equipment, then manage ISP details, priorities, and live telemetry
+            Monitor ISP links and run speed tests
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -281,7 +286,7 @@ export default function SnmpWanManagementPanel({
             onClick={() => setPickerOpen(true)}
             className="flex items-center gap-1.5 text-sm bg-primary/10 text-primary border border-primary/20 rounded-xl px-3 py-2 hover:bg-primary/20"
           >
-            <Plus size={14} /> Assign WAN router
+            <Plus size={14} /> Assign router
           </button>
           <button
             type="button"
@@ -293,68 +298,69 @@ export default function SnmpWanManagementPanel({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <KpiCard
+          label="Links online"
+          value={`${wan.summary.online}/${wan.summary.total}`}
+          sub={wan.summary.offline > 0 ? `${wan.summary.offline} offline` : "All reachable"}
+          accent={wan.summary.offline > 0 ? "text-amber-400" : "text-emerald-400"}
+        />
+        <KpiCard
+          label="Primary ISP"
+          value={wan.summary.primaryIsp || "—"}
+          sub="Active primary path"
+        />
+        <KpiCard
+          label="Last speed test"
+          value={
+            latestTest
+              ? `${Math.round(latestTest.downloadMbps)}/${Math.round(latestTest.uploadMbps)}`
+              : "—"
+          }
+          sub={
+            latestTest
+              ? `Mbps · ${formatRelativeTime(latestTest.testedAt)}`
+              : speedTestSub
+          }
+          accent={latestTest ? "text-primary" : "text-muted-foreground"}
+        />
+      </div>
+
       <AssignedRoutersBar
         assigned={assignedEquipment}
         profilesById={profilesById}
         onUnassign={handleUnassignRouter}
-        onSelect={onSelectRouter}
         onAdd={() => setPickerOpen(true)}
       />
 
       {wan.synthetic && (
         <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
-          Preview data — poll the assigned WAN routers in Fleet to capture live readings.
+          Preview data — poll an assigned router below to capture live readings.
         </div>
       )}
-
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <KpiCard label="WAN links" value={wan.summary.total} sub={`${wan.summary.online} online`} />
-        <KpiCard
-          label="Offline"
-          value={wan.summary.offline}
-          accent={wan.summary.offline > 0 ? "text-red-400" : "text-emerald-400"}
-        />
-        <KpiCard label="Primary ISP" value={wan.summary.primaryIsp} sub="Active primary path" />
-        <KpiCard
-          label={latestTest ? "Speed test ↓" : "Live download"}
-          value={latestTest ? formatSpeedMbps(latestTest.downloadMbps) : (wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateDownMbps))}
-          sub={latestTest ? `Tested ${formatRelativeTime(latestTest.testedAt)}` : (wan.synthetic ? "Poll router to measure" : "Sum of online links")}
-          accent={latestTest ? "text-primary" : (wan.synthetic ? "text-muted-foreground" : "text-primary")}
-        />
-        <KpiCard
-          label={latestTest ? "Speed test ↑" : "Live upload"}
-          value={latestTest ? formatSpeedMbps(latestTest.uploadMbps) : (wan.synthetic ? "—" : formatSpeedMbps(wan.summary.aggregateUpMbps))}
-          sub={latestTest ? `${Math.round(latestTest.latencyMs)}ms latency` : (wan.synthetic ? "Poll router to measure" : "Sum of online links")}
-          accent={latestTest ? "text-emerald-400" : (wan.synthetic ? "text-muted-foreground" : "text-emerald-400")}
-        />
-      </div>
 
       {wan.links.length === 0 ? (
         <div className="glass rounded-2xl p-10 text-center border border-border">
           <Globe size={40} className="mx-auto text-muted-foreground mb-3 opacity-60" />
           <h3 className="text-base font-semibold text-foreground">No WAN links yet</h3>
           <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
-            Use the buttons in the top-right to assign a router or add a manual WAN link.
+            Assign a router or add a manual WAN link to get started.
           </p>
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-4">
           {grouped.map((group) => {
             const profile = group.profileId ? profilesById.get(group.profileId) : null;
-            const eq = group.equipmentId ? equipmentById.get(group.equipmentId) : null;
             return (
               <WanRouterDetailPanel
                 key={group.profileId || group.routerName}
                 group={group}
                 profile={profile}
-                equipment={eq}
-                wanManagement={wanManagement}
                 defaultDashboardLink={wan.defaultDashboardLink}
                 speedTests={speedTests}
                 testingKey={testingKey}
                 pollingRouterId={pollingRouterId}
                 onPollRouter={onPollRouter}
-                onSelectRouter={onSelectRouter}
                 onSetDefault={handleSetDefault}
                 onSpeedTest={handleSpeedTest}
                 onEditLink={openEditor}
@@ -391,14 +397,14 @@ export default function SnmpWanManagementPanel({
   );
 }
 
-function AssignedRoutersBar({ assigned, profilesById, onUnassign, onSelect, onAdd }) {
+function AssignedRoutersBar({ assigned, profilesById, onUnassign, onAdd }) {
   if (!assigned.length) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-secondary/20 px-4 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div>
-          <p className="text-sm font-medium text-foreground">No WAN routers assigned yet</p>
+          <p className="text-sm font-medium text-foreground">No WAN routers assigned</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Pick a router from your Equipment inventory to start monitoring WAN links.
+            Assign a router from Equipment to monitor its WAN links.
           </p>
         </div>
         <button
@@ -413,11 +419,9 @@ function AssignedRoutersBar({ assigned, profilesById, onUnassign, onSelect, onAd
   }
   return (
     <div className="rounded-xl border border-border bg-card/40 p-3">
-      <div className="flex items-center justify-between mb-2">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          Assigned WAN routers ({assigned.length})
-        </p>
-      </div>
+      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+        Routers ({assigned.length})
+      </p>
       <div className="flex flex-wrap gap-2">
         {assigned.map((eq) => {
           const profile = [...profilesById.values()].find((p) => p.equipmentId === eq.id);
@@ -426,18 +430,11 @@ function AssignedRoutersBar({ assigned, profilesById, onUnassign, onSelect, onAd
             <div
               key={eq.id}
               className="flex items-center gap-2 rounded-lg border border-border bg-secondary/40 px-2.5 py-1.5"
+              title={`${eq.name} · ${eq.ip || "no IP"}`}
             >
               <Server size={12} className={polled ? "text-emerald-400" : "text-muted-foreground"} />
-              <button
-                type="button"
-                onClick={() => profile && onSelect?.(profile.id)}
-                className="text-xs font-medium text-foreground hover:text-primary truncate max-w-[180px]"
-                title={`${eq.name} · ${eq.model || "no model"} · ${eq.ip || "no IP"}`}
-              >
+              <span className="text-xs font-medium text-foreground truncate max-w-[180px]">
                 {eq.name}
-              </button>
-              <span className="text-[10px] text-muted-foreground">
-                {eq.make || detectIntegrationVendor(eq)}
               </span>
               <button
                 type="button"

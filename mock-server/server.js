@@ -470,12 +470,13 @@ function getMockDevices() {
 }
 
 function equipmentToTopologyNode(e) {
+  const ip = String(e.ip || "").trim();
   return {
-    id: e.id,
+    id: e.id || (ip ? `ip-${ip}` : `name-${String(e.name || "device").trim()}`),
     name: e.name,
     category: e.category || "Unknown",
     model: e.model || e.vendor || "Unknown",
-    ip: e.ip,
+    ip,
     mac: e.mac || "",
     status: e.status || "online",
     location: e.location || "",
@@ -485,21 +486,21 @@ function equipmentToTopologyNode(e) {
     hostname: e.name,
     vendor: e.vendor || "",
     openPorts: e.openPorts || [],
+    waveguardClassification: e.waveguardClassification,
+    inventoryOnly: e.inventoryOnly,
   };
 }
 
-/** Merge registered monitored/inventory equipment into a topology scan result. */
+/** Merge registered equipment with an IP into a topology scan result. */
 function mergeRegisteredEquipmentIntoTopology(scanResult) {
   const registered = db.equipment.filter(
-    (e) =>
-      e.ip &&
-      (e.waveguardClassification === "monitored" || e.waveguardClassification === "inventory")
+    (e) => Boolean(e?.ip) && e.waveguardClassification !== "ignored"
   );
   const byIp = new Map((scanResult.devices || []).map((d) => [d.ip, d]));
   for (const eq of registered) {
     const node = equipmentToTopologyNode(eq);
     if (byIp.has(eq.ip)) {
-      byIp.set(eq.ip, { ...byIp.get(eq.ip), ...node, id: eq.id });
+      byIp.set(eq.ip, { ...byIp.get(eq.ip), ...node, id: eq.id || node.id });
     } else {
       byIp.set(eq.ip, node);
     }
@@ -3506,6 +3507,44 @@ app.post("/api/apps/:appId/functions/importVesselSpreadsheet", async (req, res) 
 
     const result = await commitVesselImport(deps, payload, options);
 
+    // Collapse any leftover port-suffixed panel chassis names (MEC552-R2-PP5-1 → MEC552-R2-PP5)
+    // left behind by older imports when this run did not use replace:true.
+    try {
+      const { normalizePatchPanelId, isCanonicalPatchPanelName } = await import(
+        "../src/lib/spreadsheet/normalize.js"
+      );
+      const removed = [];
+      db.equipment = db.equipment.filter((eq) => {
+        if (eq.equipment_subtype !== "patch_panel") return true;
+        const name = String(eq.name || "").trim();
+        if (isCanonicalPatchPanelName(name)) return true;
+        const portGuess = name.match(/-(\d+)$/)?.[1] || "";
+        const parent = normalizePatchPanelId(name, portGuess);
+        if (parent && parent !== name && isCanonicalPatchPanelName(parent)) {
+          removed.push(name);
+          return false;
+        }
+        return true;
+      });
+      for (const cable of db.cables) {
+        if (!cable.patch_panel) continue;
+        const fixed = normalizePatchPanelId(cable.patch_panel, cable.port);
+        if (fixed && fixed !== cable.patch_panel) {
+          cable.patch_panel = fixed;
+          if (cable.from_equipment && cable.port) {
+            cable.from_equipment = `${fixed} P${cable.port}`;
+          }
+        }
+      }
+      if (removed.length) {
+        console.log(
+          `[importVesselSpreadsheet] pruned ${removed.length} non-canonical patch panel records`
+        );
+      }
+    } catch (cleanupErr) {
+      console.warn("[importVesselSpreadsheet] panel cleanup skipped:", cleanupErr.message);
+    }
+
     let credentialsImported = 0;
     if (payload.credentials?.length) {
       const {
@@ -3677,6 +3716,11 @@ function collectBackupSnapshot() {
   return {
     systemSettings: settings,
     users,
+    // Operational data — required so patch panel / cable edits survive restore.
+    cables: Array.isArray(db.cables) ? db.cables : [],
+    equipment: Array.isArray(db.equipment) ? db.equipment : [],
+    actionLogs: Array.isArray(db.actionLogs) ? db.actionLogs : [],
+    rackLayouts: Array.isArray(db.rackLayouts) ? db.rackLayouts : [],
     exportedAt: new Date().toISOString(),
   };
 }
@@ -3744,6 +3788,9 @@ app.post("/api/apps/:appId/backups", (req, res) => {
     snapshot,
   };
   db.backups.unshift(backup);
+  // Keep the newest 40 backups so patch-panel autosaves cannot grow forever.
+  if (db.backups.length > 40) db.backups = db.backups.slice(0, 40);
+  queueSave(db);
   res.json({ backup });
 });
 
@@ -3758,7 +3805,12 @@ app.post("/api/apps/:appId/backups/:id/restore", (req, res) => {
       else db.systemSettings.push({ id: "setting-" + Date.now(), ...s });
     });
   }
-  res.json({ success: true, message: "Configuration restored" });
+  if (Array.isArray(snap?.cables)) db.cables = snap.cables;
+  if (Array.isArray(snap?.equipment)) db.equipment = snap.equipment;
+  if (Array.isArray(snap?.actionLogs)) db.actionLogs = snap.actionLogs;
+  if (Array.isArray(snap?.rackLayouts)) db.rackLayouts = snap.rackLayouts;
+  queueSave(db);
+  res.json({ success: true, message: "Configuration and cable data restored" });
 });
 
 app.post("/api/apps/:appId/integrations/test", async (req, res) => {

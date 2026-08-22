@@ -193,7 +193,12 @@ export default function WanLinkEditDrawer({ link, onSave, onClose }) {
           </div>
 
           <div className="rounded-xl border border-border p-3 space-y-3">
-            <p className="text-xs font-semibold text-foreground">Provider / contract</p>
+            <div>
+              <p className="text-xs font-semibold text-foreground">Provider / contract</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">
+                Stored with the link — not shown on the main WAN list
+              </p>
+            </div>
             <Field label="Account / circuit ID">
               <input className={inputCls} value={form.providerAccount} onChange={(e) => set({ providerAccount: e.target.value })} />
             </Field>

@@ -89,18 +89,56 @@ Deno.serve(async (req) => {
       }
     }
 
-    if (payload.discoverySubnets?.length) {
+    if (payload.discoverySubnets?.length || payload.discoveryKnownHosts?.length) {
       const key = 'discovery';
       const records = await base44.entities.SystemSettings.filter({ key });
-      let current = { subnets: [] as unknown[] };
+      let current: {
+        subnets?: unknown[];
+        subnetLabels?: Record<string, string>;
+        knownHosts?: unknown[];
+      } = { subnets: [], subnetLabels: {}, knownHosts: [] };
       if (records[0]?.value) {
         try {
-          current = JSON.parse(records[0].value);
+          current =
+            typeof records[0].value === 'string'
+              ? JSON.parse(records[0].value)
+              : records[0].value;
         } catch {
-          current = { subnets: [] };
+          current = { subnets: [], subnetLabels: {}, knownHosts: [] };
         }
       }
-      current.subnets = [...(current.subnets || []), ...payload.discoverySubnets];
+      const labels = { ...(current.subnetLabels || {}) };
+      const cidrs: string[] = [];
+      for (const entry of payload.discoverySubnets || []) {
+        if (typeof entry === 'string' && entry.trim()) {
+          cidrs.push(entry.trim());
+        } else if (entry && typeof entry === 'object' && entry.cidr) {
+          const cidr = String(entry.cidr).trim();
+          if (!cidr) continue;
+          cidrs.push(cidr);
+          if (entry.label) labels[cidr] = String(entry.label).trim();
+        }
+      }
+      current.subnets = [...new Set([...(current.subnets || []).map((s: unknown) =>
+        typeof s === 'string' ? s : (s as { cidr?: string })?.cidr
+      ).filter(Boolean), ...cidrs])];
+      current.subnetLabels = labels;
+      const hostByIp = new Map(
+        (current.knownHosts || [])
+          .filter((h: { ip?: string }) => h?.ip)
+          .map((h: { ip: string }) => [String(h.ip).trim(), h])
+      );
+      for (const h of payload.discoveryKnownHosts || []) {
+        const ip = String(h?.ip || '').trim();
+        if (!ip || hostByIp.has(ip)) continue;
+        hostByIp.set(ip, {
+          ip,
+          name: String(h.name || ip).trim(),
+          vlan: String(h.vlan || '').trim(),
+          source: h.source || 'import',
+        });
+      }
+      current.knownHosts = [...hostByIp.values()];
       const value = JSON.stringify(current);
       if (records[0]?.id) {
         await base44.entities.SystemSettings.update(records[0].id, { key, value });

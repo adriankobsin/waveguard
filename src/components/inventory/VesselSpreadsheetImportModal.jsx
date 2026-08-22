@@ -25,6 +25,10 @@ import {
 } from "@/lib/spreadsheet";
 import { commitVesselSpreadsheetImport } from "@/api/vesselSpreadsheetImportApi";
 import { EQUIPMENT_CHANGED_EVENT } from "@/lib/discoveryRegistration";
+import { DISCOVERY_CHANGED_EVENT } from "@/lib/discoverySettings";
+import {
+  SITE_LOCATIONS_CHANGED_EVENT,
+} from "@/lib/siteLocations";
 
 const GROUP_LABELS = {
   [SHEET_GROUPS.deviceList]: "Device List (endpoints)",
@@ -113,6 +117,9 @@ export default function VesselSpreadsheetImportModal({ isOpen, onClose, onComple
       });
       setResult(commitResult);
       window.dispatchEvent(new CustomEvent(EQUIPMENT_CHANGED_EVENT));
+      // Ensure Settings → Discovery / Decks refresh even if localStorage was already in sync.
+      window.dispatchEvent(new CustomEvent(DISCOVERY_CHANGED_EVENT));
+      window.dispatchEvent(new CustomEvent(SITE_LOCATIONS_CHANGED_EVENT));
       const vlanCount = payload.stats?.vlans ?? 0;
       toast.success(
         `Imported ${commitResult.equipmentCreated} new, updated ${commitResult.equipmentUpdated} equipment; ${commitResult.cablesCreated} cables` +

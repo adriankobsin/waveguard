@@ -84,7 +84,10 @@ function findColumn(headers, candidates) {
     if (!h) continue;
     if (candidates.has(h)) return i;
     for (const c of candidates) {
-      if (h.includes(c) || c.includes(h)) return i;
+      // Avoid empty-string / tiny substring false positives ("pass" in random text).
+      if (!c || c.length < 3) continue;
+      if (h === c) return i;
+      if (h.length >= c.length && h.includes(c)) return i;
     }
   }
   return -1;
@@ -145,10 +148,14 @@ function pickCell(row, index) {
 function rowToCredential(sheetName, row, cols, headerRow, rowNumber) {
   const username = pickCell(row, cols.username);
   const password = pickCell(row, cols.password);
-  if (!username && !password) return null;
+  // Require a real login pair — password-only rows from mis-detected headers
+  // were creating junk vault entries (e.g. password "AV" / "3").
+  if (!username || !password) return null;
 
   const host = pickCell(row, cols.host);
   const deviceName = pickCell(row, cols.name);
+  if (!host && !deviceName) return null;
+
   const platform = inferPlatform(sheetName, deviceName, pickCell(row, cols.platform));
   const loginUrl = buildLoginUrl(host, pickCell(row, cols.loginUrl));
   const notes = pickCell(row, cols.notes);
@@ -177,14 +184,21 @@ export function extractCredentialsFromSheetRows(sheetName, rows) {
 
   for (let h = 0; h < scanLimit; h++) {
     const headers = (rows[h] || []).map(cellStr).map(normalizeHeader);
+    // Need an explicit username column — "password"/"pass" alone matches too many sheets.
     const cols = mapCredentialColumns(headers);
-    if (!cols.hasCredentialData) continue;
+    if (cols.username < 0 || cols.password < 0) continue;
 
+    let rowsFromHeader = 0;
     for (let r = h + 1; r < rows.length; r++) {
       if (isEmptyRow(rows[r])) continue;
       const cred = rowToCredential(sheetName, rows[r], cols, h + 1, r + 1);
-      if (cred) found.push(cred);
+      if (cred) {
+        found.push(cred);
+        rowsFromHeader += 1;
+      }
     }
+    // First header row that yields credentials wins — avoid re-scanning data rows as headers.
+    if (rowsFromHeader > 0) break;
   }
 
   return found;
