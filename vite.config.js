@@ -21,6 +21,13 @@ export default defineConfig({
     },
   },
 
+  // Same LAN binding for `npm run preview` / shipboard smoke tests
+  preview: {
+    host: '0.0.0.0',
+    allowedHosts: true,
+    port: Number(process.env.WAVEGUARD_PREVIEW_PORT || 4173),
+  },
+
   plugins: [
     base44({
       legacySDKImports: process.env.BASE44_LEGACY_SDK_IMPORTS === 'true',
