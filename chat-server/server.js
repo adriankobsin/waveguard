@@ -3,6 +3,7 @@ import cors from "cors";
 import { handleChatRequest, getChatHealth } from "./handler.js";
 
 const app = express();
+const HOST = process.env.WAVEGUARD_HOST || "0.0.0.0";
 const PORT = Number(process.env.CHAT_PORT) || 3003;
 
 app.use(cors());
@@ -34,7 +35,7 @@ app.get("/health", async (_req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`[waveguard-chat] Running on port ${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`[waveguard-chat] Listening on ${HOST}:${PORT}`);
   console.log(`[waveguard-chat] Local mode uses Ollama when available, else offline agent`);
 });

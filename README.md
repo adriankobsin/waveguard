@@ -11,6 +11,7 @@ WaveGuard runs entirely on the host network — discovery, lighting control, SNM
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
+- [Shipboard LAN deploy](#shipboard-lan-deploy)
 - [Lights and Shades](#lights-and-shades)
 - [Cisco Switches](#cisco-switches)
 - [Network & SNMP](#network--snmp)
@@ -93,7 +94,7 @@ Starts the mock API + scanner (port **3002**) and Vite (port **5173**) together:
 npm run dev:all
 ```
 
-Open <http://localhost:5173>. The first run prompts you to choose **Live** or **Demo** mode. Demo mode loads a curated yacht with Lutron zones, scenes and keypads so the platform looks populated without any LAN access.
+Open <http://localhost:5173>. From another device on the same LAN, use `http://<waveguard-host-ip>:5173` (Vite already binds `0.0.0.0`). The first run prompts you to choose **Live** or **Demo** mode. Demo mode loads a curated yacht with Lutron zones, scenes and keypads so the platform looks populated without any LAN access.
 
 Or run in two terminals:
 
@@ -129,6 +130,89 @@ VITE_BASE44_APP_BASE_URL=https://your-app.base44.app
 ```
 
 Then `npm run dev`. The app connects straight to the live Base44 backend — no mock server needed.
+
+---
+
+## Shipboard LAN deploy
+
+WaveGuard is designed to run **on the vessel**, on a host connected to the **main AV trunk**. Phones, tablets, laptops, and rack PCs on that network open the same web platform. Operator checklist: [`docs/shipboard-deploy.md`](docs/shipboard-deploy.md).
+
+### Network prerequisites
+
+1. Connect the WaveGuard host NIC to the ship AV trunk (or a management VLAN that can reach it).
+2. Give the host a **stable IP** on that network (DHCP reservation or static), e.g. `192.168.10.20`.
+3. Allow inbound **TCP 8080** (default ship port below) — or **80** if you prefer — from the AV subnet on the host firewall.
+4. Do **not** set `WAVEGUARD_USE_MOCK_SCAN=true` on the vessel; live discovery/SNMP need real LAN access.
+
+### Production start (recommended)
+
+Builds the UI and serves **UI + API + AI chat** from **one port** bound to all interfaces:
+
+```bash
+cd waveguard
+npm install
+WAVEGUARD_PORT=8080 npm run ship
+```
+
+On start the console prints LAN URLs, for example:
+
+```text
+[waveguard] Listening on 0.0.0.0:8080
+[waveguard] Local:   http://127.0.0.1:8080
+[waveguard] LAN:     http://192.168.10.20:8080
+[waveguard] Web UI is served from this process — open any LAN URL above from phones, tablets, or PCs on the AV network.
+```
+
+Open that LAN URL from **any device** on the AV trunk. Login (default local admin): `waveadmin@local` / `Wave-avi23!` (override password with `WAVE_ADMIN_PASSWORD`).
+
+Rebuild after code updates:
+
+```bash
+WAVEGUARD_PORT=8080 npm run ship
+```
+
+Or build once, then restart the API/UI process:
+
+```bash
+npm run build
+WAVEGUARD_PORT=8080 npm run start:ship
+```
+
+### Environment variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `WAVEGUARD_HOST` | `0.0.0.0` | Listen address (keep default for whole-LAN access) |
+| `WAVEGUARD_PORT` / `PORT` | `3002` | HTTP port (use `8080` or `80` on the vessel) |
+| `WAVE_ADMIN_PASSWORD` | `Wave-avi23!` | Local admin password |
+| `WAVEGUARD_USE_MOCK_SCAN` | unset | Set `true` only for offline demos |
+
+### Keep it running
+
+Use your preferred process manager (systemd, NSSM, pm2). Example systemd unit:
+
+```ini
+[Unit]
+Description=WaveGuard shipboard platform
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/waveguard
+Environment=WAVEGUARD_HOST=0.0.0.0
+Environment=WAVEGUARD_PORT=8080
+ExecStart=/usr/bin/npm run start:ship
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Run `npm run build` after pulling updates, then `systemctl restart waveguard`.
+
+### Dev access from other devices (no production build)
+
+`npm run dev:all` already binds Vite to `0.0.0.0:5173` and the API to `0.0.0.0:3002`. On the AV network open `http://<host-ip>:5173` — the Vite proxy keeps API calls on the server host.
 
 ---
 
@@ -474,7 +558,10 @@ docs/                       # Markdown docs (reports, diagnostics)
 | `npm run mock` | Start mock API + LAN scanner on port 3002 |
 | `npm run dev:all` | Start mock server and Vite together with coloured concurrent output |
 | `npm run build` | Production build |
-| `npm run preview` | Preview production build |
+| `npm run preview` | Preview production build (LAN-bound) |
+| `npm run ship` | Build UI + start shipboard server (UI+API on one port) |
+| `npm run start:ship` | Start shipboard server (expects `dist/` already built) |
+| `npm run check:lan` | Sanity-check LAN address helpers |
 | `npm run lint` | Run ESLint |
 | `npm run lint:fix` | Auto-fix lint issues |
 | `npm run typecheck` | TypeScript check (uses `jsconfig.json`) |

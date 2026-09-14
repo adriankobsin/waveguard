@@ -14,7 +14,10 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:lan": "node scripts/check-lan-access.mjs",
+    "start:ship": "node mock-server/server.js",
+    "ship": "npm run build && npm run start:ship"
   },
   "dependencies": {
     "@base44/sdk": "^0.8.32",

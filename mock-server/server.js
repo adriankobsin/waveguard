@@ -112,6 +112,11 @@ import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platfo
 import { loadPersistedDb, queueSave, pingAllOnStartup } from "./persistence.js";
 import { addClient, broadcast, clientCount } from "./events.js";
 import { getDb, seedTypes, listTypes, listConfigs, getConfig, createConfig, updateConfig, deleteConfig, logEvent, getLogs, getDashboardStats, getCategories } from "./db/database.js";
+import {
+  isPrivateOrLocalHostname,
+  buildPublicOrigin,
+  formatLanAccessBanner,
+} from "./lanAccess.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Set WAVEGUARD_USE_MOCK_SCAN=true only for demos without LAN access. */
@@ -122,8 +127,11 @@ const capturesDir = path.join(__dirname, ".captures");
 const captureStore = createCaptureStore(capturesDir);
 
 const app = express();
-const PORT = 3002;
+/** Bind all interfaces so any device on the ship AV trunk can reach WaveGuard. */
+const HOST = process.env.WAVEGUARD_HOST || "0.0.0.0";
+const PORT = Number(process.env.WAVEGUARD_PORT || process.env.PORT || 3002);
 const APP_ID = "mock-app";
+const DIST_DIR = path.resolve(__dirname, "../dist");
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -3536,7 +3544,7 @@ app.post(
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    const file_url = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+    const file_url = `${buildPublicOrigin(req, PORT)}/uploads/${req.file.filename}`;
     res.json({ file_url });
   }
 );
@@ -3646,25 +3654,28 @@ function safeRedirectUrl(url) {
   if (!url) return null;
   try {
     const parsed = new URL(url);
-    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(parsed.hostname) || parsed.hostname.endsWith(".local")) {
-      return url;
-    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (isPrivateOrLocalHostname(parsed.hostname)) return url;
   } catch { /* invalid URL */ }
   return null;
 }
 
+function defaultAppOrigin(req) {
+  return buildPublicOrigin(req, PORT);
+}
+
 app.get("/api/apps/auth/login", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || defaultAppOrigin(req);
   res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
 });
 
 app.get("/api/apps/auth/logout", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174/login";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || `${defaultAppOrigin(req)}/login`;
   res.redirect(`${fromUrl}`);
 });
 
 app.get("/api/apps/auth/:provider/login", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || defaultAppOrigin(req);
   res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
 });
 
@@ -3999,9 +4010,25 @@ app.use(`/api/apps/${APP_ID}/audio`, createAudioRouter(db, broadcast));
 app.use("/api/hvac", createHVACRouter());
 app.use("/cws/api", createCrestronGatewayRouter());
 
-app.listen(PORT, () => {
-  console.log(`[mock-base44] Server running at http://localhost:${PORT}`);
+// Shipboard / LAN production: serve the Vite build from the same origin as the API
+// so phones, tablets, and PCs on the AV trunk only need one host:port.
+const uiMounted = fs.existsSync(path.join(DIST_DIR, "index.html"));
+if (uiMounted) {
+  app.use(express.static(DIST_DIR, { index: false, maxAge: "1h" }));
+  app.get("*", (req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (req.path.startsWith("/api") || req.path.startsWith("/chat") || req.path.startsWith("/uploads") || req.path.startsWith("/cws")) {
+      return next();
+    }
+    res.sendFile(path.join(DIST_DIR, "index.html"), (err) => {
+      if (err) next(err);
+    });
+  });
+}
+
+app.listen(PORT, HOST, () => {
   console.log(`[mock-base44] App ID: ${APP_ID}`);
+  console.log(formatLanAccessBanner({ host: HOST, port: PORT, uiMounted }));
   console.log(`[mock-base44] Endpoints ready:`);
   console.log(`  - Auth: /api/apps/${APP_ID}/auth/*`);
   console.log(`  - Functions: /api/apps/${APP_ID}/functions/*`);
