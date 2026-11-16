@@ -20,8 +20,8 @@ import { toast } from "sonner";
 const GRID_COLS = 12;
 const ROW_HEIGHT = 80;
 
-const CHART_TYPES = new Set(["network_traffic"]);
-const TALL_WIDGET_TYPES = new Set(["network_traffic", "system_location", "live_weather"]);
+const CHART_TYPES = new Set(["traffic_chart", "wan_latency"]);
+const TALL_WIDGET_TYPES = new Set(["traffic_chart", "wan_latency", "system_location", "live_weather"]);
 
 function toRglLayout(layout) {
   return layout.map((widget) => {
