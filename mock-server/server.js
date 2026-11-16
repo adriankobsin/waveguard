@@ -111,6 +111,12 @@ import {
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
 import { loadPersistedDb, queueSave, pingAllOnStartup } from "./persistence.js";
 import { addClient, broadcast, clientCount } from "./events.js";
+import {
+  isVesselHostname,
+  listLanIPv4Addresses,
+  buildPublicOrigin,
+  formatLanAccessBanner,
+} from "./lanAccess.js";
 import { getDb, seedTypes, listTypes, listConfigs, getConfig, createConfig, updateConfig, deleteConfig, logEvent, getLogs, getDashboardStats, getCategories } from "./db/database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -122,7 +128,9 @@ const capturesDir = path.join(__dirname, ".captures");
 const captureStore = createCaptureStore(capturesDir);
 
 const app = express();
-const PORT = 3002;
+/** 0.0.0.0 accepts clients from every VLAN that can route to this host. */
+const HOST = process.env.WAVEGUARD_HOST || "0.0.0.0";
+const PORT = Number(process.env.WAVEGUARD_PORT || process.env.PORT || 3002);
 const APP_ID = "mock-app";
 
 const upload = multer({
@@ -136,7 +144,8 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-app.use(cors());
+app.set("trust proxy", true);
+app.use(cors({ origin: true }));
 app.use(express.json({ limit: "50mb" }));
 app.use((req, res, next) => {
   if (req.method !== "GET") {
@@ -3575,7 +3584,7 @@ app.post(
     if (!req.file) {
       return res.status(400).json({ message: "No file uploaded" });
     }
-    const file_url = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+    const file_url = `${buildPublicOrigin(req, PORT)}/uploads/${req.file.filename}`;
     res.json({ file_url });
   }
 );
@@ -3685,25 +3694,42 @@ function safeRedirectUrl(url) {
   if (!url) return null;
   try {
     const parsed = new URL(url);
-    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(parsed.hostname) || parsed.hostname.endsWith(".local")) {
-      return url;
-    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    if (isVesselHostname(parsed.hostname)) return url;
   } catch { /* invalid URL */ }
   return null;
 }
 
+function defaultAppOrigin(req) {
+  return buildPublicOrigin(req, PORT);
+}
+
+app.get("/api/apps/:appId/lan", (_req, res) => {
+  const addresses = listLanIPv4Addresses();
+  res.json({
+    host: HOST,
+    port: PORT,
+    addresses,
+    urls: [
+      `http://127.0.0.1:${PORT}`,
+      ...addresses.map((row) => `http://${row.address}:${PORT}`),
+    ],
+    access: "Any VLAN that can route to one of these addresses may open WaveGuard. Source VLAN is not filtered.",
+  });
+});
+
 app.get("/api/apps/auth/login", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || defaultAppOrigin(req);
   res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
 });
 
 app.get("/api/apps/auth/logout", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174/login";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || `${defaultAppOrigin(req)}/login`;
   res.redirect(`${fromUrl}`);
 });
 
 app.get("/api/apps/auth/:provider/login", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
+  const fromUrl = safeRedirectUrl(req.query.from_url) || defaultAppOrigin(req);
   res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
 });
 
@@ -4051,9 +4077,9 @@ app.use(`/api/apps/${APP_ID}/audio`, createAudioRouter(db, broadcast));
 app.use("/api/hvac", createHVACRouter());
 app.use("/cws/api", createCrestronGatewayRouter());
 
-app.listen(PORT, () => {
-  console.log(`[mock-base44] Server running at http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
   console.log(`[mock-base44] App ID: ${APP_ID}`);
+  console.log(formatLanAccessBanner({ host: HOST, port: PORT }));
   console.log(`[mock-base44] Endpoints ready:`);
   console.log(`  - Auth: /api/apps/${APP_ID}/auth/*`);
   console.log(`  - Functions: /api/apps/${APP_ID}/functions/*`);
