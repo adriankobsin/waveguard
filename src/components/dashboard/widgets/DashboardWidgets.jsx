@@ -18,9 +18,12 @@ import { useLiveWeather } from "@/hooks/useLiveWeather";
 
 const CATEGORY_WIDGETS = [
   { key: "network", label: "Network", icon: Wifi, color: "#06b6d4" },
-  { key: "cctv", label: "Cameras", icon: Camera, color: "#a78bfa" },
   { key: "av", label: "AV Systems", icon: Monitor, color: "#60a5fa" },
+  { key: "cctv", label: "Cameras", icon: Camera, color: "#a78bfa" },
+  { key: "lighting", label: "Lighting", icon: Lightbulb, color: "#fbbf24" },
+  { key: "control", label: "Control", icon: Cpu, color: "#38bdf8" },
   { key: "power", label: "Power", icon: Zap, color: "#34d399" },
+  { key: "other", label: "Other", icon: Server, color: "#94a3b8" },
 ];
 
 function emptyTrafficSeries() {
@@ -38,17 +41,18 @@ function emptyWanLatencySeries() {
   }));
 }
 
-function buildWanLatencySeries(wan) {
-  const latency = wan?.selected?.latencyMs ?? 0;
-  if (!wan?.configured && !latency) return emptyWanLatencySeries();
-  return Array.from({ length: 24 }, (_, i) => ({
-    hour: `${String(i).padStart(2, "0")}:00`,
-    latency,
-  }));
-}
-
 function computeStats(snapshot) {
   if (!snapshot) return { online: 0, offline: 0, warning: 0, alarms: 0 };
+  const counts = snapshot.counts;
+  if (counts) {
+    return {
+      online: counts.online || 0,
+      offline: counts.offline || 0,
+      warning: counts.warning || 0,
+      alarms:
+        (snapshot.criticalAlarms?.length || 0) + (snapshot.warningAlarms?.length || 0),
+    };
+  }
   const cats = Object.values(snapshot.categories || {});
   return {
     online: cats.reduce((sum, cat) => sum + (cat.online || 0), 0),
@@ -268,7 +272,7 @@ export function CategoriesWidget() {
           <Server size={12} className="text-primary" />
           System Categories
         </h3>
-        <div className="space-y-4 flex-1">
+        <div className="space-y-2.5 flex-1 overflow-y-auto">
           {categories.map((cat) => (
             <div key={cat.label} className="flex items-center gap-3">
               <cat.icon size={13} style={{ color: cat.color, flexShrink: 0 }} />
@@ -360,29 +364,34 @@ export function WanStatusWidget() {
 
 export function TrafficChartWidget() {
   const { snapshot } = useSystemData();
-  const traffic =
-    snapshot?.monitoredCount > 0 && snapshot?.traffic?.length
-      ? snapshot.traffic
-      : emptyTrafficSeries();
+  const traffic = snapshot?.traffic?.length ? snapshot.traffic : emptyTrafficSeries();
+  const live = snapshot?.trafficLive;
+  const hasTraffic = snapshot?.trafficSource === "snmp";
 
   return (
     <Card>
       <div className="p-5 h-full flex flex-col">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-2">
           <h3 className="text-xs font-semibold text-foreground uppercase tracking-widest flex items-center gap-2">
             <BarChart3 size={12} className="text-primary" />
             Network Traffic (24h)
           </h3>
           <div className="flex gap-3 text-[10px] text-muted-foreground">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary" />In
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />Out
-            </span>
+            {hasTraffic ? (
+              <span className="font-medium text-foreground tabular-nums">
+                {Number(live?.inMbps || 0).toFixed(1)} ↓ · {Number(live?.outMbps || 0).toFixed(1)} ↑ Mbps
+              </span>
+            ) : (
+              <span>Waiting for switch counters</span>
+            )}
           </div>
         </div>
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 relative">
+          {!hasTraffic && (
+            <p className="absolute inset-x-4 top-1/2 -translate-y-1/2 z-10 text-center text-[11px] text-muted-foreground">
+              No interface counters yet. Core Network fills this chart from the second SNMP poll.
+            </p>
+          )}
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={traffic} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
               <defs>
@@ -411,7 +420,7 @@ export function TrafficChartWidget() {
 
 export function WanLatencyWidget() {
   const { snapshot } = useSystemData();
-  const wanLatency = buildWanLatencySeries(snapshot?.wan);
+  const wanLatency = snapshot?.wanLatency?.length ? snapshot.wanLatency : emptyWanLatencySeries();
 
   return (
     <Card>

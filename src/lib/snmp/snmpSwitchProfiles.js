@@ -422,6 +422,7 @@ export function appendTrafficHistory(lastPoll, inMbps, outMbps, maxSamples = 24)
   const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   hist.push({
     time,
+    at: new Date().toISOString(),
     inMbps: Math.round(inMbps * 10) / 10,
     outMbps: Math.round(outMbps * 10) / 10,
   });

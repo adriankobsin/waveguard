@@ -11,14 +11,19 @@ export default defineConfig({
 
     proxy: {
       '/api': {
-        target: process.env.VITE_SCANNER_URL || 'http://localhost:3002',
+        target: process.env.VITE_SCANNER_URL || 'http://127.0.0.1:3002',
         changeOrigin: true,
       },
       '/chat': {
-        target: process.env.VITE_SCANNER_URL || 'http://localhost:3002',
+        target: process.env.VITE_SCANNER_URL || 'http://127.0.0.1:3002',
         changeOrigin: true,
       },
     },
+  },
+
+  preview: {
+    host: '0.0.0.0',
+    allowedHosts: true,
   },
 
   plugins: [

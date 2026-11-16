@@ -1,6 +1,12 @@
 import { formatRelativeTime } from "./formatRelativeTime";
 import { buildSnmpFleetSnapshot } from "@/lib/snmp/snmpAnalytics";
 import { buildWanSnapshot } from "@/lib/wan/buildWanSnapshot";
+import {
+  dashboardStatus,
+  dashboardCategory,
+  buildTrafficSeries,
+  buildWanLatencySeries,
+} from "./dashboardMetrics";
 
 function countByStatus(devices) {
   const total = devices.length;
@@ -10,10 +16,6 @@ function countByStatus(devices) {
   return { online, warning, offline, total };
 }
 
-function filterCategory(devices, category) {
-  return devices.filter((d) => d.category === category);
-}
-
 function filterControl(devices) {
   return devices.filter(
     (d) =>
@@ -21,40 +23,6 @@ function filterControl(devices) {
       /cp4|processor|controller/i.test(d.name || "") ||
       /crestron|lutron/i.test(d.model || "")
   );
-}
-
-function buildTrafficSeries(logs) {
-  const now = Date.now();
-  const buckets = Array.from({ length: 24 }, (_, i) => {
-    const hour = new Date(now - (23 - i) * 3600000);
-    return {
-      time: `${String(hour.getHours()).padStart(2, "0")}:00`,
-      inMbps: 0,
-      outMbps: 0,
-    };
-  });
-
-  for (const log of logs || []) {
-    const t = new Date(log.created_date || log.createdAt).getTime();
-    const hoursAgo = Math.floor((now - t) / 3600000);
-    if (hoursAgo < 0 || hoursAgo >= 24) continue;
-    const idx = 23 - hoursAgo;
-    const weight = log.status === "error" ? 2 : 8;
-    if (log.action === "scan_completed" || log.action === "snmp_poll") {
-      buckets[idx].inMbps += weight * 1.2;
-      buckets[idx].outMbps += weight * 0.6;
-    } else {
-      buckets[idx].inMbps += weight * 0.4;
-      buckets[idx].outMbps += weight * 0.3;
-    }
-  }
-
-  const hasData = (logs || []).length > 0;
-  return buckets.map((b) => ({
-    ...b,
-    inMbps: hasData ? Math.round(Math.max(4, b.inMbps) * 10) / 10 : 0,
-    outMbps: hasData ? Math.round(Math.max(2, b.outMbps) * 10) / 10 : 0,
-  }));
 }
 
 function formatLogEvent(log) {
@@ -160,11 +128,12 @@ export function buildSystemSnapshot({
   wanManagement = null,
 }) {
   const devices = equipment.map((eq) => {
-    const status = eq.status || "online";
+    const status = dashboardStatus(eq);
     const meta = eq.telemetry || {};
     return {
       ...eq,
       status,
+      dashboardCategory: dashboardCategory(eq),
       telemetry: {
         powerW: meta.powerW ?? eq.defaultWatts,
         tempC: meta.tempC,
@@ -175,12 +144,18 @@ export function buildSystemSnapshot({
     };
   });
 
-  const network = countByStatus(filterCategory(devices, "Network"));
-  const av = countByStatus(filterCategory(devices, "AV"));
-  const control = countByStatus(filterControl(devices));
-  const lighting = countByStatus(filterCategory(devices, "Lighting"));
-  const cctv = countByStatus(filterCategory(devices, "Camera"));
-  const power = countByStatus(filterCategory(devices, "Power"));
+  const network = countByStatus(devices.filter((d) => d.dashboardCategory === "network"));
+  const av = countByStatus(devices.filter((d) => d.dashboardCategory === "av"));
+  const control = countByStatus([
+    ...devices.filter((d) => d.dashboardCategory === "control"),
+    ...filterControl(devices).filter((d) => d.dashboardCategory !== "control"),
+  ]);
+  const lighting = countByStatus(devices.filter((d) => d.dashboardCategory === "lighting"));
+  const cctv = countByStatus(devices.filter((d) => d.dashboardCategory === "cctv"));
+  const power = countByStatus(devices.filter((d) => d.dashboardCategory === "power"));
+  const other = countByStatus(devices.filter((d) => d.dashboardCategory === "other"));
+  const counts = countByStatus(devices);
+  const traffic = buildTrafficSeries(snmpSwitches);
 
   const offline = devices.filter((d) => d.status === "offline");
   const warning = devices.filter((d) => d.status === "warning");
@@ -211,6 +186,7 @@ export function buildSystemSnapshot({
 
   return {
     monitoredCount: devices.length,
+    counts,
     categories: {
       network: { label: "Core network", ...network },
       av: { label: "AV systems", ...av },
@@ -218,8 +194,14 @@ export function buildSystemSnapshot({
       lighting: { label: "Lighting zones", ...lighting },
       cctv: { label: "Cameras", ...cctv },
       power: { label: "Power", ...power },
+      other: { label: "Other", ...other },
     },
-    traffic: buildTrafficSeries(logs),
+    traffic: traffic.series,
+    trafficLive: traffic.live,
+    trafficSource: traffic.source,
+    wanLatency: buildWanLatencySeries(
+      wanFromNetwork.selected?.latencyMs ?? wanFromNetwork.latencyMs
+    ),
     criticalAlarms,
     warningAlarms,
     offlineDevices: offline.map((d) => ({ name: d.name, ip: d.ip || "—", id: d.id })),
@@ -242,16 +224,8 @@ export function buildSystemSnapshot({
           selected: null,
           status: wanDevice?.status === "online" ? "online" : wanDevice?.status === "offline" ? "offline" : "warning",
           name: wanDevice?.name || "WAN",
-          downloadMbps:
-            wanDevice?.responseTimeMs != null
-              ? Math.round((120 - Math.min(wanDevice.responseTimeMs, 100)) * 0.5 * 10) / 10
-              : wanDevice?.status === "online"
-                ? 24.3
-                : 0,
-          uploadMbps:
-            wanDevice?.status === "online"
-              ? Math.round((wanDevice?.responseTimeMs != null ? 18 : 12) * 10) / 10
-              : 0,
+          downloadMbps: 0,
+          uploadMbps: 0,
         },
     ups: mainUps
       ? {
@@ -260,7 +234,7 @@ export function buildSystemSnapshot({
           battery: estimateBattery(mainUps),
           load: mainUps.telemetry?.powerW
             ? Math.min(95, Math.round((mainUps.telemetry.powerW / 3000) * 100))
-            : 38,
+            : null,
         }
       : null,
     maintenance: {

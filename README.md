@@ -11,6 +11,7 @@ WaveGuard runs entirely on the host network — discovery, lighting control, SNM
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Getting Started](#getting-started)
+- [Access from every VLAN](#access-from-every-vlan)
 - [Lights and Shades](#lights-and-shades)
 - [Cisco Switches](#cisco-switches)
 - [Network & SNMP](#network--snmp)
@@ -129,6 +130,47 @@ VITE_BASE44_APP_BASE_URL=https://your-app.base44.app
 ```
 
 Then `npm run dev`. The app connects straight to the live Base44 backend — no mock server needed.
+
+---
+
+## Access from every VLAN
+
+The API and the web UI listen on **all IPv4 interfaces** (`0.0.0.0`). A browser on any ship VLAN can open WaveGuard when the core switch routes that VLAN to the server. WaveGuard does not allow or deny clients based on which VLAN they come from.
+
+On the server:
+
+```bash
+npm run dev:all
+```
+
+Startup prints one URL per interface, for example `http://192.168.10.20:5173`. Use the address that the other VLANs can route to. The UI is port **5173**; the API is port **3002** on the same host (the UI proxies `/api` and `/chat`, so clients only need **5173**).
+
+Confirm from another VLAN:
+
+```bash
+curl http://<server-ip>:3002/api/apps/mock-app/lan
+```
+
+The JSON lists every address this host is using.
+
+### What the network must allow
+
+1. Inter-VLAN routing from each client VLAN to the WaveGuard server IP.
+2. Return traffic back to those VLANs.
+3. TCP **5173** (web UI) permitted from those VLANs to the server. TCP **3002** only if a client talks to the API directly.
+
+Example on a Cisco core (server `192.168.10.20` on VLAN 10, clients on VLAN 20 and 30):
+
+```text
+ip access-list extended WAVEGUARD-IN
+ permit tcp 192.168.20.0 0.0.0.255 host 192.168.10.20 eq 5173
+ permit tcp 192.168.30.0 0.0.0.255 host 192.168.10.20 eq 5173
+ permit tcp 192.168.10.0 0.0.0.255 host 192.168.10.20 eq 5173
+```
+
+Apply that toward the server, and make sure each VLAN has a route to `192.168.10.20`. If the server itself should sit on more than one VLAN, add a subinterface or access port per VLAN; each new address shows up in the startup banner and in `/api/apps/mock-app/lan`.
+
+Login redirects accept any private address (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), so signing in from another VLAN returns you to that VLAN’s URL.
 
 ---
 
