@@ -24,6 +24,7 @@ const LightingPage = lazy(() => import('./pages/LightingPage'));
 const ScenesPage = lazy(() => import('./pages/ScenesPage'));
 const NetworkDiscoveryPage = lazy(() => import('./pages/NetworkDiscoveryPage'));
 const AudioPage = lazy(() => import('./pages/AudioPage'));
+const AvFlowPage = lazy(() => import('./pages/AvFlowPage'));
 const HVACPage = lazy(() => import('./pages/HVACPage'));
 const MonitoringPage = lazy(() => import('./pages/MonitoringPage'));
 const NetworkToolsPage = lazy(() => import('./pages/NetworkToolsPage'));
@@ -94,6 +95,7 @@ function App() {
             <Route path="/cisco-switches" element={<Navigate to="/snmp?tab=cisco" replace />} />
             <Route path="/discovery" element={<NetworkDiscoveryPage />} />
             <Route path="/audio" element={<AudioPage />} />
+            <Route path="/av-flow" element={<AvFlowPage />} />
             <Route path="/hvac" element={<HVACPage />} />
             <Route path="/monitoring" element={<MonitoringPage />} />
             <Route path="/tools" element={<NetworkToolsPage />} />

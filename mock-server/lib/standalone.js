@@ -14,12 +14,39 @@ import { CHANNEL_TYPES, normalizeChannel, maskChannel, mergeChannel, sendToChann
 import { hostHealth, gitInfo } from "./hostHealth.js";
 import { createConfigBackups } from "./configBackups.js";
 import { extractPersistentState } from "../persistence.js";
+import { createAvFlow, AV_FLOW_SETTINGS_KEY } from "./avFlow.js";
 
-export function registerStandaloneFeatures(app, { db, auth, queueSave, broadcast, getCiscoSwitchClient, getSettingValue }) {
+export function registerStandaloneFeatures(app, { db, auth, queueSave, broadcast, getCiscoSwitchClient, getSettingValue, getCiscoTargets }) {
   const save = () => queueSave(db);
   const vesselName = () => getSettingValue?.("general")?.name || "";
   const tech = auth.requireRole("admin", "technician");
   const admin = auth.requireAdmin;
+
+  // ---------------------------------------------------------------- AV flow (NVX + Dante + network)
+  const avFlow = createAvFlow({ db, getSettingValue, getCiscoTargets });
+  app.post("/api/av-flow/scan", handle((req) => avFlow.scan({ listenSeconds: Math.min(10, Number(req.body?.seconds) || 4) })));
+  app.get("/api/av-flow/settings", handle(() => ({ settings: avFlow.settings() })));
+  app.put("/api/av-flow/settings", tech, handle((req) => {
+    const prev = getSettingValue?.(AV_FLOW_SETTINGS_KEY) || {};
+    const b = req.body || {};
+    const ips = Array.isArray(b.extraNvxIps) ? b.extraNvxIps : String(b.extraNvxIps || "").split(/[\s,]+/);
+    const value = {
+      nvxUsername: String(b.nvxUsername ?? prev.nvxUsername ?? "admin").slice(0, 64),
+      nvxPassword: b.nvxPassword && b.nvxPassword !== "********" ? String(b.nvxPassword) : prev.nvxPassword || "",
+      extraNvxIps: ips.map((x) => x.trim()).filter((x) => /^\d{1,3}(\.\d{1,3}){3}$/.test(x)).slice(0, 200),
+    };
+    const row = db.systemSettings.find((r) => r.key === AV_FLOW_SETTINGS_KEY);
+    if (row) row.value = value;
+    else db.systemSettings.push({ id: "setting-av-flow", key: AV_FLOW_SETTINGS_KEY, category: "av", value });
+    save();
+    return { settings: avFlow.settings() };
+  }));
+  app.post("/api/av-flow/nvx/route", tech, handle(async (req) => {
+    const { rxIp, txIp } = req.body || {};
+    const ip = /^\d{1,3}(\.\d{1,3}){3}$/;
+    if (!ip.test(rxIp || "") || !ip.test(txIp || "")) throw httpError(400, "rxIp and txIp must be IPv4 addresses");
+    return avFlow.route({ rxIp, txIp });
+  }));
 
   // ---------------------------------------------------------------- health
   app.get("/api/health", (_req, res) => res.json({ ok: true, version: config.version, uptimeSec: Math.round(process.uptime()) }));

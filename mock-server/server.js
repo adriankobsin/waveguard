@@ -2329,12 +2329,31 @@ app.post("/api/apps/:appId/functions/ciscoCommand", async (req, res) => {
         closeCiscoSwitchClient(conn.host);
         return res.json({ success: true, host: conn.host });
       }
+      case "getMulticast": {
+        const multicast = await client.getMulticast();
+        return res.json({ success: true, host: conn.host, multicast });
+      }
+      case "portAction":
+      case "saveConfig": {
+        // Changing the switch is for admins and technicians only.
+        const role = req.user?.role;
+        if (role && !["admin", "technician"].includes(role)) {
+          return res.status(403).json({ success: false, error: "Only admins and technicians can change switch ports" });
+        }
+        const result = op === "saveConfig"
+          ? await client.saveConfig()
+          : await client.portAction({
+              action: req.body.action,
+              port: req.body.port,
+              vlan: req.body.vlan,
+              description: req.body.description,
+            });
+        console.info(`[cisco] ${req.user?.username || "user"}: ${op === "saveConfig" ? "save config" : `${req.body.action} ${req.body.port}`} on ${conn.host}`);
+        return res.json({ success: true, host: conn.host, ...result });
+      }
       case "setPortEnabled": {
-        // Reserved — write support is a follow-up PR.
-        return res.status(501).json({
-          success: false,
-          error: "Port admin shutdown not yet supported. Coming in the next release.",
-        });
+        const result = await client.portAction({ action: req.body.enabled === false ? "shutdown" : "enable", port: req.body.port });
+        return res.json({ success: true, host: conn.host, ...result });
       }
       default:
         return res.status(400).json({ success: false, error: `unknown op ${op}` });
@@ -3833,7 +3852,26 @@ app.use("/api/hvac", createHVACRouter());
 app.use("/cws/api", createCrestronGatewayRouter());
 
 // ---- Standalone features (monitors, alerts, network tools, host health, config backups) ----
-standalone = registerStandaloneFeatures(app, { db, auth, queueSave, broadcast, getCiscoSwitchClient, getSettingValue: (key) => db.systemSettings.find((s) => s.key === key)?.value });
+standalone = registerStandaloneFeatures(app, {
+  db,
+  auth,
+  queueSave,
+  broadcast,
+  getCiscoSwitchClient,
+  getSettingValue: (key) => db.systemSettings.find((s) => s.key === key)?.value,
+  // Latest snapshot of every enabled Cisco switch (polls if none cached yet) for AV Flow.
+  getCiscoTargets: async () => {
+    const targets = getStoredCiscoSwitches().switches.filter((s) => s.enabled && s.host);
+    return Promise.all(targets.map(async (sw) => {
+      const client = getCiscoSwitchClient(sw);
+      let snapshot = client?.lastSnapshot || null;
+      if (!snapshot?.multicast && client) {
+        snapshot = await client.pollAll({ snmpCommunity: sw.snmpCommunity, snmpVersion: sw.snmpVersion }).catch(() => snapshot);
+      }
+      return { host: sw.host, name: sw.label || snapshot?.system?.hostname || sw.host, snapshot: snapshot || {} };
+    }));
+  },
+});
 
 // ---- Built front end (single-process standalone mode) ----
 serveFrontend(app);

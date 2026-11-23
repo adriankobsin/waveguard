@@ -70,6 +70,21 @@ sudo waveguard config        # edit port and other server settings
 
 To update from the web console instead: **Settings → Server & updates → Check for updates → Install update now**. WaveGuard backs up the data, downloads the new version, rebuilds and restarts. If the new version fails to start, it rolls back on its own.
 
+## AV Flow (Crestron NVX + Dante) and Cisco port control
+
+**AV Flow** (left menu) shows every NVX encoder and decoder, every Dante device, which switch port each one is on, which multicast streams are flowing, and plain-English problems with the fix (IGMP snooping off, no querier, 100 Mb/s links, cable errors, decoders not joined to their encoder's stream, several Dante clock leaders).
+
+To get the full picture:
+
+1. Connect each switch under **Core Network → Cisco Switches → Add switch** (IP, SSH user, password).
+2. Add NVX endpoints in **Equipment** with a model containing "NVX" (or list their IPs in **AV Flow → Settings**).
+3. In **AV Flow → Settings**, enter the NVX login (the same as each NVX web page).
+4. Put WaveGuard's network port on the Dante VLAN (or a trunk) so it can hear the Dante clock.
+
+Technicians can route an NVX decoder to any encoder from the Devices list and reboot PoE-powered devices with **Reboot**.
+
+On **Core Network → Cisco Switches → Ports**, click a port to restart it, power-cycle PoE, disable/enable it, change its VLAN or rename it. Changes are live straight away; click **Save to switch** in the yellow bar so they survive a switch reboot. Viewers and crew can see ports but not change them.
+
 ## User roles
 
 | Role | Can do |

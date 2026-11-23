@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
   Wifi, Menu, X, Search, Bell, Share2,
   BookOpen, Bot, Cable, Package, FileText,   Lightbulb, Music, Radar, Thermometer,
-  Sun, Moon, FlaskConical, Loader2, HeartPulse, Terminal, LogOut, UserCircle2,
+  Sun, Moon, FlaskConical, Loader2, HeartPulse, Terminal, LogOut, UserCircle2, Workflow,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { ROLE_LABELS } from "@/lib/permissions";
@@ -20,6 +20,7 @@ const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/topology", icon: Share2, label: "Topology" },
   { to: "/snmp", icon: Network, label: "Core Network" },
+  { to: "/av-flow", icon: Workflow, label: "AV Flow" },
   { to: "/discovery", icon: Radar, label: "Discovery" },
   { to: "/monitoring", icon: HeartPulse, label: "Monitoring" },
   { to: "/tools", icon: Terminal, label: "Network Tools" },

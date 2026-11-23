@@ -28,7 +28,7 @@ function buildInterfaces() {
     "CCTV-Bridge", "CCTV-Stern", "Music-Server",
     "DECK-IP1", "DECK-IP2", "Engine-PC", "ECDIS-1", "ECDIS-2",
     "AIS-Receiver", "Radar-Switch", "VOIP-Master", "VOIP-Galley",
-    "TV-Saloon", "TV-Master", "Sonos-Saloon", "Sonos-Aft",
+    "NVX-ENC-Saloon", "NVX-DEC-Saloon", "NVX-DEC-Master", "QSYS-Core-Dante",
   ];
   const sampleMacs = [
     "C0:25:E9:11:22:01", "C0:25:E9:11:22:02", "C0:25:E9:11:22:03",
@@ -162,7 +162,29 @@ function buildSystem(host, interfaces) {
 
 export function buildClientCiscoMockSnapshot({ host } = {}) {
   const interfaces = buildInterfaces();
+  // A slightly worn cable on the ECDIS port so "Problems" has something to show.
+  const ecdis = interfaces.find((p) => p.ifAlias === "ECDIS-2");
+  if (ecdis) ecdis.errors = { in: 37, out: 0, fcs: 214 };
   return {
+    vlans: [
+      { id: 1, name: "default", active: true },
+      { id: 10, name: "Crew-IT", active: true },
+      { id: 20, name: "Navigation", active: true },
+      { id: 30, name: "AV", active: true },
+      { id: 40, name: "AV-NVX", active: true },
+      { id: 41, name: "AV-Dante", active: true },
+    ],
+    multicast: {
+      snoopingEnabled: true,
+      querierChecked: true,
+      vlans: [{ vlan: 30, snooping: true }, { vlan: 40, snooping: true }, { vlan: 41, snooping: true }],
+      queriers: [{ vlan: 30, address: "192.168.30.1", version: 2, port: "te1/0/1" }],
+      groups: [
+        { vlan: 30, group: "239.8.0.17", ports: ["gi1/0/18", "gi1/0/19"] },
+        { vlan: 30, group: "239.255.220.1", ports: ["gi1/0/20"] },
+        { vlan: 30, group: "224.0.1.129", ports: ["gi1/0/20"] },
+      ],
+    },
     system: buildSystem(host, interfaces),
     interfaces,
     macs: buildMacTable(interfaces),

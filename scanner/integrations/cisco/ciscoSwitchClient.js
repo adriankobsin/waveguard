@@ -14,6 +14,7 @@
  */
 
 import { EventEmitter } from "node:events";
+import { createHash } from "node:crypto";
 import { CiscoSshClient } from "./ciscoSshClient.js";
 import { pollCiscoSwitch as pollCiscoSnmp } from "./ciscoSnmpPoller.js";
 import { CiscoMockEngine, getCiscoMockEngine } from "./ciscoMockEngine.js";
@@ -179,6 +180,21 @@ class CiscoSwitchClient extends EventEmitter {
     }
   }
 
+  async getMulticast() {
+    return this._ssh.getMulticast();
+  }
+
+  /** Port control (bounce / shutdown / enable / poeCycle / setVlan / setDescription). */
+  async portAction(args) {
+    const result = await this._ssh.portAction(args);
+    this._lastSnapshot = null;
+    return result;
+  }
+
+  async saveConfig() {
+    return this._ssh.saveConfig();
+  }
+
   /**
    * One-shot snapshot of every datapoint the UI cares about.
    *
@@ -263,7 +279,9 @@ const clients = new Map();
 
 export function getCiscoSwitchClient(connection) {
   if (!connection?.host) return null;
-  const key = `${connection.host}:${connection.sshPort || 22}:${connection.sshUsername || connection.username || "cisco"}`;
+  // Include a hash of the secrets so a changed password replaces the old session.
+  const secret = createHash("sha256").update(`${connection.sshPassword || connection.password || ""}|${connection.enablePassword || ""}`).digest("hex").slice(0, 12);
+  const key = `${connection.host}:${connection.sshPort || 22}:${connection.sshUsername || connection.username || "cisco"}:${secret}`;
   const existing = clients.get(key);
   if (existing && !existing._disposed) return existing;
   for (const [k, c] of clients) {
