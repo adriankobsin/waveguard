@@ -223,7 +223,7 @@ export async function portCheck({ host, ports, timeoutMs = 1500 }) {
 // ------------------------------------------------------------------ nmap
 function parseNmapXml(xml) {
   const hosts = [];
-  for (const block of xml.split("<host ").slice(1)) {
+  for (const block of xml.split(/<host(?=[\s>])/).slice(1)) {
     const status = (block.match(/<status state="(\w+)"/) || [])[1];
     const ip = (block.match(/<address addr="([^"]+)" addrtype="ipv4"/) || [])[1];
     const macM = block.match(/<address addr="([^"]+)" addrtype="mac"(?: vendor="([^"]*)")?/);
@@ -668,3 +668,5 @@ export const TOOL_BINARIES = [
 export async function toolInventory() {
   return Promise.all(TOOL_BINARIES.map(async (t) => ({ ...t, installed: await hasCommand(t.cmd) })));
 }
+
+export const __test = { parsePtp, parseSdp, parseNmapXml };

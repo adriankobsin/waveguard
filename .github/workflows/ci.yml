@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Shell scripts
+        run: |
+          for f in deploy/*.sh; do bash -n "$f"; done
+          shellcheck -S error deploy/*.sh
+      - name: Dependency audit (report only)
+        run: npm audit --omit=dev || true
+      - name: Make sure no runtime data is committed
+        run: |
+          if git ls-files | grep -E '(^|/)(waveguard-data\.json|.*\.db|secret\.key|initial-admin-password\.txt)$'; then
+            echo "Runtime data files must not be committed"; exit 1
+          fi

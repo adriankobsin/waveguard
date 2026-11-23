@@ -1,0 +1,35 @@
+[Unit]
+Description=WaveGuard vessel AV/IT monitoring platform
+Documentation=https://github.com/adriankobsin/waveguard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=waveguard
+Group=waveguard
+EnvironmentFile=/etc/waveguard/waveguard.env
+WorkingDirectory=@INSTALL_DIR@/mock-server
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+TimeoutStopSec=15
+
+# Network tools (ping, nmap, arp-scan, tshark, PTP listener on UDP 319/320) and
+# binding port 80 need these capabilities. The service itself runs unprivileged.
+AmbientCapabilities=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+# Hardening — code is read-only to the service; only the data directory is writable.
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/waveguard
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
