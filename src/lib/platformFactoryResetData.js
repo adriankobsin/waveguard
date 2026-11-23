@@ -149,31 +149,6 @@ export function buildFactorySystemSettings() {
   ];
 }
 
-export function buildFactoryUsers() {
-  return [
-    {
-      id: "user-admin",
-      username: "WaveAdmin",
-      email: "waveadmin@local",
-      name: "Wave Admin",
-      full_name: "Wave Admin",
-      role: "admin",
-      password: "Wave-avi23!",
-      created_date: new Date().toISOString(),
-    },
-    {
-      id: "user-2",
-      username: "tech",
-      email: "tech@waveguard.test",
-      name: "Tech User",
-      full_name: "Tech User",
-      role: "user",
-      password: "password123",
-      created_date: new Date().toISOString(),
-    },
-  ];
-}
-
 export function buildFactoryOperationalState() {
   return {
     equipment: [],
@@ -189,10 +164,19 @@ export function buildFactoryOperationalState() {
   };
 }
 
+/**
+ * Clear operational data. User accounts and active sessions are kept — a reset
+ * must never restore default passwords.
+ */
 export function applyFactoryResetToDb(db) {
-  const sessions = { ...db.sessions };
+  const users = db.users;
+  const sessions = db.sessions;
   Object.assign(db, buildFactoryOperationalState());
-  db.users = buildFactoryUsers();
-  db.systemSettings = buildFactorySystemSettings();
+  db.users = users;
   db.sessions = sessions;
+  db.systemSettings = buildFactorySystemSettings();
+  db.monitors = [];
+  db.alertEvents = [];
+  db.configBackups = [];
+  db.notificationChannels = [];
 }
