@@ -153,8 +153,10 @@ let auth = null;
 let standalone = null;
 app.use((req, res, next) => (auth ? auth.middleware(req, res, next) : res.status(503).json({ message: "Starting up" })));
 app.use(express.json({ limit: "25mb" }));
+// Tool runs, logins and monitor checks are not data changes — don't trigger a save + UI-wide refresh.
+const NO_CHANGE_BROADCAST = /^\/api\/(tools|auth|system\/update|monitors\/[^/]+\/check|notifications\/channels\/[^/]+\/test|apps\/[^/]+\/auth)(\/|$)/;
 app.use((req, res, next) => {
-  if (req.method !== "GET") {
+  if (req.method !== "GET" && !NO_CHANGE_BROADCAST.test(req.path)) {
     const originalJson = res.json.bind(res);
     res.json = (body) => {
       queueSave(db);

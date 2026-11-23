@@ -1,11 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, Suspense } from "react";
 import { NavLink, Outlet, useLocation, Link } from "react-router-dom";
 import {
   LayoutDashboard, Network, Activity, Wrench, Settings,
   Wifi, Menu, X, Search, Bell, Share2,
   BookOpen, Bot, Cable, Package, FileText,   Lightbulb, Music, Radar, Thermometer,
-  Sun, Moon, FlaskConical, Loader2,
+  Sun, Moon, FlaskConical, Loader2, HeartPulse, Terminal, LogOut, UserCircle2,
 } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
+import { ROLE_LABELS } from "@/lib/permissions";
+import { monitorSummary } from "@/api/standaloneApi";
 import { useBranding, DEFAULT_BRANDING } from "@/contexts/BrandingContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { usePlatformMode } from "@/contexts/PlatformModeContext";
@@ -18,6 +21,8 @@ const NAV = [
   { to: "/topology", icon: Share2, label: "Topology" },
   { to: "/snmp", icon: Network, label: "Core Network" },
   { to: "/discovery", icon: Radar, label: "Discovery" },
+  { to: "/monitoring", icon: HeartPulse, label: "Monitoring" },
+  { to: "/tools", icon: Terminal, label: "Network Tools" },
   { to: "/diagnoses", icon: Activity, label: "Diagnoses" },
   { to: "/maintenance", icon: Wrench, label: "Maintenance" },
   { to: "/equipment", icon: Package, label: "Equipment" },
@@ -129,6 +134,19 @@ function AppLayoutContent() {
   const maintenanceOverdue = systemData?.snapshot?.maintenance?.overdue ?? 0;
   const monitoredCount = systemData?.snapshot?.monitoredCount;
   const { scanning, progress, devices, error } = useDiscovery();
+  const { user, logout } = useAuth();
+  const [monitorsDown, setMonitorsDown] = useState(0);
+
+  useEffect(() => {
+    let alive = true;
+    const load = () => monitorSummary().then((s) => alive && setMonitorsDown(s.down || 0)).catch(() => {});
+    load();
+    const t = setInterval(load, 30000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
 
   const toggleTheme = () => {
     const next = theme === "light" ? "dark" : "light";
@@ -257,6 +275,11 @@ function AppLayoutContent() {
                       {diagCounts.active}
                     </span>
                   )}
+                  {item.to === "/monitoring" && monitorsDown > 0 && (
+                    <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400" title={`${monitorsDown} monitor(s) down`}>
+                      {monitorsDown}
+                    </span>
+                  )}
                   {item.to === "/maintenance" && maintenanceOverdue > 0 && (
                     <span className="ml-auto text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/15 text-red-400">
                       {maintenanceOverdue}
@@ -269,8 +292,26 @@ function AppLayoutContent() {
         </nav>
 
         {/* Footer */}
-        <div className="px-5 py-3.5 border-t border-border">
-          <p className="text-[10px] text-muted-foreground">v1.0.0 · Wave Guard</p>
+        <div className="px-3 py-3 border-t border-border">
+          {user && (
+            <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg">
+              <UserCircle2 size={18} className="text-muted-foreground flex-shrink-0" />
+              <NavLink to="/settings?section=account" onClick={() => setSidebarOpen(false)} className="flex-1 min-w-0" title="My account">
+                <p className="text-xs font-medium text-foreground truncate">{user.full_name || user.name || user.username}</p>
+                <p className="text-[10px] text-muted-foreground truncate">{ROLE_LABELS[user.role] || user.role}</p>
+              </NavLink>
+              <button
+                type="button"
+                onClick={() => logout(true)}
+                title="Sign out"
+                aria-label="Sign out"
+                className="w-7 h-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary"
+              >
+                <LogOut size={13} />
+              </button>
+            </div>
+          )}
+          <p className="text-[10px] text-muted-foreground px-2 mt-1">Wave Guard</p>
         </div>
       </aside>
 
@@ -326,9 +367,23 @@ function AppLayoutContent() {
           </div>
         </header>
 
+        {user?.mustChangePassword && (
+          <NavLink to="/settings?section=account" className="block px-5 py-2 text-xs bg-amber-500/10 border-b border-amber-500/30 text-amber-300 hover:bg-amber-500/15">
+            You are signed in with the temporary installation password. Click here to choose your own.
+          </NavLink>
+        )}
+
         {/* Page content */}
         <main className={`flex-1 min-h-0 ${isAssistant ? "overflow-hidden" : "overflow-y-auto"}`}>
-          <Outlet />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full min-h-[50vh]">
+                <div className="w-7 h-7 border-2 border-border border-t-primary rounded-full animate-spin" />
+              </div>
+            }
+          >
+            <Outlet />
+          </Suspense>
         </main>
 
         <NotifPanel

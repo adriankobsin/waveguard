@@ -286,7 +286,10 @@ export function createAuth(db, { onChange } = {}) {
       user.lastLoginAt = new Date().toISOString();
       const token = createSession(user, req);
       setSessionCookie(res, token);
-      res.json({ access_token: token, user: sanitizeUser(user), expires_in: Math.floor(ttlMs / 1000) });
+      // The web UI relies on the HttpOnly cookie; only the SDK-compatible route returns the raw token.
+      const body = { user: sanitizeUser(user), expires_in: Math.floor(ttlMs / 1000) };
+      if (req.path !== "/api/auth/login") body.access_token = token;
+      res.json(body);
     };
     app.post("/api/auth/login", login);
     app.post("/api/apps/:appId/auth/login", login);

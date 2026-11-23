@@ -1,29 +1,43 @@
-import { isMockServer } from "@/api/base44Client";
-
 export function isAdmin(user) {
   return user?.role === "admin";
 }
 
-/**
- * Local mock deployments run without strict RBAC — treat missing auth as admin
- * so operators still see discovery, credentials, integrations, etc.
- */
-export function hasFullSettingsAccess(user) {
-  if (isAdmin(user)) return true;
-  if (isMockServer && (!user || !user.role)) return true;
-  return false;
+export function isTechnician(user) {
+  return user?.role === "admin" || user?.role === "technician";
 }
 
-/** Sections a standard user may open in Settings (dashboard layout and help). */
-const USER_SETTINGS_SECTIONS = new Set(["dashboard", "help"]);
+export const ROLE_LABELS = {
+  admin: "Administrator",
+  technician: "Technician",
+  user: "Crew / operator",
+  viewer: "Viewer (read-only)",
+};
+
+export const ROLE_DESCRIPTIONS = {
+  admin: "Everything, including users, credentials, updates and factory reset",
+  technician: "Network scans, monitors, config backups, discovery and device settings",
+  user: "Day-to-day control: lighting, audio, HVAC, maintenance tasks",
+  viewer: "Can look at everything but change nothing",
+};
+
+export function hasFullSettingsAccess(user) {
+  return isAdmin(user);
+}
+
+/** Sections each non-admin role may open in Settings. */
+const ROLE_SETTINGS_SECTIONS = {
+  technician: new Set(["account", "dashboard", "help", "discovery", "integrations", "site-locations", "system"]),
+  user: new Set(["account", "dashboard", "help"]),
+  viewer: new Set(["account", "help"]),
+};
 
 export function canAccessSettingsSection(user, sectionKey) {
   if (!sectionKey) return true;
   if (hasFullSettingsAccess(user)) return true;
-  return USER_SETTINGS_SECTIONS.has(sectionKey);
+  return ROLE_SETTINGS_SECTIONS[user?.role]?.has(sectionKey) ?? false;
 }
 
 export function filterSettingsSections(sections, user) {
   if (hasFullSettingsAccess(user)) return sections;
-  return sections.filter((s) => USER_SETTINGS_SECTIONS.has(s.key));
+  return sections.filter((s) => canAccessSettingsSection(user, s.key));
 }
