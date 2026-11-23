@@ -3,9 +3,10 @@ import multer from "multer";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { config } from "./lib/config.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadsDir = path.join(__dirname, "uploads", "qsys-designs");
+const uploadsDir = path.join(config.uploadsDir, "qsys-designs");
 fs.mkdirSync(uploadsDir, { recursive: true });
 
 const upload = multer({

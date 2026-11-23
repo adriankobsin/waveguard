@@ -7,6 +7,7 @@ const FILTERS = [
   { id: "down", label: "Down" },
   { id: "poe", label: "PoE active" },
   { id: "uplink", label: "Uplinks" },
+  { id: "problems", label: "Problems" },
 ];
 
 function StatusDot({ status }) {
@@ -34,7 +35,8 @@ export default function CiscoInterfaceTable({ interfaces = [], onSelect }) {
     const q = query.trim().toLowerCase();
     return interfaces.filter((p) => {
       if (filter === "up" && p.status !== "up") return false;
-      if (filter === "down" && p.status !== "down") return false;
+      if (filter === "down" && p.status === "up") return false;
+      if (filter === "problems" && !(p.status === "err-disabled" || (p.errors && (p.errors.fcs || p.errors.in) > 0) || (p.status === "up" && p.speedMbps && p.speedMbps < 1000 && !p.isUplink))) return false;
       if (filter === "poe" && !(p.poeWatts > 0)) return false;
       if (filter === "uplink" && !p.isUplink) return false;
       if (!q) return true;
@@ -111,12 +113,14 @@ export default function CiscoInterfaceTable({ interfaces = [], onSelect }) {
                 }`}>
                   {p.status}
                 </div>
-                <div className="col-span-1 text-center font-mono text-foreground">{speedLabel(p)}</div>
+                <div className={`col-span-1 text-center font-mono ${p.status === "up" && p.speedMbps && p.speedMbps < 1000 && !p.isUplink ? "text-amber-400" : "text-foreground"}`} title={p.errors ? `${(p.errors.fcs || 0) + (p.errors.in || 0)} receive errors` : undefined}>
+                  {speedLabel(p)}{p.errors && (p.errors.fcs || p.errors.in) > 0 ? <span className="text-red-400"> !</span> : null}
+                </div>
                 <div className="col-span-1 text-center font-mono text-muted-foreground">
                   {p.duplex || "—"}
                 </div>
                 <div className="col-span-1 text-center font-mono text-muted-foreground">
-                  {p.vlan != null ? p.vlan : "—"}
+                  {p.trunk ? "trunk" : p.vlan != null ? p.vlan : "—"}
                 </div>
                 <div className="col-span-1 text-center font-mono">
                   {p.poeWatts != null ? (
@@ -148,6 +152,7 @@ export default function CiscoInterfaceTable({ interfaces = [], onSelect }) {
         <span className="inline-flex items-center gap-1.5">
           <ArrowUp size={9} className="text-amber-400" /> Outbound
         </span>
+        {onSelect && <span>Click a port to restart it, power-cycle PoE, change VLAN or rename it.</span>}
         <span className="ml-auto">
           {filtered.length} of {interfaces.length} ports shown
         </span>

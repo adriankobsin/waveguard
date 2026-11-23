@@ -13,6 +13,9 @@ import { usePlatformMode } from "@/contexts/PlatformModeContext";
 import { PLATFORM_MODES } from "@/lib/platformMode";
 import { useAuth } from "@/lib/AuthContext";
 import { filterSettingsSections, canAccessSettingsSection } from "@/lib/permissions";
+import AccountPanel from "./settings/AccountPanel";
+import SystemPanel from "./settings/SystemPanel";
+import { UserCircle2, Server } from "lucide-react";
 import {
   DashboardWidgetsPanel,
   IntegrationsPanel,
@@ -31,6 +34,8 @@ import { toast } from "sonner";
 
 // ─── Sections list (profile → users → connectivity → AI/docs → alerts → data) ───
 const SECTIONS = [
+  { key: "account",            label: "My account",          icon: UserCircle2,     desc: "Change your password, sign out" },
+  { key: "system",             label: "Server & updates",    icon: Server,          desc: "Mini PC health, software updates, full backup" },
   { key: "general",            label: "General",             icon: Anchor,          desc: "Vessel / property profile" },
   { key: "platform-mode",      label: "Platform mode",       icon: Activity,        desc: "Switch between Live and Demo operation" },
   { key: "site-locations",     label: "Decks & rooms",       icon: MapPin,          desc: "Decks and rooms for equipment placement" },
@@ -516,6 +521,8 @@ const PANEL_COMPONENTS = {
   notifications: NotificationsPanel,
   email:         EmailPanel,
   users:         UsersPanel,
+  account:       AccountPanel,
+  system:        SystemPanel,
   backup:        BackupPanel,
   retention:     RetentionPanel,
   "platform-reset": PlatformResetPanel,
@@ -567,9 +574,9 @@ export default function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">Configure vessel profile, monitoring, integrations, and operator experience — settings are saved to the database.</p>
-        {user?.role === "user" && visibleSections.length < SECTIONS.length && (
+        {user?.role !== "admin" && visibleSections.length < SECTIONS.length && (
           <p className="text-xs text-amber-400/90 mt-2">
-            Signed in as a standard user — only dashboard layout and help guides are available. Log in as an administrator (e.g. WaveAdmin) for full settings access.
+            Some settings are only available to administrators.
           </p>
         )}
       </div>

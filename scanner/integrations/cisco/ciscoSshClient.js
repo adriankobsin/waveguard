@@ -258,21 +258,30 @@ export class CiscoSshClient extends EventEmitter {
   }
 
   /** Run a single command. Serialized — each command waits for the previous one. */
-  runCommand(command) {
-    this._cmdQueue = this._cmdQueue
-      .then(() => this._runCommandInner(command))
-      .catch((err) => {
-        console.warn(`[ciscoSsh] Command "${command}" failed: ${err.message}`);
-      });
-    return this._cmdQueue;
+  runCommand(command, timeoutMs) {
+    const run = this._cmdQueue.then(() => this._runCommandInner(command, timeoutMs));
+    // Keep the queue alive after a failure, but let the caller see the error.
+    this._cmdQueue = run.catch((err) => {
+      console.warn(`[ciscoSsh] Command "${String(command).split("\n")[0]}" failed: ${err.message}`);
+    });
+    return run;
   }
 
-  async _runCommandInner(command) {
+  /** Resolve IOS-XE vs SMB once per session (was re-running `show version` 3× per poll). */
+  async ensurePlatform() {
+    if (!this._connected) await this.connect();
+    if (this._platform) return this._platform;
+    if (this.platformPref === "ios-xe" || this.platformPref === "smb") return this._resolvePlatform("");
+    this._versionText = await this.runCommand("show version").catch(() => "");
+    return this._resolvePlatform(this._versionText);
+  }
+
+  async _runCommandInner(command, timeoutMs) {
     if (!this._connected || !this._shell) {
       await this.connect();
     }
     if (!this._shell) throw new Error("SSH shell not ready");
-    return this._sendRaw(`${command}\n`, this.timeoutMs);
+    return this._sendRaw(`${command}\n`, timeoutMs || this.timeoutMs);
   }
 
   _sendRaw(line, timeoutMs) {
@@ -351,9 +360,9 @@ export class CiscoSshClient extends EventEmitter {
   }
 
   async getSystem() {
-    if (!this._connected) await this.connect();
-    const version = await this.runCommand("show version").catch(() => "");
-    const plat = this._resolvePlatform(version);
+    const plat = await this.ensurePlatform();
+    const version = this._versionText || (await this.runCommand("show version").catch(() => ""));
+    this._versionText = version;
     const hostnameCmd =
       plat === "ios-xe"
         ? this.runCommand("show running-config | include ^hostname").catch(() => "")
@@ -367,11 +376,7 @@ export class CiscoSshClient extends EventEmitter {
   }
 
   async getInterfaces() {
-    if (!this._connected) await this.connect();
-    if (!this._platform || this.platformPref === "auto") {
-      const version = await this.runCommand("show version").catch(() => "");
-      this._resolvePlatform(version);
-    }
+    await this.ensurePlatform();
     const [status, description, power] = await Promise.all([
       this.runCommand("show interfaces status").catch(() => ""),
       this.runCommand("show interfaces description").catch(() => ""),
@@ -381,11 +386,7 @@ export class CiscoSshClient extends EventEmitter {
   }
 
   async getMacTable() {
-    if (!this._connected) await this.connect();
-    if (!this._platform || this.platformPref === "auto") {
-      const version = await this.runCommand("show version").catch(() => "");
-      this._resolvePlatform(version);
-    }
+    await this.ensurePlatform();
     const cmd = this._isIosXe()
       ? "show mac address-table"
       : "show mac address-table dynamic";
@@ -405,6 +406,96 @@ export class CiscoSshClient extends EventEmitter {
     };
   }
 
+  async getVlans() {
+    const plat = await this.ensurePlatform();
+    const raw = await this.runCommand(plat === "ios-xe" ? "show vlan brief" : "show vlan");
+    return parseVlans(raw);
+  }
+
+  /**
+   * IGMP snooping state, querier and joined groups — the things that decide
+   * whether NVX video and Dante multicast reach only the ports that asked
+   * for them, or flood every port on the VLAN.
+   */
+  async getMulticast() {
+    await this.ensurePlatform();
+    const [status, querier, groups] = await Promise.all([
+      this.runCommand("show ip igmp snooping").catch(() => ""),
+      this.runCommand("show ip igmp snooping querier").catch(() => ""),
+      this.runCommand("show ip igmp snooping groups").catch(() => ""),
+    ]);
+    return parseMulticast({ status, querier, groups });
+  }
+
+  async getErrorCounters() {
+    await this.ensurePlatform();
+    const raw = await this.runCommand("show interfaces counters errors");
+    return parseErrorCounters(raw);
+  }
+
+  /**
+   * Run configuration lines in one `configure terminal` session and return
+   * to exec mode. Lines are validated by the caller (see portAction()).
+   */
+  async configure(lines) {
+    await this.ensurePlatform();
+    const block = ["configure terminal", ...lines, "end"].join("\n");
+    const out = await this.runCommand(block, 20_000);
+    const bad = String(out || "").match(/^%\s*(Invalid|Incomplete|Ambiguous|Unrecognized|Error)[^\n]*/im);
+    if (bad) throw new Error(`Switch rejected the change: ${bad[0].replace(/^%\s*/, "")}`);
+    return out;
+  }
+
+  async saveConfig() {
+    const plat = await this.ensurePlatform();
+    // SMB OS asks "Overwrite file [startup-config]? (Y/N)" — answer it in the same write.
+    const out = plat === "ios-xe"
+      ? await this.runCommand("write memory", 30_000)
+      : await this.runCommand("copy running-config startup-config\nY", 30_000);
+    return { saved: !/error|fail/i.test(out || ""), output: String(out || "").slice(-300) };
+  }
+
+  /**
+   * The everyday port jobs an ETO needs, without typing IOS:
+   *   bounce | shutdown | enable | poeCycle | setVlan | setDescription
+   */
+  async portAction({ action, port, vlan, description }) {
+    const iface = assertPortName(port);
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    switch (action) {
+      case "shutdown":
+        await this.configure([`interface ${iface}`, "shutdown"]);
+        break;
+      case "enable":
+        await this.configure([`interface ${iface}`, "no shutdown"]);
+        break;
+      case "bounce":
+        await this.configure([`interface ${iface}`, "shutdown"]);
+        await wait(3000);
+        await this.configure([`interface ${iface}`, "no shutdown"]);
+        break;
+      case "poeCycle":
+        await this.configure([`interface ${iface}`, "power inline never"]);
+        await wait(5000);
+        await this.configure([`interface ${iface}`, "power inline auto"]);
+        break;
+      case "setVlan": {
+        const v = Number(vlan);
+        if (!Number.isInteger(v) || v < 1 || v > 4094) throw new Error("VLAN must be 1–4094");
+        await this.configure([`interface ${iface}`, "switchport mode access", `switchport access vlan ${v}`]);
+        break;
+      }
+      case "setDescription": {
+        const d = String(description ?? "").replace(/[^\x20-\x7e]/g, "").trim().slice(0, 64);
+        await this.configure([`interface ${iface}`, d ? `description ${d}` : "no description"]);
+        break;
+      }
+      default:
+        throw new Error(`Unknown port action "${action}"`);
+    }
+    return { port: iface, action, done: true };
+  }
+
   async pollAll() {
     if (!this._connected) {
       // Force an explicit connection up-front so the orchestrator can
@@ -412,17 +503,29 @@ export class CiscoSshClient extends EventEmitter {
       // from "switch online but `show` output is unusual".
       await this.connect();
     }
-    const [system, interfaces, macs, neighbors] = await Promise.all([
+    await this.ensurePlatform();
+    const [system, interfaces, macs, neighbors, vlans, multicast, errors] = await Promise.all([
       this.getSystem(),
       this.getInterfaces(),
       this.getMacTable(),
       this.getNeighbors(),
+      this.getVlans().catch(() => []),
+      this.getMulticast().catch(() => null),
+      this.getErrorCounters().catch(() => []),
     ]);
+    // Attach error counters to their ports so the UI shows them in one row.
+    const errByPort = new Map(errors.map((e) => [shortPortName(e.port), e]));
+    for (const p of interfaces) {
+      const e = errByPort.get(shortPortName(p.name));
+      if (e) p.errors = { in: e.inErrors, out: e.outErrors, fcs: e.fcs };
+    }
     const snapshot = {
       system,
       interfaces,
       macs,
       neighbors,
+      vlans,
+      multicast,
       polledAt: new Date().toISOString(),
     };
     this.emit("snapshot", snapshot);
@@ -617,7 +720,7 @@ function parseInterfaces({ status, description, power, platform = "smb" }) {
   for (const line of lines) {
     if (platform === "ios-xe") {
       const ix = line.match(
-        /^\s*(Gi|Te|Fa|Po|Hu|Tw)(\d+\/\d+\/\d+)\s+(\S*)\s+(connected|notconnect|disabled|err-disabled|suspended)\S*\s+(\d+)\s+(\S+)\s+(\S+)\s*(.*)$/i
+        /^\s*(Gi|Te|Fa|Po|Hu|Tw|Fo)(\d+\/\d+\/\d+|\d+)\s+(.*?)\s*\b(connected|notconnect|disabled|err-disabled|suspended|monitoring|inactive)\S*\s+(\d+|trunk|routed)\s+(\S+)\s+(\S+)\s*(.*)$/i
       );
       if (ix) {
         index += 1;
@@ -628,14 +731,16 @@ function parseInterfaces({ status, description, power, platform = "smb" }) {
         out.push({
           index,
           name,
-          ifAlias: ix[3] || "",
-          status: linkState === "connected" ? "up" : "down",
+          ifAlias: (ix[3] || "").trim(),
+          status: linkState === "connected" ? "up" : linkState === "err-disabled" ? "err-disabled" : "down",
+          adminDown: linkState === "disabled",
           speed: speedMbps,
           speedMbps,
           duplex: ix[6] === "auto" ? null : ix[6],
           type: ix[8]?.trim() || "",
           mtu: 1500,
           vlan: Number(ix[5]) || null,
+          trunk: /trunk/i.test(ix[5]),
           poeWatts: null,
           poeStatus: null,
           isUplink,
@@ -679,11 +784,14 @@ function parseInterfaces({ status, description, power, platform = "smb" }) {
   // gi1/0/2
   const descByName = new Map();
   for (const line of description.split(/\r?\n/)) {
-    const m = line.match(/^\s*((?:gi|te|fa|po|xg|tw)\d+\/\d+\/\d+)\s+(.+)$/i);
-    if (m) descByName.set(m[1].toLowerCase(), m[2].trim());
+    const m = line.match(/^\s*((?:gi|te|fa|po|xg|tw|hu|fo)\d+(?:\/\d+\/\d+)?)\s+(.+)$/i);
+    if (!m) continue;
+    // IOS-XE: "Gi1/0/1   up   up   Saloon NVX"  (strip Status / Protocol columns)
+    const rest = m[2].replace(/^(?:admin down|up|down)\s+(?:up|down)\s*/i, "").trim();
+    if (rest) descByName.set(shortPortName(m[1]), rest);
   }
   for (const p of out) {
-    const d = descByName.get(p.name.toLowerCase());
+    const d = descByName.get(shortPortName(p.name));
     if (d) p.ifAlias = d;
   }
 
@@ -693,6 +801,17 @@ function parseInterfaces({ status, description, power, platform = "smb" }) {
   // gi1/0/1                   On           Low      4     5400       5500
   // gi1/0/2                   Off          Low      0     0          0
   for (const line of power.split(/\r?\n/)) {
+    // IOS-XE: "Gi1/0/3   auto   on    15.4    Ieee PD    4    30.0"
+    const x = line.match(/^\s*((?:Gi|Te|Tw|Fa)\d+\/\d+\/\d+)\s+(auto|off|static|never)\s+(on|off|faulty|power-deny|err-disable)\s+([\d.]+)\s+(.*?)\s+(\S+)\s+([\d.]+)\s*$/i);
+    if (x) {
+      const i = out.findIndex((p) => shortPortName(p.name) === shortPortName(x[1]));
+      if (i >= 0) {
+        out[i].poeStatus = x[3].toLowerCase();
+        out[i].poeWatts = Number(x[4]) || 0;
+        out[i].poeDevice = x[5].trim() === "n/a" ? null : x[5].trim();
+      }
+      continue;
+    }
     const m = line.match(/^\s*((?:gi|te|fa|po|xg|tw)\d+\/\d+\/\d+)\s+(.*?)\s+(On|Off|Searching|Test|Fault)\s+\S+\s+(\d+)\s+(\d+)\s+(\d+)/i);
     if (!m) continue;
     const idx = out.findIndex((p) => p.name.toLowerCase() === m[1].toLowerCase());
@@ -708,9 +827,15 @@ function parseInterfaces({ status, description, power, platform = "smb" }) {
 
 function parseIosXeSpeed(token) {
   const t = String(token || "").toLowerCase();
-  if (t.includes("1000") || t === "a-1000") return 1000;
+  // Longest first — "10000" also contains "1000" and "100".
+  const g = t.match(/(\d+(?:\.\d+)?)g/);
+  if (g) return Math.round(Number(g[1]) * 1000);
+  if (t.includes("10000")) return 10000;
+  if (t.includes("5000")) return 5000;
+  if (t.includes("2500")) return 2500;
+  if (t.includes("1000")) return 1000;
   if (t.includes("100")) return 100;
-  if (t.includes("10000") || t.includes("10g")) return 10000;
+  if (/(^|-)10$/.test(t)) return 10;
   if (t === "auto" || t === "--") return 0;
   const n = Number(t.replace(/[^\d]/g, ""));
   return Number.isFinite(n) ? n : 0;
@@ -723,19 +848,16 @@ function parseMacTable(raw, { platform = "smb" } = {}) {
   //   1     74:86:0b:aa:bb:cc   gi1/0/3     dynamic
   const out = [];
   for (const line of raw.split(/\r?\n/)) {
-    let m = line.match(/^\s*(\d+)\s+([0-9a-fA-F:.-]{12,})\s+(\S+)\s+(\S+)/);
-    if (!m && platform === "ios-xe") {
-      m = line.match(/^\s*(\d+)\s+([0-9a-fA-F.]{12,})\s+(\S+)\s+(\S+)/);
-    }
+    const m = line.match(/^\s*(\d+)\s+([0-9a-fA-F:.-]{12,})\s+(\S+)\s+(\S+)/);
     if (!m) continue;
     const mac = normaliseMac(m[2]);
-    if (!mac) continue;
-    out.push({
-      vlan: Number(m[1]) || null,
-      mac,
-      port: m[3],
-      type: (m[4] || "").toLowerCase(),
-    });
+    if (!mac || mac.replace(/:/g, "").length !== 12) continue;
+    // SMB: Vlan Mac Port Type — IOS-XE: Vlan Mac Type Ports. Tell them apart by which column is a type word.
+    const typeFirst = /^(dynamic|static|secure|self|management)$/i.test(m[3]);
+    const port = typeFirst ? m[4] : m[3];
+    const type = (typeFirst ? m[3] : m[4]).toLowerCase();
+    if (/^cpu$/i.test(port)) continue;
+    out.push({ vlan: Number(m[1]) || null, mac, port, type });
   }
   return out;
 }
@@ -791,6 +913,82 @@ function parseCdpNeighbors(raw) {
   }
   return out;
 }
+
+/** "GigabitEthernet1/0/3" / "gi1/0/3" / "Gi1/0/3" → "gi1/0/3" for matching across commands. */
+export function shortPortName(name) {
+  const n = String(name || "").trim().toLowerCase();
+  const m = n.match(/^([a-z]+?)(?:abitethernet|gigabitethernet|ethernet|igabitethernet|e)?(\d.*)$/);
+  if (!m) return n;
+  const map = { gigabitethernet: "gi", gi: "gi", tengigabitethernet: "te", te: "te", twogigabitethernet: "tw", tw: "tw", fastethernet: "fa", fa: "fa", port: "po", po: "po", xg: "xg", hu: "hu" };
+  const word = n.match(/^[a-z-]+/)?.[0] || m[1];
+  const prefix = map[word] || map[word.slice(0, 2)] || word.slice(0, 2);
+  return `${prefix}${n.slice(word.length)}`;
+}
+
+/** Only accept real interface names — they're spliced into config mode. */
+export function assertPortName(port) {
+  const p = String(port || "").trim();
+  if (!/^(?:gi|te|tw|fa|xg|hu|fo|po)[a-z]*\d+(?:\/\d+){0,2}$/i.test(p)) {
+    throw new Error(`"${p}" is not a valid switch port name`);
+  }
+  return p;
+}
+
+function parseVlans(raw) {
+  const out = [];
+  for (const line of String(raw || "").split(/\r?\n/)) {
+    // IOS-XE: "10   AV-NVX      active    Gi1/0/1, Gi1/0/2"  SMB: "10   AV-NVX   gi1/0/1-4   ...  Static"
+    const m = line.match(/^\s*(\d{1,4})\s+(\S+)\s*(.*)$/);
+    if (!m) continue;
+    const id = Number(m[1]);
+    if (id < 1 || id > 4094 || out.some((v) => v.id === id)) continue;
+    const rest = m[3] || "";
+    if (/^(act\/unsup|suspended)/i.test(rest) && id >= 1002 && id <= 1005) continue;
+    out.push({ id, name: m[2], active: !/suspend|act\/lshut/i.test(rest) });
+  }
+  return out;
+}
+
+function parseMulticast({ status = "", querier = "", groups = "" }) {
+  const result = { snoopingEnabled: null, vlans: [], queriers: [], groups: [], querierChecked: /querier|vlan/i.test(querier) && !/^%/m.test(querier) };
+  const g = status.match(/IGMP\s+snooping\s*(?:is|:|status\s*:?)\s*(Enabled|Disabled)/i);
+  if (g) result.snoopingEnabled = /enabled/i.test(g[1]);
+  // IOS-XE prints a block per VLAN: "Vlan 10:\n--------\nIGMP snooping : Enabled"
+  for (const block of status.split(/(?=^\s*Vlan\s+\d+\s*:?)/im)) {
+    const v = block.match(/^\s*Vlan\s+(\d+)/i);
+    if (!v) continue;
+    const en = block.match(/IGMP\s+snooping\s*(?:status)?\s*:\s*(Enabled|Disabled)/i);
+    const imm = block.match(/immediate\s*leave\s*:\s*(Enabled|Disabled)/i);
+    result.vlans.push({ vlan: Number(v[1]), snooping: en ? /enabled/i.test(en[1]) : null, immediateLeave: imm ? /enabled/i.test(imm[1]) : null });
+  }
+  if (result.snoopingEnabled == null && result.vlans.length) result.snoopingEnabled = result.vlans.some((v) => v.snooping);
+  for (const line of querier.split(/\r?\n/)) {
+    const q = line.match(/^\s*(\d+)\s+(\d+\.\d+\.\d+\.\d+)\s+(?:v?(\d))?\s*(\S+)?/i);
+    if (q) result.queriers.push({ vlan: Number(q[1]), address: q[2], version: q[3] ? Number(q[3]) : null, port: q[4] || null });
+  }
+  for (const line of groups.split(/\r?\n/)) {
+    // IOS-XE: "10    239.255.0.1    igmp    v2    Gi1/0/3, Gi1/0/7"
+    // SMB:    "10    239.255.0.1    *    gi1/0/3 gi1/0/7"
+    const m = line.match(/^\s*(\d+)\s+(2(?:2[4-9]|3\d)\.\d+\.\d+\.\d+)\s+(.*)$/);
+    if (!m) continue;
+    const ports = (m[3].match(/\b(?:gi|te|tw|fa|xg|po)\d+(?:\/\d+){0,2}\b/gi) || []);
+    result.groups.push({ vlan: Number(m[1]), group: m[2], ports });
+  }
+  return result;
+}
+
+function parseErrorCounters(raw) {
+  const out = [];
+  for (const line of String(raw || "").split(/\r?\n/)) {
+    // IOS-XE: "Port  Align-Err  FCS-Err  Xmit-Err  Rcv-Err  UnderSize  OutDiscards"
+    const m = line.match(/^\s*((?:gi|te|tw|fa|xg)\S*\d)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?(?:\s+(\d+))?/i);
+    if (!m) continue;
+    out.push({ port: m[1], fcs: Number(m[3]), outErrors: Number(m[4]), inErrors: Number(m[5]) + Number(m[2]) });
+  }
+  return out;
+}
+
+export const __test = { parseInterfaces, parseMacTable, parseVlans, parseMulticast, parseErrorCounters, parseIosXeSpeed };
 
 function pickValue(text, regex) {
   const m = text.match(regex);

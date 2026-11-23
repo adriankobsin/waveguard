@@ -8,8 +8,10 @@
  * gaps so the right-hand "path" column ends up after a tab character.
  */
 import * as pdfjsLib from "pdfjs-dist";
+// Bundled locally so PDF import works without internet on board.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 const ROW_TOLERANCE = 2.5;
 const COLUMN_GAP_THRESHOLD = 18;

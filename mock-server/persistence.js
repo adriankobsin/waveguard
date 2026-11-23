@@ -1,8 +1,10 @@
 import fs from "fs";
 import path from "path";
 import { pingHost } from "../scanner/ping.js";
+import { config } from "./lib/config.js";
+import { encryptSecrets, decryptSecrets } from "./lib/secrets.js";
 
-const DATA_PATH = process.env.WAVEGUARD_DATA_PATH || "./data/waveguard-data.json";
+const DATA_PATH = config.dataPath;
 
 let saveTimer = null;
 let pendingDb = null;
@@ -21,6 +23,12 @@ export function extractPersistentState(db) {
     deviceGroups: db.deviceGroups || [],
     speedTests: db.speedTests || [],
     documents: db.documents || [],
+    users: db.users || [],
+    sessions: db.sessions || {},
+    monitors: db.monitors || [],
+    notificationChannels: db.notificationChannels || [],
+    alertEvents: db.alertEvents || [],
+    configBackups: db.configBackups || [],
   };
 }
 
@@ -29,9 +37,9 @@ function doSave(db) {
     const dir = path.dirname(DATA_PATH);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const tmp = DATA_PATH + ".tmp";
-    const serializable = extractPersistentState(db);
+    const serializable = encryptSecrets(extractPersistentState(db));
     const json = JSON.stringify(serializable, null, 2);
-    fs.writeFileSync(tmp, json, "utf-8");
+    fs.writeFileSync(tmp, json, { encoding: "utf-8", mode: 0o600 });
     try {
       fs.renameSync(tmp, DATA_PATH);
     } catch (renameErr) {
@@ -62,11 +70,19 @@ export function queueSave(db) {
   }, 500);
 }
 
+/** Write immediately (used on shutdown). */
+export function flushSave(db) {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  pendingDb = null;
+  doSave(db);
+}
+
 export function loadPersistedDb() {
   try {
     if (fs.existsSync(DATA_PATH)) {
       const raw = fs.readFileSync(DATA_PATH, "utf-8");
-      const parsed = JSON.parse(raw);
+      const parsed = decryptSecrets(JSON.parse(raw));
       console.log(`[persistence] Restored from ${DATA_PATH}`);
       return parsed;
     }

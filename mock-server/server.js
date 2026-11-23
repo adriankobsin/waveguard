@@ -109,20 +109,24 @@ import {
   normalizeCiscoWlcController,
 } from "../src/lib/network/ciscoWlcSettings.js";
 import { applyFactoryResetToDb, PLATFORM_RESET_CONFIRM } from "../src/lib/platformFactoryResetData.js";
-import { loadPersistedDb, queueSave, pingAllOnStartup } from "./persistence.js";
+import { loadPersistedDb, queueSave, flushSave, pingAllOnStartup } from "./persistence.js";
+import { config } from "./lib/config.js";
+import { createAuth, sanitizeUser } from "./lib/auth.js";
+import { registerStandaloneFeatures, serveFrontend } from "./lib/standalone.js";
 import { addClient, broadcast, clientCount } from "./events.js";
 import { getDb, seedTypes, listTypes, listConfigs, getConfig, createConfig, updateConfig, deleteConfig, logEvent, getLogs, getDashboardStats, getCategories } from "./db/database.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** Set WAVEGUARD_USE_MOCK_SCAN=true only for demos without LAN access. */
-const USE_MOCK_SCAN = process.env.WAVEGUARD_USE_MOCK_SCAN === "true";
-const uploadsDir = path.join(__dirname, "uploads");
-fs.mkdirSync(uploadsDir, { recursive: true });
-const capturesDir = path.join(__dirname, ".captures");
+const USE_MOCK_SCAN = config.useMockScan;
+const uploadsDir = config.uploadsDir;
+const capturesDir = config.capturesDir;
 const captureStore = createCaptureStore(capturesDir);
 
 const app = express();
-const PORT = 3002;
+app.disable("x-powered-by");
+app.set("trust proxy", "loopback");
+const PORT = config.port;
 const APP_ID = "mock-app";
 
 const upload = multer({
@@ -136,10 +140,23 @@ const upload = multer({
   limits: { fileSize: 10 * 1024 * 1024 },
 });
 
-app.use(cors());
-app.use(express.json({ limit: "50mb" }));
+// Same-origin by default (the UI is served by this process). Extra origins via WAVEGUARD_CORS_ORIGINS.
+app.use(cors({ origin: (origin, cb) => cb(null, !origin || config.corsOrigins.includes(origin)), credentials: true }));
 app.use((req, res, next) => {
-  if (req.method !== "GET") {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "same-origin");
+  next();
+});
+// Auth is created once the data store has loaded (below); requests before then get 503.
+let auth = null;
+let standalone = null;
+app.use((req, res, next) => (auth ? auth.middleware(req, res, next) : res.status(503).json({ message: "Starting up" })));
+app.use(express.json({ limit: "25mb" }));
+// Tool runs, logins and monitor checks are not data changes — don't trigger a save + UI-wide refresh.
+const NO_CHANGE_BROADCAST = /^\/api\/(tools|auth|system\/update|monitors\/[^/]+\/check|notifications\/channels\/[^/]+\/test|apps\/[^/]+\/auth)(\/|$)/;
+app.use((req, res, next) => {
+  if (req.method !== "GET" && !NO_CHANGE_BROADCAST.test(req.path)) {
     const originalJson = res.json.bind(res);
     res.json = (body) => {
       queueSave(db);
@@ -160,31 +177,9 @@ function sanitizeObject(obj) {
 }
 
 // ---- In-memory data store ----
-const WAVE_ADMIN_PASSWORD = process.env.WAVE_ADMIN_PASSWORD || "Wave-avi23!";
-
 const db = {
-  users: [
-    {
-      id: "user-admin",
-      username: "WaveAdmin",
-      email: "waveadmin@local",
-      name: "Wave Admin",
-      full_name: "Wave Admin",
-      role: "admin",
-      password: WAVE_ADMIN_PASSWORD,
-      created_date: new Date().toISOString(),
-    },
-    {
-      id: "user-2",
-      username: "tech",
-      email: "tech@waveguard.test",
-      name: "Tech User",
-      full_name: "Tech User",
-      role: "user",
-      password: process.env.WAVE_TECH_PASSWORD || "password123",
-      created_date: new Date().toISOString(),
-    },
-  ],
+  // Accounts are created by lib/auth.js ensureAdmin() on first boot — no default passwords.
+  users: [],
   backups: [],
   sessions: {},
   deviceGroups: [
@@ -266,6 +261,11 @@ if (persisted) {
   db.equipment.forEach(e => { e.status = "unknown"; });
   pingAllOnStartup(db.equipment).catch(() => {});
 }
+
+// ---- Authentication (must be registered before every other route) ----
+auth = createAuth(db, { onChange: () => queueSave(db) });
+auth.ensureAdmin();
+auth.registerRoutes(app);
 
 // ---- Helpers ----
 function enrichEquipmentMeta(item) {
@@ -557,86 +557,8 @@ function getTopologyScanResult() {
 }
 
 // ============================================================
-// AUTH
-// ============================================================
-function findUserByIdentifier(identifier) {
-  const id = (identifier || "").trim().toLowerCase();
-  return db.users.find(
-    (u) =>
-      u.email?.toLowerCase() === id ||
-      u.username?.toLowerCase() === id
-  );
-}
-
-function sanitizeUser(user) {
-  if (!user) return null;
-  const { password, ...safe } = user;
-  return safe;
-}
-
-app.post("/api/apps/:appId/auth/login", (req, res) => {
-  const { email, password, username } = req.body;
-  const identifier = email || username;
-  const user = findUserByIdentifier(identifier);
-  if (!user || password !== user.password) {
-    return res.status(401).json({ message: "Invalid username or password", code: "auth_error" });
-  }
-  const token = "mock-access-token-" + Date.now();
-  db.sessions[token] = user.id;
-  res.json({ access_token: token, user: sanitizeUser(user), expires_in: 86400 });
-});
-
-app.post("/api/apps/:appId/auth/register", (req, res) => {
-  const { email, password } = req.body;
-  const user = { id: "user-" + Date.now(), email, name: email.split("@")[0], role: "user", created_date: new Date().toISOString() };
-  db.users.push(user);
-  res.json({ message: "Registration successful. Please verify your email.", user_id: user.id });
-});
-
-app.post("/api/apps/:appId/auth/verify-otp", (req, res) => {
-  res.json({ access_token: "mock-access-token-" + Date.now(), message: "Email verified successfully" });
-});
-
-app.post("/api/apps/:appId/auth/resend-otp", (req, res) => {
-  res.json({ message: "OTP resent successfully" });
-});
-
-app.post("/api/apps/:appId/auth/reset-password-request", (req, res) => {
-  res.json({ message: "If the email exists, a reset link has been sent." });
-});
-
-app.post("/api/apps/:appId/auth/reset-password", (req, res) => {
-  res.json({ message: "Password has been reset successfully." });
-});
-
-app.post("/api/apps/:appId/auth/change-password", (req, res) => {
-  res.json({ message: "Password changed successfully." });
-});
-
-app.get("/api/apps/:appId/entities/User/me", (req, res) => {
-  const user = getRequestUser(req);
-  res.json(sanitizeUser(user || db.users[0]));
-});
-
-app.put("/api/apps/:appId/entities/User/me", (req, res) => {
-  Object.assign(db.users[0], req.body);
-  res.json(db.users[0]);
-});
-
-app.post("/api/apps/:appId/runtime/users/invite-user", (req, res) => {
-  const { user_email, userEmail, role } = req.body;
-  const email = user_email || userEmail;
-  const user = { id: "user-" + Date.now(), email, name: email.split("@")[0], role: role || "user", created_date: new Date().toISOString() };
-  db.users.push(user);
-  res.json({ message: "Invitation sent", user, data: user });
-});
-
-app.post("/api/apps/:appId/users/invite-user", (req, res) => {
-  const { userEmail, role } = req.body;
-  const user = { id: "user-" + Date.now(), email: userEmail, name: userEmail.split("@")[0], role: role || "user", created_date: new Date().toISOString() };
-  db.users.push(user);
-  res.json({ message: "Invitation sent", user });
-});
+// AUTH — see lib/auth.js (registered right after the data store loads)
+app.get("/ws-user-apps/socket.io/", (req, res) => res.json({}));
 
 // ============================================================
 // FUNCTIONS
@@ -2407,12 +2329,31 @@ app.post("/api/apps/:appId/functions/ciscoCommand", async (req, res) => {
         closeCiscoSwitchClient(conn.host);
         return res.json({ success: true, host: conn.host });
       }
+      case "getMulticast": {
+        const multicast = await client.getMulticast();
+        return res.json({ success: true, host: conn.host, multicast });
+      }
+      case "portAction":
+      case "saveConfig": {
+        // Changing the switch is for admins and technicians only.
+        const role = req.user?.role;
+        if (role && !["admin", "technician"].includes(role)) {
+          return res.status(403).json({ success: false, error: "Only admins and technicians can change switch ports" });
+        }
+        const result = op === "saveConfig"
+          ? await client.saveConfig()
+          : await client.portAction({
+              action: req.body.action,
+              port: req.body.port,
+              vlan: req.body.vlan,
+              description: req.body.description,
+            });
+        console.info(`[cisco] ${req.user?.username || "user"}: ${op === "saveConfig" ? "save config" : `${req.body.action} ${req.body.port}`} on ${conn.host}`);
+        return res.json({ success: true, host: conn.host, ...result });
+      }
       case "setPortEnabled": {
-        // Reserved — write support is a follow-up PR.
-        return res.status(501).json({
-          success: false,
-          error: "Port admin shutdown not yet supported. Coming in the next release.",
-        });
+        const result = await client.portAction({ action: req.body.enabled === false ? "shutdown" : "enable", port: req.body.port });
+        return res.json({ success: true, host: conn.host, ...result });
       }
       default:
         return res.status(400).json({ success: false, error: `unknown op ${op}` });
@@ -3134,20 +3075,13 @@ app.post("/api/apps/:appId/functions/updateDevice", (req, res) => {
 // ENTITIES (generic CRUD)
 // ============================================================
 const entityHandlers = {
+  // Users are read-only through the generic entity API; manage them via /users (admin only).
   User: {
     list: () => db.users.map(sanitizeUser),
     get: (id) => sanitizeUser(db.users.find(u => u.id === id)),
-    create: (data) => {
-      const e = { id: "user-" + Date.now(), ...data, created_date: new Date().toISOString() };
-      db.users.push(e);
-      return sanitizeUser(e);
-    },
-    update: (id, data) => {
-      const e = db.users.find(u => u.id === id);
-      if (e) Object.assign(e, data);
-      return sanitizeUser(e);
-    },
-    delete: (id) => { db.users = db.users.filter(u => u.id !== id); return { success: true }; },
+    create: () => { throw Object.assign(new Error("Use Settings → Users to manage accounts"), { status: 403 }); },
+    update: () => { throw Object.assign(new Error("Use Settings → Users to manage accounts"), { status: 403 }); },
+    delete: () => { throw Object.assign(new Error("Use Settings → Users to manage accounts"), { status: 403 }); },
   },
   DeviceGroup: {
     list: () => db.deviceGroups,
@@ -3358,7 +3292,7 @@ app.all("/api/apps/:appId/entities/:entityName/:id?", (req, res) => {
     if (MUTATE_METHODS.has(method)) queueSave(db);
     res.json(result);
   } catch (err) {
-    res.status(500).json({ message: err.message, code: "server_error" });
+    res.status(err.status || 500).json({ message: err.message, code: "server_error" });
   }
 });
 
@@ -3637,36 +3571,6 @@ app.post("/api/apps/:appId/analytics/track/batch", (req, res) => res.json({}));
 // ============================================================
 // SOCKET.IO (stub)
 // ============================================================
-app.get("/ws-user-apps/socket.io/", (req, res) => res.json({}));
-
-// ============================================================
-// OAUTH REDIRECTS (local dev stubs)
-// ============================================================
-function safeRedirectUrl(url) {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    if (["localhost", "127.0.0.1", "0.0.0.0", "::1"].includes(parsed.hostname) || parsed.hostname.endsWith(".local")) {
-      return url;
-    }
-  } catch { /* invalid URL */ }
-  return null;
-}
-
-app.get("/api/apps/auth/login", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
-  res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
-});
-
-app.get("/api/apps/auth/logout", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174/login";
-  res.redirect(`${fromUrl}`);
-});
-
-app.get("/api/apps/auth/:provider/login", (req, res) => {
-  const fromUrl = safeRedirectUrl(req.query.from_url) || "http://localhost:5174";
-  res.redirect(`${fromUrl}?access_token=mock-oauth-token-${Date.now()}`);
-});
 
 // ============================================================
 // SETTINGS API (backups, integrations test, users, AI, docs)
@@ -3681,21 +3585,8 @@ function collectBackupSnapshot() {
   };
 }
 
-/** Resolve user from session token; aligns with GET /entities/User/me mock behaviour. */
-function getRequestUser(req) {
-  const token = req.headers.authorization?.replace(/^Bearer\s+/i, "").trim();
-  if (token === "mock-dev-token") {
-    return db.users.find((u) => u.role === "admin") ?? db.users[0];
-  }
-  const userId = token ? db.sessions[token] : null;
-  if (userId) {
-    return db.users.find((u) => u.id === userId) ?? null;
-  }
-  return db.users.find((u) => u.role === "admin") ?? db.users[0];
-}
-
 function getAdminUserFromRequest(req) {
-  const user = getRequestUser(req);
+  const user = req.user || auth.userFromRequest(req);
   return user?.role === "admin" ? user : null;
 }
 
@@ -3710,6 +3601,7 @@ function handlePlatformReset(req, res) {
     });
   }
   applyFactoryResetToDb(db);
+  standalone?.reload();
   console.log("[platform] Factory reset applied — operational data cleared");
   res.json({
     success: true,
@@ -3748,6 +3640,7 @@ app.post("/api/apps/:appId/backups", (req, res) => {
 });
 
 app.post("/api/apps/:appId/backups/:id/restore", (req, res) => {
+  if (!getAdminUserFromRequest(req)) return res.status(403).json({ message: "Administrator access required" });
   const backup = db.backups.find((b) => b.id === req.params.id);
   if (!backup) return res.status(404).json({ message: "Backup not found" });
   const snap = backup.snapshot;
@@ -3802,48 +3695,7 @@ app.post("/api/apps/:appId/documentation/reindex", (req, res) => {
   });
 });
 
-app.get("/api/apps/:appId/users", (req, res) => {
-  res.json({ users: db.users.map(sanitizeUser) });
-});
-
-app.post("/api/apps/:appId/users", (req, res) => {
-  const { username, password, role } = req.body;
-  if (!username || !password) {
-    return res.status(400).json({ message: "Username and password required" });
-  }
-  if (db.users.some((u) => u.username?.toLowerCase() === username.toLowerCase())) {
-    return res.status(400).json({ message: "Username already exists" });
-  }
-  const user = {
-    id: "user-" + Date.now(),
-    username,
-    email: `${username}@local`,
-    name: username,
-    full_name: username,
-    role: role || "user",
-    password,
-    created_date: new Date().toISOString(),
-  };
-  db.users.push(user);
-  res.json({ user: sanitizeUser(user) });
-});
-
-app.put("/api/apps/:appId/users/:id", (req, res) => {
-  const user = db.users.find((u) => u.id === req.params.id);
-  if (!user) return res.status(404).json({ message: "User not found" });
-  const { role, password } = req.body;
-  if (role) user.role = role;
-  if (password) user.password = password;
-  res.json({ user: sanitizeUser(user) });
-});
-
-app.delete("/api/apps/:appId/users/:id", (req, res) => {
-  if (req.params.id === "user-admin") {
-    return res.status(400).json({ message: "Cannot delete default admin" });
-  }
-  db.users = db.users.filter((u) => u.id !== req.params.id);
-  res.json({ success: true });
-});
+// User management routes now live in lib/auth.js
 
 // ---- Integration Database API ----
 seedTypes();
@@ -3999,16 +3851,44 @@ app.use(`/api/apps/${APP_ID}/audio`, createAudioRouter(db, broadcast));
 app.use("/api/hvac", createHVACRouter());
 app.use("/cws/api", createCrestronGatewayRouter());
 
-app.listen(PORT, () => {
-  console.log(`[mock-base44] Server running at http://localhost:${PORT}`);
-  console.log(`[mock-base44] App ID: ${APP_ID}`);
-  console.log(`[mock-base44] Endpoints ready:`);
-  console.log(`  - Auth: /api/apps/${APP_ID}/auth/*`);
-  console.log(`  - Functions: /api/apps/${APP_ID}/functions/*`);
-  console.log(`  - Entities: /api/apps/${APP_ID}/entities/*`);
-  console.log(`  - Platform reset: POST /api/apps/${APP_ID}/platform/reset`);
-  console.log(`  - Integrations: /api/apps/${APP_ID}/integration-endpoints/Core/*`);
-  console.log(`  - Network scanner: ${USE_MOCK_SCAN ? "MOCK (demo devices only)" : "LIVE (ping/arp/full on this host)"}`);
-  console.log(`  - Scanner health: GET /api/apps/${APP_ID}/scanner/health`);
-  console.log(`  - AI Assistant: POST /chat (offline agent + optional Ollama/OpenAI)`);
+// ---- Standalone features (monitors, alerts, network tools, host health, config backups) ----
+standalone = registerStandaloneFeatures(app, {
+  db,
+  auth,
+  queueSave,
+  broadcast,
+  getCiscoSwitchClient,
+  getSettingValue: (key) => db.systemSettings.find((s) => s.key === key)?.value,
+  // Latest snapshot of every enabled Cisco switch (polls if none cached yet) for AV Flow.
+  getCiscoTargets: async () => {
+    const targets = getStoredCiscoSwitches().switches.filter((s) => s.enabled && s.host);
+    return Promise.all(targets.map(async (sw) => {
+      const client = getCiscoSwitchClient(sw);
+      let snapshot = client?.lastSnapshot || null;
+      if (!snapshot?.multicast && client) {
+        snapshot = await client.pollAll({ snmpCommunity: sw.snmpCommunity, snmpVersion: sw.snmpVersion }).catch(() => snapshot);
+      }
+      return { host: sw.host, name: sw.label || snapshot?.system?.hostname || sw.host, snapshot: snapshot || {} };
+    }));
+  },
 });
+
+// ---- Built front end (single-process standalone mode) ----
+serveFrontend(app);
+
+const server = app.listen(PORT, config.host, () => {
+  console.log(`[waveguard] v${config.version} listening on http://${config.host}:${PORT}`);
+  console.log(`[waveguard] Data directory: ${config.dataDir}`);
+  console.log(`[waveguard] Network scanner: ${USE_MOCK_SCAN ? "MOCK (demo devices only)" : "LIVE (ping/arp/snmp on this host)"}`);
+  if (config.authDisabled) console.warn("[waveguard] WARNING: WAVEGUARD_AUTH_DISABLED=true — the API is open to anyone on the network");
+});
+
+function shutdown(signal) {
+  console.log(`[waveguard] ${signal} received — saving data and shutting down`);
+  try { flushSave(db); } catch (err) { console.error("[waveguard] Final save failed:", err.message); }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+

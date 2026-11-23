@@ -6,6 +6,18 @@ WaveGuard runs entirely on the host network — discovery, lighting control, SNM
 
 ---
 
+## Install on the vessel (Debian mini PC)
+
+```bash
+sudo apt update && sudo apt install -y git
+sudo git clone https://github.com/adriankobsin/waveguard.git /opt/waveguard
+sudo /opt/waveguard/deploy/install.sh
+```
+
+The installer sets up Node.js, the network tools (nmap, arp-scan, tshark, lldpd, mtr, iperf3…), a hardened `waveguard` systemd service on port 80, nightly backups and one-click updates from the web UI. Full guide, including moving data from the old version: **[docs/install-debian.md](docs/install-debian.md)**.
+
+---
+
 ## Table of Contents
 
 - [Features](#features)
@@ -28,6 +40,11 @@ WaveGuard runs entirely on the host network — discovery, lighting control, SNM
 
 | Module | What it does |
 |---|---|
+| **Monitoring** | Uptime checks (ping, TCP port, HTTP keyword, DNS, TLS expiry) for every device, 24h/7d/30d uptime and response-time history, maintenance mode, alert history |
+| **Alerts** | Email (SMTP), Telegram, ntfy push, Slack / Teams / Discord / signed webhooks — with severity filters, recovery notices and repeat reminders |
+| **Network Tools** | Ping, traceroute, MTR, DNS, port check (AV/control ports), nmap scans, ARP scan with manufacturer lookup, LLDP, interfaces, mDNS/Bonjour, Wake-on-LAN, iperf3, TLS check, Dante/AES67 PTP clock + SAP stream listener |
+| **Config backups** | Nightly `show running-config` from every Cisco switch, change alerts and line-by-line diffs |
+| **Security** | Per-person accounts with roles (admin / technician / crew / viewer), hashed passwords, HttpOnly sessions, login rate-limiting, device passwords encrypted at rest |
 | **Dashboard** | Real-time status overview with customisable widgets — device health, alerts, **WAN status (live public IP, gateway latency, speed test)**, **Lutron processor + lights**, **Cisco switch fleet**, network stats |
 | **Topology** | Filterable equipment list with per-device scan/edit, path tracing, groups, CSV import. Full SNMP scan only on **Refresh** |
 | **Topology — Deck / Rack / AV / Control** | Deck floor plans, rack elevation designer, AV signal flow, control-path diagrams |
@@ -85,7 +102,7 @@ cd mock-server && npm install && cd ..
 cd scanner && npm install && cd ..
 ```
 
-### Run locally (recommended)
+### Run locally for development
 
 Starts the mock API + scanner (port **3002**) and Vite (port **5173**) together:
 
@@ -93,7 +110,7 @@ Starts the mock API + scanner (port **3002**) and Vite (port **5173**) together:
 npm run dev:all
 ```
 
-Open <http://localhost:5173>. The first run prompts you to choose **Live** or **Demo** mode. Demo mode loads a curated yacht with Lutron zones, scenes and keypads so the platform looks populated without any LAN access.
+Open <http://localhost:5173>. On first start the server prints a one-time `admin` password in the terminal (also saved to `mock-server/data/initial-admin-password.txt`); set `WAVEGUARD_ADMIN_PASSWORD` to choose it yourself. The first run prompts you to choose **Live** or **Demo** mode. Demo mode loads a curated yacht with Lutron zones, scenes and keypads so the platform looks populated without any LAN access.
 
 Or run in two terminals:
 
@@ -239,7 +256,7 @@ The legacy URL `/cisco-switches` redirects to `/snmp?tab=cisco`.
 
 - Configured switches live under SystemSettings key `network-cisco-switches`, mirrored in `localStorage` (`waveguard:network:cisco-switches`).
 - Connection events (200-entry ring buffer) live under `network-cisco-event-log`.
-- SSH/SNMP credentials are kept inside the switch record (encrypted in production via the Base44 secrets vault) and are never returned to the browser by the `list` API in plain form.
+- SSH/SNMP credentials are kept inside the switch record and encrypted at rest (AES-256-GCM) in the WaveGuard data file; only signed-in users can read them.
 
 ### Live updates
 

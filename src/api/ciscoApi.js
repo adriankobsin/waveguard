@@ -314,6 +314,52 @@ export async function getCiscoNeighbors(draft) {
   return { success: true, mode: "mock", neighbors: buildMockSnapshot(conn).neighbors };
 }
 
+// ── Port control ────────────────────────────────────────────────────────
+
+export const CISCO_PORT_ACTIONS = {
+  bounce: { label: "Restart port", hint: "Shut the port, wait 3 s, bring it back. Fixes most stuck links." },
+  poeCycle: { label: "Power-cycle device (PoE)", hint: "Cut PoE for 5 s. Reboots an AP, camera, NVX or Dante device powered by this port." },
+  shutdown: { label: "Disable port", hint: "Turns the port off until you enable it again." },
+  enable: { label: "Enable port", hint: "Turns a disabled port back on." },
+  setVlan: { label: "Change VLAN", hint: "Moves the port to another access VLAN." },
+  setDescription: { label: "Rename port", hint: "Sets the port description shown here and on the switch." },
+};
+
+/**
+ * Run one port action on a saved switch. Changes are live but not saved to
+ * startup-config until saveCiscoConfig() runs, so a reboot undoes them.
+ */
+export async function ciscoPortAction(draft, { action, port, vlan, description }) {
+  const conn = normalizeCiscoSwitch(draft);
+  const label = CISCO_PORT_ACTIONS[action]?.label || action;
+  if (isDemoModeActive()) {
+    await new Promise((r) => setTimeout(r, 600));
+    logEvent({ host: conn.host, switchId: conn.id, kind: "port-action", severity: "info", action, port, result: "success", message: `Demo: ${label} on ${port}` });
+    return { success: true, mode: "demo", port, action };
+  }
+  const live = await callMockCisco("portAction", { ...redactForWire(conn), action, port, vlan, description });
+  const ok = !!live?.success;
+  logEvent({
+    host: conn.host,
+    switchId: conn.id,
+    kind: "port-action",
+    severity: ok ? "info" : "warning",
+    action,
+    port,
+    result: ok ? "success" : "failed",
+    message: ok ? `${label} on ${port}` : `${label} on ${port} failed: ${live?.error || "no response"}`,
+  });
+  return live || { success: false, error: "WaveGuard server not reachable" };
+}
+
+export async function saveCiscoConfig(draft) {
+  const conn = normalizeCiscoSwitch(draft);
+  if (isDemoModeActive()) return { success: true, mode: "demo", saved: true };
+  const live = await callMockCisco("saveConfig", redactForWire(conn));
+  logEvent({ host: conn.host, switchId: conn.id, kind: "config-save", severity: live?.success ? "info" : "warning", action: "saveConfig", result: live?.success ? "success" : "failed", message: live?.success ? "Configuration saved to startup-config" : `Save failed: ${live?.error || "no response"}` });
+  return live || { success: false, error: "WaveGuard server not reachable" };
+}
+
 // ── Live event stream (SSE) ─────────────────────────────────────────────
 
 export function subscribeCiscoEvents({ host, onSnapshot, onPortChange, onError, onPing } = {}) {

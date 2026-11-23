@@ -46,3 +46,13 @@ leap-certs/
 
 # OS
 Thumbs.db
+
+# Runtime data — NEVER commit (contains vessel inventory, credentials, sessions)
+mock-server/data/
+data/
+*.db
+*.db-shm
+*.db-wal
+secret.key
+initial-admin-password.txt
+mock-server/.captures/

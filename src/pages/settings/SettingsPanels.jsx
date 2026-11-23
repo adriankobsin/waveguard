@@ -6,7 +6,8 @@ import {
 import { Link } from "react-router-dom";
 import { useSettings } from "@/hooks/useSettings";
 import { useAuth } from "@/lib/AuthContext";
-import { isAdmin } from "@/lib/permissions";
+import { isAdmin, ROLE_LABELS, ROLE_DESCRIPTIONS } from "@/lib/permissions";
+import { KeyRound } from "lucide-react";
 import { testLightingProcessor } from "@/api/lightingApi";
 import { getIntegrationTypes, getIntegrationConfigs, createIntegrationConfig, deleteIntegrationConfig, testIntegrationConfig, getIntegrationLogs } from "@/api/integrationApi";
 import { getCategoryLabel, CATEGORY_ORDER } from "@/lib/integrations/integrationRegistry";
@@ -730,7 +731,12 @@ export function UsersPanel() {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">Create operator accounts. Default admin: WaveAdmin (configured on server).</p>
+      <p className="text-xs text-muted-foreground">Create a personal account for each crew member or technician. Passwords need 10+ characters with letters and numbers.</p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        {Object.entries(ROLE_DESCRIPTIONS).map(([r, d]) => (
+          <p key={r} className="text-[11px] text-muted-foreground"><span className="text-foreground font-medium">{ROLE_LABELS[r]}:</span> {d}</p>
+        ))}
+      </div>
       {loading ? (
         <div className="flex items-center gap-2 text-sm text-muted-foreground py-4"><Loader2 size={14} className="animate-spin" /> Loading…</div>
       ) : (
@@ -753,13 +759,37 @@ export function UsersPanel() {
                     }
                   }}
                   className="text-xs bg-secondary border border-border rounded-lg px-2 py-1"
-                  disabled={u.id === "user-admin"}
+                  disabled={u.id === currentUser?.id}
                 >
-                  <option value="user">User</option>
-                  <option value="admin">Admin</option>
+                  {Object.entries(ROLE_LABELS).map(([r, l]) => <option key={r} value={r}>{l}</option>)}
                 </select>
-                {u.id !== "user-admin" && (
-                  <button type="button" onClick={async () => { await deleteUserAccount(u.id); load(); }} className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg">
+                <button
+                  type="button"
+                  title="Set a new password"
+                  onClick={async () => {
+                    const pw = window.prompt(`New password for ${u.username} (10+ characters, letters and numbers):`);
+                    if (!pw) return;
+                    try {
+                      await updateUserAccount(u.id, { password: pw });
+                      toast.success(`Password updated for ${u.username}. They have been signed out everywhere.`);
+                    } catch (err) {
+                      toast.error(err.message);
+                    }
+                  }}
+                  className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg"
+                >
+                  <KeyRound size={14} />
+                </button>
+                {u.id !== currentUser?.id && (
+                  <button
+                    type="button"
+                    title="Delete user"
+                    onClick={async () => {
+                      if (!window.confirm(`Delete the account ${u.username}?`)) return;
+                      try { await deleteUserAccount(u.id); load(); } catch (err) { toast.error(err.message); }
+                    }}
+                    className="p-1.5 text-red-400 hover:bg-red-500/10 rounded-lg"
+                  >
                     <Trash2 size={14} />
                   </button>
                 )}
@@ -774,8 +804,7 @@ export function UsersPanel() {
           <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" className={INPUT_CLS} />
           <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className={INPUT_CLS} />
           <select value={role} onChange={(e) => setRole(e.target.value)} className={INPUT_CLS}>
-            <option value="user">User</option>
-            <option value="admin">Admin</option>
+            {Object.entries(ROLE_LABELS).map(([r, l]) => <option key={r} value={r}>{l}</option>)}
           </select>
         </div>
         <button type="button" onClick={handleCreate} disabled={creating || !username || !password} className="px-4 py-2 bg-primary text-primary-foreground rounded-xl text-sm font-medium disabled:opacity-50 flex items-center gap-2">

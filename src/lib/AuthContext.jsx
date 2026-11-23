@@ -107,20 +107,11 @@ export const AuthProvider = ({ children }) => {
       setIsLoadingAuth(false);
       setAuthChecked(true);
 
-      // Local mock server: keep full settings access when /User/me is unreachable
-      if (isMockServer) {
-        setUser({
-          id: "user-admin",
-          username: "WaveAdmin",
-          role: "admin",
-          name: "Wave Admin",
-          full_name: "Wave Admin",
-        });
-        setIsAuthenticated(true);
-        return;
-      }
-
       setIsAuthenticated(false);
+      setUser(null);
+
+      // Standalone server: no session → the router sends the user to /login.
+      if (isMockServer) return;
 
       // If user auth fails, it might be an expired token
       if (error.status === 401 || error.status === 403) {
@@ -135,6 +126,14 @@ export const AuthProvider = ({ children }) => {
   const logout = (shouldRedirect = true) => {
     setUser(null);
     setIsAuthenticated(false);
+    if (isMockServer) {
+      fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" })
+        .catch(() => {})
+        .finally(() => {
+          if (shouldRedirect) window.location.href = "/login";
+        });
+      return;
+    }
     
     if (shouldRedirect) {
       // Use the SDK's logout method which handles token cleanup and redirect
@@ -146,6 +145,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const navigateToLogin = () => {
+    if (isMockServer) {
+      window.location.href = `/login?next=${encodeURIComponent(window.location.pathname)}`;
+      return;
+    }
     // Use the SDK's redirectToLogin method
     base44.auth.redirectToLogin(window.location.href);
   };

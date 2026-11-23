@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Fonts are bundled (no Google Fonts) so the UI looks right with no internet on board. */
 
 @tailwind base;
 @tailwind components;

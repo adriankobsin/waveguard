@@ -2,9 +2,11 @@ import { useState, useRef } from "react";
 import { Map, FileText, Image } from "lucide-react";
 import { motion } from "framer-motion";
 import * as pdfjsLib from "pdfjs-dist";
+// Bundled locally so PDF import works without internet on board.
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 // Point pdfjs to its worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 async function renderPdfFirstPage(file) {
   const arrayBuffer = await file.arrayBuffer();

@@ -1,8 +1,0 @@
-{
-  "type": "github",
-  "scopes": [
-    "repo:status",
-    "read:user",
-    "public_repo"
-  ]
-}
